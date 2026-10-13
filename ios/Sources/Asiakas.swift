@@ -80,6 +80,11 @@ struct Asiakas {
         try await hae("/api/skoopit/\(koodattu(nimi))/viesti", metodi: "POST", runko: try JSONEncoder().encode(["teksti": teksti]))
     }
 
+    // Kortin X: palvelu sulkee auki olevan monivalinnan Escapella.
+    func suljeKysymys(_ nimi: String) async throws -> LahetysVastaus {
+        try await hae("/api/skoopit/\(koodattu(nimi))/kysymys-pois", metodi: "POST", runko: nil)
+    }
+
     // Verkon katkos (näyttölukko, äpin vaihto, WireGuard poissa) eikä palvelun vastaus: äppi tarjoaa uudelleenyhdistämisen.
     static func yhteysKatkesi(_ virhe: Error) -> Bool {
         guard let u = virhe as? URLError else { return false }

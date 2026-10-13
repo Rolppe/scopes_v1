@@ -286,6 +286,18 @@ test('lahetaSkooppiin: auki oleva monivalinta suljetaan Escapella ennen tekstiä
     [['send-keys', '-t', '%5', 'Escape'], ['send-keys', '-t', '%5', '-l', 'oma vastaus'], ['send-keys', '-t', '%5', 'Enter']]);
 });
 
+test('suljeKysymys: auki oleva monivalinta suljetaan pelkällä Escapella; muuten 409', async () => {
+  const a = ymparisto();
+  const polku = join(a.projektitDir, projektiNimi('/x'), 's1.jsonl');
+  const kysy = { type: 'tool_use', id: 'k1', name: 'AskUserQuestion', input: { questions: [{ question: 'Q?', options: [{ label: 'A' }] }] } };
+  writeFileSync(polku, rivi({ type: 'assistant', timestamp: 't', message: { content: [kysy] } }));
+  const { aja, kutsut } = vaarennos();
+  await luoViestit(a, { aja }).suljeKysymys('a');
+  assert.deepEqual(kutsut.slice(1).map((k) => k.argumentit), [['send-keys', '-t', '%5', 'Escape']]);
+  writeFileSync(polku, rivi({ type: 'assistant', timestamp: 't', message: { content: [{ type: 'text', text: 'moi' }] } }));
+  await hylkaa(luoViestit(a, { aja: vaarennos().aja }).suljeKysymys('a'), 409);
+});
+
 test('palvelin: chat- ja viestipolut avaimella, iso runko sallittu', async () => {
   const a = ymparisto();
   const avain = 'k'.repeat(32);
