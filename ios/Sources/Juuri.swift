@@ -77,7 +77,7 @@ struct JuuriView: View {
                 // avauksen alussa ja vain sen läpinäkyvyys muuttuu: .blur ja materiaali laskivat sumeuden joka ruudulla ("raskas").
                 // Sumeus vain liikeradan viimeisellä 30 %:lla (käyttäjä 13.10.2026).
                 ZStack {
-                    if let sumea {
+                    if let sumea, Mittari.sumeus {
                         Image(uiImage: sumea).resizable().opacity(max(0, siirto / leveys - 0.7) / 0.3)
                     }
                     Color.black.opacity(0.3 * siirto / leveys)
@@ -87,17 +87,22 @@ struct JuuriView: View {
                     .onTapGesture { withAnimation(.snappy) { navigaatio.sivupalkkiAuki = false } }
                     .gesture(vetoEle(leveys))
                 Sivupalkki(auki: navigaatio.sivupalkkiAuki)
+                    .equatable()
                     .frame(width: leveys)
-                    .offset(x: siirto - leveys)
+                    // Siirto piirtovaiheen efektinä, ei asettelussa: .offset siirsi palkin UIKit-näkymien kehystä joka
+                    // ruudulla, ja navigointi- ja listanäkymät asettelivat itsensä uudelleen (SCOPES-LISTA-SUMEUS).
+                    .visualEffect { [x = siirto - leveys] sisalto, _ in sisalto.offset(x: x) }
                     .gesture(vetoEle(leveys))
                     .accessibilityHidden(!navigaatio.sivupalkkiAuki)
+                if Mittari.paalla { MittariTulos() }
             }
         }
         // Käynnistys (käyttäjä 13.10.2026): kun mikään keskustelu ei ole kesken, äppi aukeaa listaan eikä tyhjään chattiin.
         // Juurinäkymä ilmestyy kerran käynnistyksessä, joten paluu taustalta ei avaa palkkia.
         .task { if navigaatio.nakyma == .chat && navigaatio.nykyinenChat == nil { navigaatio.sivupalkkiAuki = true } }
+        .task { if Mittari.itseajo { await itseajo() } }
         .onChange(of: navigaatio.sivupalkkiAuki) { _, auki in
-            if auki && !sumeaVedosta { sumea = Sumennus.kuva() }
+            if auki && !sumeaVedosta { sumea = Mittari.jaettu.kuva(Sumennus.kuva) }
             sumeaVedosta = false
             auki ? fokus.piilota(navigaatio) : fokus.palauta(navigaatio)
         }
@@ -105,13 +110,41 @@ struct JuuriView: View {
         .sheet(isPresented: $navigaatio.uusiSkooppiAuki) { UusiSkooppiView() }
     }
 
+    // Mittarin itseajo (SCOPES_MITTARI=itse, SCOPES-LISTA-SUMEUS 13.10.2026): äppi vetää palkin itse auki ja kiinni
+    // kolmesti samalla eleellä kuin sormi, ilman XCUITestiä, jonka odotukset ja elementtiluvut pysäyttivät pääsäikeen
+    // mittausikkunassa. Tulos Documents/mittaus.txt:iin (simctl get_app_container … data).
+    private func itseajo() async {
+        guard let ikkuna = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first
+        else { return }
+        let leveys = min(ikkuna.bounds.width * 0.85, 340)
+        let ele = vetoEle(leveys)
+        try? await Task.sleep(for: .seconds(5))
+        if navigaatio.sivupalkkiAuki { navigaatio.sivupalkkiAuki = false }
+        try? await Task.sleep(for: .seconds(1))
+        var rivit: [String] = []
+        for _ in 0..<3 {
+            for suunta: CGFloat in [1, -1] {
+                for i in 1...24 {
+                    ele.muuttui(suunta * leveys * 0.9 * CGFloat(i) / 24)
+                    try? await Task.sleep(for: .milliseconds(16))
+                }
+                ele.loppui(suunta * leveys * 0.9, suunta * 600)
+                try? await Task.sleep(for: .seconds(1.5))
+                rivit.append((suunta > 0 ? "avaus " : "sulku ") + Mittari.jaettu.tulos)
+            }
+        }
+        let polku = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("mittaus.txt")
+        try? (rivit.joined(separator: "\n") + "\n").write(to: polku, atomically: true, encoding: .utf8)
+    }
+
     // Veto oikealle avaa, vasemmalle sulkee; yli kolmannes leveydestä (tai nopea heitto) ratkaisee.
     private func vetoEle(_ leveys: CGFloat) -> SivuttaisVeto {
         SivuttaisVeto(
             muuttui: { x in
                 // Veto alkaa avata palkkia: näppäimistö pois heti, ettei se peitä palkin alaosaa vedon aikana.
+                if veto == 0 { Mittari.jaettu.alku() }
                 if veto == 0, !navigaatio.sivupalkkiAuki {
-                    sumea = Sumennus.kuva()
+                    sumea = Mittari.jaettu.kuva(Sumennus.kuva)
                     sumeaVedosta = true
                     fokus.piilota(navigaatio)
                 }
@@ -139,6 +172,7 @@ struct JuuriView: View {
                 }
                 // Avausveto jäi kesken: palkin tila ei muuttunut, joten onChange ei palauta kenttää.
                 if !auki && !uusi { sumeaVedosta = false; fokus.palauta(navigaatio) }
+                Mittari.jaettu.loppu()
             })
     }
 }
@@ -192,6 +226,85 @@ struct JuuriView: View {
         let tulos = ci.clampedToExtent().applyingGaussianBlur(sigma: 1.2).cropped(to: ci.extent)
         guard let cg = konteksti.createCGImage(tulos, from: ci.extent) else { return nil }
         return UIImage(cgImage: cg)
+    }
+}
+
+// Sivupalkin vedon ruutuajat (SCOPES-LISTA-SUMEUS 13.10.2026): vain kun SCOPES_MITTARI=1. Vedon alusta 0,6 s sen
+// päättymisen yli kirjataan ruutujen välit ja sumean kuvan teko; UI-testi lukee tuloksen näkymättömän "mittari"-
+// elementin nimiöstä. SCOPES_SUMEUS=0 jättää sumean kuvan pois, jotta sumeuden osuus erottuu.
+@MainActor final class Mittari: NSObject, ObservableObject {
+    static let jaettu = Mittari()
+    static let paalla = ["1", "itse"].contains(ProcessInfo.processInfo.environment["SCOPES_MITTARI"])
+    static let itseajo = ProcessInfo.processInfo.environment["SCOPES_MITTARI"] == "itse"
+    static let sumeus = ProcessInfo.processInfo.environment["SCOPES_SUMEUS"] != "0"
+    @Published private(set) var tulos = ""
+    private var linkki: CADisplayLink?
+    private var edellinen: CFTimeInterval = 0
+    private var valit: [(hetki: CFTimeInterval, ms: Double)] = []
+    private var irrotus: CFTimeInterval = .infinity
+    private var kuvaMs: Double = 0
+    private var lopetus: DispatchWorkItem?
+    private var n = 0
+
+    func kuva(_ f: () -> UIImage?) -> UIImage? {
+        let a = CACurrentMediaTime()
+        defer { kuvaMs = (CACurrentMediaTime() - a) * 1000 }
+        return f()
+    }
+
+    func alku() {
+        guard Self.paalla else { return }
+        lopetus?.cancel()
+        guard linkki == nil else { return }
+        valit = []
+        edellinen = 0
+        irrotus = .infinity
+        kuvaMs = 0
+        let l = CADisplayLink(target: self, selector: #selector(ruutu))
+        l.add(to: .main, forMode: .common)
+        linkki = l
+    }
+
+    @objc private func ruutu(_ l: CADisplayLink) {
+        if edellinen > 0 { valit.append((l.timestamp, (l.timestamp - edellinen) * 1000)) }
+        edellinen = l.timestamp
+    }
+
+    func loppu() {
+        guard linkki != nil else { return }
+        irrotus = CACurrentMediaTime()
+        lopetus?.cancel()
+        let w = DispatchWorkItem { [weak self] in self?.kirjaa() }
+        lopetus = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: w)
+    }
+
+    private func kirjaa() {
+        guard let l = linkki else { return }
+        let jakso = (l.targetTimestamp - l.timestamp) * 1000
+        l.invalidate()
+        linkki = nil
+        n += 1
+        // Veto = sormen liike irrotukseen asti, jalki = irrotuksen jälkeinen animaatio ja 0,6 s lepo.
+        func osa(_ v: [Double]) -> String {
+            let pitkat = v.filter { $0 > 1.5 * jakso }
+            return String(format: "ruutuja=%d max=%.1f yli1.5x=%d pitkat=%.0f", v.count, v.max() ?? 0, pitkat.count,
+                          pitkat.reduce(0, +))
+        }
+        tulos = String(format: "n=%d jakso=%.1f kuva=%.1f sumeus=%@ | veto %@ | jalki %@", n, jakso, kuvaMs,
+                       Self.sumeus ? "on" : "pois", osa(valit.filter { $0.hetki <= irrotus }.map(\.ms)),
+                       osa(valit.filter { $0.hetki > irrotus }.map(\.ms)))
+    }
+}
+
+struct MittariTulos: View {
+    @ObservedObject private var m = Mittari.jaettu
+    var body: some View {
+        Color.clear.frame(width: 1, height: 1)
+            .accessibilityElement()
+            .accessibilityIdentifier("mittari")
+            .accessibilityLabel(m.tulos)
+            .allowsHitTesting(false)
     }
 }
 

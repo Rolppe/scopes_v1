@@ -45,8 +45,13 @@ private enum Suodatin: String, CaseIterable {
     case kaikki = "All", skoopit = "Scope", chatit = "Chat"
 }
 
-struct Sivupalkki: View {
+// Equatable: juurinäkymä piirtyy vedon jokaisella ruudulla, mutta palkin sisältö riippuu vain auki-tilasta ja omasta
+// tilastaan (SCOPES-LISTA-SUMEUS 13.10.2026: @AppStorage teki jokaisesta uudesta arvosta "muuttuneen", ja koko lista
+// laskettiin uudelleen ruuduittain). Oma tila ja ympäristöoliot päivittävät palkin edelleen.
+struct Sivupalkki: View, Equatable {
     let auki: Bool
+
+    static func == (a: Sivupalkki, b: Sivupalkki) -> Bool { a.auki == b.auki }
     @EnvironmentObject private var asetukset: Asetukset
     @EnvironmentObject private var navigaatio: Navigaatio
     @State private var skoopit: [SkooppiYhteenveto] = []
@@ -61,8 +66,12 @@ struct Sivupalkki: View {
     private var kohteet: [Kohde] {
         let kaikki = (chatit.map(Kohde.chat) + skoopit.map(Kohde.skooppi)).filter { $0.kuuluu(suodatin) }
         let h = haku.trimmingCharacters(in: .whitespaces)
+        // Aika jäsennetään kerran riviä kohden, ei joka vertailussa (SCOPES-LISTA-SUMEUS 13.10.2026: ISO-jäsennys
+        // lajittelun sisällä vei pääsäikeeltä ~170 ms ruutua kohden).
         return (h.isEmpty ? kaikki : kaikki.filter { $0.osuu(h) })
-            .sorted { $0.aktiivinen != $1.aktiivinen ? $0.aktiivinen : $0.aika > $1.aika }
+            .map { ($0, $0.aktiivinen, $0.aika) }
+            .sorted { $0.1 != $1.1 ? $0.1 : $0.2 > $1.2 }
+            .map(\.0)
     }
 
     var body: some View {
