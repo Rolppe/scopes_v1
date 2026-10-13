@@ -2,6 +2,7 @@
 // listassa sivupalkissa, joka aukeaa vasemman yläkulman nuolesta tai vetämällä sivuttain missä kohtaa tahansa;
 // samassa palkissa ovat uusi chat, uusi skooppi, infra ja asetukset (aiemmin kolmen pisteen valikko ja chatin kello).
 // Chat ja infra pysyvät muistissa vaihdon yli, jotta kesken oleva vastaus ja avattu puu eivät katoa.
+import CoreImage
 import SwiftUI
 
 @main
@@ -48,6 +49,9 @@ struct JuuriView: View {
     @EnvironmentObject private var navigaatio: Navigaatio
     @State private var veto: CGFloat = 0
     @State private var fokus = Fokusmuisti()
+    @State private var sumea: UIImage?
+    // Vedon alussa otettu kuva kelpaa vedon päättävään avaukseen; painikkeen avaus ottaa omansa.
+    @State private var sumeaVedosta = false
 
     var body: some View {
         GeometryReader { g in
@@ -68,7 +72,17 @@ struct JuuriView: View {
                 }
                 // Sivuttaisveto missä kohtaa tahansa avaa palkin (käyttäjä 13.10.2026).
                 .gesture(vetoEle(leveys))
-                Color.black.opacity(0.3 * siirto / leveys).ignoresSafeArea()
+                // Palkin ollessa esillä päänäkymä on sumea (käyttäjä 13.10.2026): sumeus seuraa palkin siirtoa, joten se
+                // tulee ja haihtuu samaa tahtia kuin palkki liukuu, myös vedon aikana sormen mukana. Sumea kuva otetaan kerran
+                // avauksen alussa ja vain sen läpinäkyvyys muuttuu: .blur ja materiaali laskivat sumeuden joka ruudulla ("raskas").
+                // Sumeus vain liikeradan viimeisellä 30 %:lla (käyttäjä 13.10.2026).
+                ZStack {
+                    if let sumea {
+                        Image(uiImage: sumea).resizable().opacity(max(0, siirto / leveys - 0.7) / 0.3)
+                    }
+                    Color.black.opacity(0.3 * siirto / leveys)
+                }
+                    .ignoresSafeArea()
                     .allowsHitTesting(navigaatio.sivupalkkiAuki)
                     .onTapGesture { withAnimation(.snappy) { navigaatio.sivupalkkiAuki = false } }
                     .gesture(vetoEle(leveys))
@@ -82,7 +96,11 @@ struct JuuriView: View {
         // Käynnistys (käyttäjä 13.10.2026): kun mikään keskustelu ei ole kesken, äppi aukeaa listaan eikä tyhjään chattiin.
         // Juurinäkymä ilmestyy kerran käynnistyksessä, joten paluu taustalta ei avaa palkkia.
         .task { if navigaatio.nakyma == .chat && navigaatio.nykyinenChat == nil { navigaatio.sivupalkkiAuki = true } }
-        .onChange(of: navigaatio.sivupalkkiAuki) { _, auki in auki ? fokus.piilota(navigaatio) : fokus.palauta(navigaatio) }
+        .onChange(of: navigaatio.sivupalkkiAuki) { _, auki in
+            if auki && !sumeaVedosta { sumea = Sumennus.kuva() }
+            sumeaVedosta = false
+            auki ? fokus.piilota(navigaatio) : fokus.palauta(navigaatio)
+        }
         .sheet(isPresented: $navigaatio.asetuksetAuki) { AsetuksetView() }
         .sheet(isPresented: $navigaatio.uusiSkooppiAuki) { UusiSkooppiView() }
     }
@@ -92,7 +110,11 @@ struct JuuriView: View {
         SivuttaisVeto(
             muuttui: { x in
                 // Veto alkaa avata palkkia: näppäimistö pois heti, ettei se peitä palkin alaosaa vedon aikana.
-                if veto == 0, !navigaatio.sivupalkkiAuki { fokus.piilota(navigaatio) }
+                if veto == 0, !navigaatio.sivupalkkiAuki {
+                    sumea = Sumennus.kuva()
+                    sumeaVedosta = true
+                    fokus.piilota(navigaatio)
+                }
                 var ilman = Transaction()
                 ilman.disablesAnimations = true
                 withTransaction(ilman) { veto = x }
@@ -116,7 +138,7 @@ struct JuuriView: View {
                     veto = 0
                 }
                 // Avausveto jäi kesken: palkin tila ei muuttunut, joten onChange ei palauta kenttää.
-                if !auki && !uusi { fokus.palauta(navigaatio) }
+                if !auki && !uusi { sumeaVedosta = false; fokus.palauta(navigaatio) }
             })
     }
 }
@@ -149,6 +171,27 @@ struct JuuriView: View {
               (r as? UIView)?.window != nil else { return }
         r.becomeFirstResponder()
         if let valinta, let t = r as? UITextInput { t.selectedTextRange = valinta }
+    }
+}
+
+// Päänäkymän sumea kuva palkin taustaksi: ikkunan kuva neljäsosakoossa, sumennus kerran (käyttäjä 13.10.2026).
+// Kuva otetaan ennen kuin palkki on ruudulla, joten siinä on vain päänäkymä.
+@MainActor enum Sumennus {
+    private static let konteksti = CIContext()
+
+    static func kuva() -> UIImage? {
+        guard let ikkuna = UIApplication.shared.connectedScenes
+            .compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first else { return nil }
+        let koko = CGSize(width: ikkuna.bounds.width / 4, height: ikkuna.bounds.height / 4)
+        let muoto = UIGraphicsImageRendererFormat()
+        muoto.scale = 1
+        let pieni = UIGraphicsImageRenderer(size: koko, format: muoto).image { _ in
+            ikkuna.drawHierarchy(in: CGRect(origin: .zero, size: koko), afterScreenUpdates: false)
+        }
+        guard let ci = CIImage(image: pieni) else { return nil }
+        let tulos = ci.clampedToExtent().applyingGaussianBlur(sigma: 1.2).cropped(to: ci.extent)
+        guard let cg = konteksti.createCGImage(tulos, from: ci.extent) else { return nil }
+        return UIImage(cgImage: cg)
     }
 }
 
