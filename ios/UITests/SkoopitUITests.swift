@@ -3,11 +3,12 @@
 import XCTest
 
 final class SkoopitUITests: XCTestCase {
-    private func kaynnista(avain: String?) -> XCUIApplication {
+    private func kaynnista(avain: String?, lisa: [String: String] = [:]) -> XCUIApplication {
         let app = XCUIApplication()
         let ymp = ProcessInfo.processInfo.environment
         app.launchEnvironment["SCOPES_OSOITE"] = ymp["SCOPES_OSOITE"] ?? "http://192.0.2.11:8787"
         app.launchEnvironment["SCOPES_AVAIN"] = avain ?? ""
+        app.launchEnvironment.merge(lisa) { $1 }
         app.launch()
         return app
     }
@@ -305,6 +306,46 @@ final class SkoopitUITests: XCTestCase {
             XCTAssertFalse(nakyvat.isEmpty, "viestinäkymä tyhjä vaihdon \(kierros) jälkeen (\(skooppi))")
         }
         kuva("vaihto-lopuksi")
+    }
+
+    // Sivupalkin vedon ruutuajat (SCOPES-LISTA-SUMEUS 13.10.2026): sama avaus- ja sulkuveto sumeudella ja ilman,
+    // kolmesti kumpikin. Tulos on liitteenä "mittaus" (xcresulttool export attachments); testi ei aseta rajaa.
+    func testSumeusMittaus() throws {
+        let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        var rivit: [String] = []
+        for sumeus in ["1", "0"] {
+            let app = kaynnista(avain: avain, lisa: ["SCOPES_MITTARI": "1", "SCOPES_SUMEUS": sumeus])
+            chattiin(app)
+            let mittari = app.otherElements["mittari"]
+            XCTAssertTrue(mittari.waitForExistence(timeout: 5), "mittari puuttuu")
+            var edellinen = mittari.label
+            // Elementin luku ottaa äpistä saavutettavuuskuvan, joka pysäyttää pääsäikeen (~160 ms ruutuja): luetaan vasta,
+            // kun mittausikkuna (veto + 0,6 s) on sulkeutunut.
+            func lue(_ veto: String) {
+                sleep(2)
+                let loppu = Date().addingTimeInterval(5)
+                while mittari.label == edellinen && Date() < loppu { usleep(100_000) }
+                edellinen = mittari.label
+                rivit.append("\(veto) \(edellinen)")
+            }
+            for _ in 0..<3 {
+                app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5))
+                    .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)),
+                           withVelocity: 600, thenHoldForDuration: 0.1)
+                lue("avaus")
+                XCTAssertTrue(osuttava(app.buttons["suodatin-all"], true), "veto ei avannut palkkia")
+                app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5))
+                    .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)),
+                           withVelocity: 600, thenHoldForDuration: 0.1)
+                lue("sulku")
+                XCTAssertTrue(osuttava(app.buttons["suodatin-all"], false), "veto ei sulkenut palkkia")
+            }
+            app.terminate()
+        }
+        let liite = XCTAttachment(string: rivit.joined(separator: "\n"))
+        liite.name = "mittaus"
+        liite.lifetime = .keepAlways
+        add(liite)
     }
 
     func testKysymysKortti() throws {
