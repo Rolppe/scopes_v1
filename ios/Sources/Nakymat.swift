@@ -51,7 +51,7 @@ struct SkooppiNakymaView: View {
                         if !s.kuvaus.isEmpty { Text(s.kuvaus).font(.callout) }
                         if let a = s.aloitus { Text(a).font(.caption.monospaced()).foregroundStyle(.secondary) }
                     } else {
-                        Text("ei mitään").foregroundStyle(.secondary)
+                        Text("ei mitään").foregroundStyle(.secondary).accessibilityIdentifier("seuraava-ei")
                     }
                 }
                 if let k = n.konteksti {
