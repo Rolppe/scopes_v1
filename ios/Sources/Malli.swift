@@ -126,6 +126,8 @@ struct ChatKeskustelunViestit: Decodable {
 struct SkooppiViestit: Decodable {
     let nimi: String
     let auki: Bool
+    // Skoopissa on vain pakattuja istuntoja: keskustelu tyhjennetään ja Pura jatkaa samassa näkymässä.
+    let pakattu: Bool?
     let istunto: Istunto?
     let voiLahettaa: Bool
     let viestit: [Viesti]

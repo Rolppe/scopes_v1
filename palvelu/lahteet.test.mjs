@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request } from 'node:http';
 import { createServer } from 'node:http';
-import { istunnonSkooppi, istunnot, jasennaSeuraava, konteksti, lista, projektiNimi, pysahdys, seuraavaRivi, taulukko, yksi } from './lahteet.mjs';
+import { istunnonSkooppi, istunnot, jasennaSeuraava, konteksti, lista, pakattu, projektiNimi, pysahdys, seuraavaRivi, taulukko, yksi } from './lahteet.mjs';
 import { avainKelpaa, kasittelija } from './palvelin.mjs';
 
 const REK = `# R
@@ -100,7 +100,7 @@ function ymparisto() {
 test('istunnot: vain elävät, skooppi ja konteksti transkriptista', () => {
   const a = ymparisto();
   const i = istunnot({ ...a, skooppiNimet: ['a', 'b'] });
-  assert.deepEqual(i, [{ id: 's1', nimi: 'kone-1', tila: 'idle', skooppi: 'a', konteksti: { tokenit: 50005, aika: 't' }, pysahdys: null,
+  assert.deepEqual(i, [{ id: 's1', nimi: 'kone-1', tila: 'idle', skooppi: 'a', konteksti: { tokenit: 50005, aika: 't' }, pysahdys: null, pakattu: false, alkoi: 0,
     pid: process.pid, vanhempi: process.ppid, ruutu: null, polku: join(a.projektitDir, '-x-y', 's1.jsonl') }]);
 });
 
@@ -149,4 +149,19 @@ test('avain: vain täsmälleen oikea Bearer kelpaa', () => {
   assert.equal(avainKelpaa('Bearer abcd', 'abc'), false);
   assert.equal(avainKelpaa('abc', 'abc'), false);
   assert.equal(avainKelpaa(undefined, 'abc'), false);
+});
+
+test('pakattu: PAKKAUS: vahvistettu viimeisen käyttäjän viestin jälkeen', () => {
+  const r = (o) => JSON.stringify(o);
+  const k = (teksti, muut = {}) => r({ type: 'user', message: { content: teksti }, ...muut });
+  const a = (teksti) => r({ type: 'assistant', message: { content: [{ type: 'text', text: teksti }] } });
+  const pakkaus = a('Tehty.\n**PAKKAUS: vahvistettu** — rekisterit ok, commit abc, push ok');
+  assert.equal(pakattu([k('<command-name>/pakkaa</command-name>'), pakkaus].join('\n')), true);
+  // Herätykset, työkalutulokset, meta- ja ali-agenttirivit eivät avaa pakattua istuntoa.
+  assert.equal(pakattu([pakkaus, k('sa-tick: herätys'), a('ok'), k('<system-reminder>x</system-reminder>'),
+    k('jatka', { isMeta: true }), k('jatka', { isSidechain: true }), r({ type: 'user', message: { content: [{ type: 'tool_result', content: 'x' }] } })].join('\n')), true);
+  assert.equal(pakattu([pakkaus, k('jatketaan vielä')].join('\n')), false);
+  // Taidon teksti käyttäjän viestissä tai rivin maininta lauseen keskellä ei ole pakkaus.
+  assert.equal(pakattu([k('rivi `PAKKAUS: vahvistettu` tulee loppuun'), a('Ei vielä: PAKKAUS: vahvistettu tulee myöhemmin')].join('\n')), false);
+  assert.equal(pakattu(''), false);
 });

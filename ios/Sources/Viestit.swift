@@ -1,6 +1,7 @@
 // Chat ja skoopin viestit (DEMO-SCOPES-VALILEHDET 13.10.2026). Chat: palvelin ajaa valitun mallin tai oman
 // agentin ilman kontekstinhallintaa; jatko kulkee keskustelun tunnuksella; vastaus suoratoistona. Skoopin viestit: käynnissä olevan
-// istunnon keskustelu; jos skooppi ei ole auki, viesti ja sen alla Pura-painike, joka purkaa ja avaa viestit.
+// istunnon keskustelu; jos skooppi ei ole auki tai se on pakattu, viesti ja sen alla Pura-painike, joka purkaa ja avaa
+// uuden istunnon viestit samaan näkymään (pakkaus ja automaattisiirto eivät vaihda äpin keskustelua, käyttäjä 13.10.2026).
 import SwiftUI
 import UIKit
 
@@ -472,7 +473,8 @@ struct SkooppiViestitView: View {
                 } else {
                     Spacer()
                     VStack(spacing: 16) {
-                        Text("Skooppi ei ole auki.").font(.headline).accessibilityIdentifier("ei-auki")
+                        Text(t.pakattu == true ? "Skooppi on pakattu." : "Skooppi ei ole auki.").font(.headline)
+                            .accessibilityIdentifier(t.pakattu == true ? "pakattu" : "ei-auki")
                         Button { Task { await pura() } } label: { Label("Pura", systemImage: "play.circle") }
                             .buttonStyle(.borderedProminent)
                             .disabled(puretaan)

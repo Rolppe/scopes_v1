@@ -43,11 +43,30 @@ test('pura: uusi istunto vain tunnetulle skoopille ilman käynnissä olevaa istu
   const a = ymparisto();
   const v = vaarennos();
   const suorita = luoToiminnot(a, { aja: v.aja });
-  assert.deepEqual(await suorita('pura', 'b'), { ok: true, toiminto: 'pura', nimi: 'b', osoite: 'https://claude.ai/code/session_abc123' });
+  assert.deepEqual(await suorita('pura', 'b'), { ok: true, toiminto: 'pura', nimi: 'b', osoite: 'https://claude.ai/code/session_abc123', suljettiin: [] });
   assert.deepEqual(v.kutsut, [['bash', join(a.juuri, 'claude/siirto/tools/autovaihto.sh'), 'vaihda', 'b', '--ei-sulje', '--viesti', '/pura b']]);
   await hylkaa(suorita('pura', 'a'), 409);
   await hylkaa(suorita('pura', 'c; rm -rf /'), 404);
   assert.equal(v.kutsut.length, 1);
+});
+
+test('pura: pakattu tmux-istunto suljetaan ensin, varattu tai pakkaamaton estää', async () => {
+  const pakkaa = (a) => writeFileSync(join(a.projektitDir, projektiNimi('/x'), 's1.jsonl'),
+    JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'PAKKAUS: vahvistettu — commit abc' }] } }));
+  const a = ymparisto();
+  pakkaa(a);
+  const v = vaarennos();
+  const r = await luoToiminnot(a, { aja: v.aja })('pura', 'a');
+  assert.deepEqual(r.suljettiin, ['s1']);
+  assert.deepEqual(v.kutsut.slice(1), [['tmux', 'send-keys', '-t', '%5', '-l', '/exit'], ['tmux', 'send-keys', '-t', '%5', 'Enter'],
+    ['bash', join(a.juuri, 'claude/siirto/tools/autovaihto.sh'), 'vaihda', 'a', '--ei-sulje', '--viesti', '/pura a']]);
+  const varattu = ymparisto({ tila: 'busy' });
+  pakkaa(varattu);
+  const v2 = vaarennos();
+  await hylkaa(luoToiminnot(varattu, { aja: v2.aja })('pura', 'a'), 409);
+  assert.equal(v2.kutsut.length, 0);
+  // Pakattuun istuntoon ei lähetetä /pakkaa uudelleen.
+  await hylkaa(luoToiminnot(a, { aja: vaarennos().aja })('pakkaa', 'a'), 409);
 });
 
 test('pura: autovaihdon virhe näkyy 502:na', async () => {
