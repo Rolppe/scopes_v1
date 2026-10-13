@@ -74,6 +74,8 @@ struct KysymysKortti: View {
                         .padding(8)
                         .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 8))
                         .accessibilityIdentifier("kysymys-muu")
+                        // Oma vastaus korvaa valinnan (käyttäjä 13.10.2026): kirjoitus poistaa aiemmat valinnat.
+                        .onChange(of: muu) { if !muuTeksti.isEmpty { valinnat = [:] } }
                     Button("Lähetä") { laheta(vastaa) }
                         .buttonStyle(.borderedProminent)
                         .tint(Color.claude)
@@ -120,6 +122,7 @@ struct KysymysKortti: View {
         var joukko = valinnat[q] ?? []
         if kysymykset[q].monivalinta { if joukko.contains(i) { joukko.remove(i) } else { joukko.insert(i) } } else { joukko = [i] }
         valinnat[q] = joukko
+        muu = ""
     }
 
     // Vastaus tekstinä: kysymys kerrallaan "otsikko: valinnat", lopuksi Muu-kentän teksti.
