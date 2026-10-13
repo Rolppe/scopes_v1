@@ -355,6 +355,9 @@ final class SkoopitUITests: XCTestCase {
         let odota = TimeInterval(ymp["SCOPES_KOE_KORTTI_ODOTA"] ?? "") ?? 5
         let app = kaynnista(avain: avain)
         etsi(app, skooppi)
+        // Hakunappi sulkee haun näppäimistön; auki jäävä näppäimistö vierittää kortin yläkulman ja X:n piiloon.
+        app.searchFields.firstMatch.typeText("\n")
+        _ = app.keyboards.firstMatch.waitForNonExistence(timeout: 3)
         let rivi = app.buttons["skooppi-\(skooppi)"]
         XCTAssertTrue(rivi.waitForExistence(timeout: 15), "haku ei löytänyt skooppia")
         rivi.tap()
@@ -366,6 +369,26 @@ final class SkoopitUITests: XCTestCase {
         // Auki oleva kortti piilottaa syöttökentän (käyttäjä 13.10.2026).
         XCTAssertFalse(app.textViews["viestit-kentta"].exists || app.textFields["viestit-kentta"].exists, "syöttökenttä näkyy kortin rinnalla")
         kuva("kysymys-kortti")
+        // X ja Muu-kenttä vain lähetettävässä istunnossa (CHAT-KORTTI-SIMU, V-276). X:ää ei paineta: se hylkäisi
+        // oikean istunnon kysymyksen. Muu-kentän valinta nostaa kentän näppäimistön yläpuolelle.
+        let muu = app.textFields["kysymys-muu-0"].exists ? app.textFields["kysymys-muu-0"] : app.textViews["kysymys-muu-0"]
+        guard muu.exists else { throw XCTSkip("istuntoon ei voi lähettää: X ja Muu puuttuvat") }
+        // Ruutua pidempi kortti: X vedetään esiin lyhyellä vedolla (pyyhkäisy vieri kortin ohi). Ei napautusta listaan:
+        // yhden kysymyksen vaihtoehdon napautus lähettäisi vastauksen oikeaan istuntoon.
+        let x = app.buttons["kysymys-sulje"]
+        if x.exists && !x.isHittable {
+            let alku = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4))
+            alku.press(forDuration: 0.1, thenDragTo: alku.withOffset(CGVector(dx: 0, dy: 250)))
+        }
+        XCTAssertTrue(x.isHittable, "kortista puuttuu sulkunappi X")
+        kuva("kysymys-sulje")
+        muu.tap()
+        let nappaimisto = app.keyboards.firstMatch
+        XCTAssertTrue(nappaimisto.waitForExistence(timeout: 5), "näppäimistö ei auennut Muu-kentästä")
+        sleep(2)
+        kuva("kysymys-muu")
+        XCTAssertLessThanOrEqual(muu.frame.maxY, nappaimisto.frame.minY + 2,
+                                 "Muu-kenttä jää näppäimistön alle: \(muu.frame.maxY), näppäimistö \(nappaimisto.frame.minY)")
     }
 
     // Chat oikeaa palvelua vastaan halvimmalla mallilla: yksi lyhyt kysymys (noin 1 snt).
