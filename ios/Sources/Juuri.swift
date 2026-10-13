@@ -47,6 +47,7 @@ final class Navigaatio: ObservableObject {
 struct JuuriView: View {
     @EnvironmentObject private var navigaatio: Navigaatio
     @State private var veto: CGFloat = 0
+    @State private var fokus = Fokusmuisti()
 
     var body: some View {
         GeometryReader { g in
@@ -81,6 +82,7 @@ struct JuuriView: View {
         // Käynnistys (käyttäjä 13.10.2026): kun mikään keskustelu ei ole kesken, äppi aukeaa listaan eikä tyhjään chattiin.
         // Juurinäkymä ilmestyy kerran käynnistyksessä, joten paluu taustalta ei avaa palkkia.
         .task { if navigaatio.nakyma == .chat && navigaatio.nykyinenChat == nil { navigaatio.sivupalkkiAuki = true } }
+        .onChange(of: navigaatio.sivupalkkiAuki) { _, auki in auki ? fokus.piilota(navigaatio) : fokus.palauta(navigaatio) }
         .sheet(isPresented: $navigaatio.asetuksetAuki) { AsetuksetView() }
         .sheet(isPresented: $navigaatio.uusiSkooppiAuki) { UusiSkooppiView() }
     }
@@ -89,6 +91,8 @@ struct JuuriView: View {
     private func vetoEle(_ leveys: CGFloat) -> SivuttaisVeto {
         SivuttaisVeto(
             muuttui: { x in
+                // Veto alkaa avata palkkia: näppäimistö pois heti, ettei se peitä palkin alaosaa vedon aikana.
+                if veto == 0, !navigaatio.sivupalkkiAuki { fokus.piilota(navigaatio) }
                 var ilman = Transaction()
                 ilman.disablesAnimations = true
                 withTransaction(ilman) { veto = x }
@@ -111,8 +115,52 @@ struct JuuriView: View {
                     navigaatio.sivupalkkiAuki = uusi
                     veto = 0
                 }
+                // Avausveto jäi kesken: palkin tila ei muuttunut, joten onChange ei palauta kenttää.
+                if !auki && !uusi { fokus.palauta(navigaatio) }
             })
     }
+}
+
+// Sivupalkin avaus piilottaa näppäimistön ja muistaa kirjoituskentän (käyttäjä 13.10.2026). Kun palkki sulkeutuu samaan
+// keskusteluun (himmennyksen napautus, veto tai saman rivin valinta), kursori palaa samaan kenttään samaan kohtaan ja
+// näppäimistö takaisin; toiseen näkymään tai keskusteluun vaihto unohtaa kentän. Chatin tunnus päivittyy vasta
+// latauksen jälkeen, joten vaihto tunnistetaan sivupalkin pyynnöstä.
+@MainActor final class Fokusmuisti {
+    private weak var kentta: UIResponder?
+    private var valinta: UITextRange?
+    private var nakyma: Paanakyma?
+    private var chat: String?
+    private var pyynto = 0
+
+    func piilota(_ n: Navigaatio) {
+        guard kentta == nil, let r = UIResponder.nykyinen, r is UITextInput else { return }
+        kentta = r
+        valinta = (r as? UITextInput)?.selectedTextRange
+        nakyma = n.nakyma
+        chat = n.nykyinenChat
+        pyynto = n.chatPyynto.n
+        r.resignFirstResponder()
+    }
+
+    func palauta(_ n: Navigaatio) {
+        defer { kentta = nil; valinta = nil }
+        guard let r = kentta, n.nakyma == nakyma, !n.asetuksetAuki, !n.uusiSkooppiAuki,
+              n.chatPyynto.n == pyynto || n.chatPyynto.id == chat,
+              (r as? UIView)?.window != nil else { return }
+        r.becomeFirstResponder()
+        if let valinta, let t = r as? UITextInput { t.selectedTextRange = valinta }
+    }
+}
+
+extension UIResponder {
+    private static weak var loydetty: UIResponder?
+    // Nykyinen ensimmäinen vastaaja: kohteeton toiminto menee sille, ja se kirjaa itsensä.
+    static var nykyinen: UIResponder? {
+        loydetty = nil
+        UIApplication.shared.sendAction(#selector(kirjaaItsensa), to: nil, from: nil, for: nil)
+        return loydetty
+    }
+    @objc private func kirjaaItsensa() { UIResponder.loydetty = self }
 }
 
 // Sivuttaisveto UIKitin pan-eleenä (käyttäjä 13.10.2026: SwiftUI:n DragGesture "ei seuraa sormen liikettä
