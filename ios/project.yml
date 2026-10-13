@@ -1,0 +1,41 @@
+name: Skoopit
+options:
+  deploymentTarget:
+    iOS: "18.0"
+settings:
+  base:
+    DEVELOPMENT_TEAM: YOUR_TEAM_ID
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+targets:
+  Skoopit:
+    type: application
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources: [Sources, Resources]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.skoopit
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    scheme:
+      testTargets: [SkoopitUITests]
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: Scopes
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        NSLocalNetworkUsageDescription: Sovellus lukee skooppien tilan kotipalvelimelta.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+  SkoopitUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources: [UITests]
+    dependencies:
+      - target: Skoopit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.skoopit.uitests
+        GENERATE_INFOPLIST_FILE: YES

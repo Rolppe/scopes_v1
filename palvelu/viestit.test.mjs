@@ -1,0 +1,354 @@
+// node --test scopes/palvelu/viestit.test.mjs
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { createServer, request } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { projektiNimi } from './lahteet.mjs';
+import { kasittelija } from './palvelin.mjs';
+import { Hylatty } from './toiminnot.mjs';
+import { keskustelu, luoViestit, MALLIT, paikallisetMallit, tyokaluRivi } from './viestit.mjs';
+
+const ID = '38c487b9-3c36-4723-b2af-5f07b106c172';
+const rivi = (o) => JSON.stringify(o);
+const TRANSKRIPTI = [
+  rivi({ type: 'user', message: { content: '<command-name>/pura</command-name>\n<command-args>a</command-args>' }, timestamp: 't1' }),
+  rivi({ type: 'user', isMeta: true, message: { content: 'meta' } }),
+  rivi({ type: 'assistant', message: { content: [{ type: 'text', text: 'Purku valmis.' }, { type: 'tool_use', name: 'Bash' }] }, timestamp: 't2' }),
+  rivi({ type: 'user', message: { content: [{ type: 'tool_result', content: 'x' }] } }),
+  rivi({ type: 'assistant', isSidechain: true, message: { content: [{ type: 'text', text: 'ali' }] } }),
+  rivi({ type: 'user', message: { content: '<system-reminder>r</system-reminder>' } }),
+  rivi({ type: 'user', message: { content: 'jatka' }, timestamp: 't3' }),
+].join('\n');
+
+// Skooppi a: elävä tmux-istunto (oma prosessi, ruutu %5) ja transkripti. Skooppi b: ei istuntoja.
+function ymparisto({ tmux = 'siirto-a-1:@1.%5' } = {}) {
+  const d = mkdtempSync(join(tmpdir(), 'scopes-v-'));
+  const juuri = join(d, 'juuri');
+  mkdirSync(join(juuri, 'claude/siirto/state'), { recursive: true });
+  writeFileSync(join(juuri, 'claude/siirto/state/skoopit.json'), JSON.stringify({ a: ['R.md'], b: ['R.md'] }));
+  const istunnotDir = join(d, 'istunnot');
+  mkdirSync(istunnotDir);
+  writeFileSync(join(istunnotDir, `${process.pid}.json`), JSON.stringify({ pid: process.pid, sessionId: 's1', cwd: '/x', name: 'a', status: 'busy', tmux }));
+  const projektitDir = join(d, 'projektit');
+  mkdirSync(join(projektitDir, projektiNimi('/x')), { recursive: true });
+  writeFileSync(join(projektitDir, projektiNimi('/x'), 's1.jsonl'), TRANSKRIPTI);
+  return { juuri, istunnotDir, projektitDir, chatDir: join(d, 'chat') };
+}
+
+// claude -p --output-format stream-json: tekstin palat stream_event-riveinä, lopuksi result-rivi.
+const delta = (text) => rivi({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text } } });
+const lohko = (type) => rivi({ type: 'stream_event', event: { type: 'content_block_start', content_block: { type } } });
+const VIRTA = [rivi({ type: 'system', subtype: 'init' }), lohko('thinking'),
+  rivi({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'mietin' } } }),
+  lohko('text'), delta('h'), delta('ei'), 'ei json',
+  rivi({ type: 'result', subtype: 'success', result: 'hei', session_id: ID, total_cost_usd: 0.01, is_error: false })].join('\n') + '\n';
+
+// LM Studio palvelimella ssh:n yli: mallilista ja SSE-virta (ajattelu reasoning_content-kentässä).
+const LMS_LISTA = JSON.stringify({ data: [{ id: 'qwen/qwen3.6-35b-a3b' }, { id: 'text-embedding-nomic' }, { id: 'paha; rm' }] });
+const sse = (delta) => `data: ${JSON.stringify({ choices: [{ delta }] })}`;
+const LMS_VIRTA = [sse({ reasoning_content: 'mietin' }), '', sse({ content: 'moi' }), sse({ content: ' sinulle' }), 'data: [DONE]'].join('\n') + '\n';
+const PAIKALLINEN = 'palvelin/qwen/qwen3.6-35b-a3b';
+
+function vaarennos(claude = { koodi: 0, stdout: VIRTA, stderr: '' }, lms = { koodi: 0, stdout: LMS_LISTA, stderr: '' }) {
+  const kutsut = [];
+  const aja = async (komento, argumentit, valinnat = {}) => {
+    kutsut.push({ komento, argumentit, ...valinnat });
+    if (komento === 'ssh' && argumentit.at(-1).includes('/v1/models')) return lms;
+    if (komento === 'ssh' && argumentit.at(-1).includes('lms load')) return { koodi: 0, stdout: '', stderr: '' };
+    if (komento === 'ssh') {
+      for (const r of LMS_VIRTA.split('\n')) if (r && valinnat.riville) valinnat.riville(r);
+      return { koodi: 0, stdout: LMS_VIRTA, stderr: '' };
+    }
+    if (komento === 'tmux' && argumentit[0] === 'display-message') return { koodi: 0, stdout: `${process.pid}\n`, stderr: '' };
+    if (komento === 'tmux') return { koodi: 0, stdout: '', stderr: '' };
+    for (const r of claude.stdout.split('\n')) if (r && valinnat.riville) valinnat.riville(r);
+    return claude;
+  };
+  return { aja, kutsut };
+}
+
+const hylkaa = async (lupaus, koodi) => assert.rejects(lupaus, (e) => e instanceof Hylatty && e.koodi === koodi);
+
+test('paikallisetMallit: LM Studion lista, upotukset ja kelvottomat pois', () => {
+  assert.deepEqual(paikallisetMallit(LMS_LISTA), [{ nimi: PAIKALLINEN, kuvaus: 'qwen3.6-35b-a3b', tyyppi: 'paikallinen' }]);
+  assert.deepEqual(paikallisetMallit(''), []);
+  assert.deepEqual(paikallisetMallit('{"data":5}'), []);
+});
+
+test('keskustelu: teksti, komennot ja työkalurivit; ei tuloksia, metaa eikä ali-agentteja', () => {
+  assert.deepEqual(keskustelu(TRANSKRIPTI), [
+    { rooli: 'kayttaja', teksti: '/pura a', aika: 't1' },
+    { rooli: 'agentti', teksti: 'Purku valmis.', aika: 't2' },
+    { rooli: 'tyokalu', teksti: 'Bash', aika: 't2' },
+    { rooli: 'kayttaja', teksti: 'jatka', aika: 't3' },
+  ]);
+  assert.equal(keskustelu(TRANSKRIPTI, 1).length, 1);
+});
+
+test('keskustelu: monivalinta kysymyksenä vaihtoehtoineen, vastaus käyttäjän viestinä', () => {
+  const kysy = { type: 'tool_use', id: 'k1', name: 'AskUserQuestion', input: { questions: [
+    { question: 'Mitä tehdään?', header: 'Jatko', multiSelect: false, options: [{ label: 'Aloita', description: 'paketti' }, { label: 'Ei mitään' }] }] } };
+  const t = [
+    rivi({ type: 'assistant', timestamp: 'a1', message: { content: [{ type: 'text', text: 'Valitse:' }, kysy] } }),
+    rivi({ type: 'user', timestamp: 'a2', message: { content: [{ type: 'tool_result', tool_use_id: 'k1', content: 'answered' }] },
+      toolUseResult: { answers: { 'Mitä tehdään?': 'Aloita' } } }),
+    rivi({ type: 'user', timestamp: 'a3', message: { content: [{ type: 'tool_result', tool_use_id: 'muu', content: 'x' }] } }),
+  ].join('\n');
+  assert.deepEqual(keskustelu(t), [
+    { rooli: 'agentti', teksti: 'Valitse:', aika: 'a1' },
+    { rooli: 'kysymys', teksti: 'Mitä tehdään?\n1. Aloita\n2. Ei mitään', aika: 'a1', vastattu: true, kysymykset: [
+      { kysymys: 'Mitä tehdään?', otsikko: 'Jatko', monivalinta: false, vaihtoehdot: [{ nimi: 'Aloita', kuvaus: 'paketti' }, { nimi: 'Ei mitään', kuvaus: null }] }] },
+    { rooli: 'kayttaja', teksti: 'Aloita', aika: 'a2' },
+  ]);
+  assert.equal(keskustelu(t.split('\n')[0])[1].vastattu, false);
+  // Keskeytetty kysymys: perässä muu viesti ilman tool_resultia → ei enää auki.
+  const keskeytys = [t.split('\n')[0], rivi({ type: 'user', timestamp: 'a4', message: { content: 'muuta tekstiä' } })].join('\n');
+  assert.equal(keskustelu(keskeytys)[1].vastattu, true);
+});
+
+test('tyokaluRivi: komento, muokattu tiedosto, lyhennys', () => {
+  assert.equal(tyokaluRivi({ name: 'Bash', input: { command: 'git status\ngit log' } }), '$ git status');
+  assert.equal(tyokaluRivi({ name: 'Bash', input: { command: 'cd "/a b" && npm test' } }), '$ npm test');
+  assert.equal(tyokaluRivi({ name: 'Edit', input: { file_path: '/a/b/c.swift' } }), '✎ /a/b/c.swift');
+  assert.equal(tyokaluRivi({ name: 'Write', input: { file_path: '/a/d.md' } }), '✎ /a/d.md');
+  assert.equal(tyokaluRivi({ name: 'Read', input: { file_path: '/a/b/c.swift' } }), 'luki c.swift');
+  assert.equal(tyokaluRivi({ name: 'Grep', input: { pattern: 'x+' } }), 'haki x+');
+  assert.equal(tyokaluRivi({ name: 'Agent', input: { description: 'tutki' } }), 'ali-agentti: tutki');
+  assert.equal(tyokaluRivi({ name: 'Bash', input: { command: 'x'.repeat(200) } }).length, 122);
+});
+
+test('chat: keskusteluhistoria transkripteista, agentti talteen', async () => {
+  const a = ymparisto();
+  const dir = join(a.projektitDir, projektiNimi(a.chatDir));
+  mkdirSync(dir, { recursive: true });
+  const ID2 = '00000000-0000-4000-8000-000000000002';
+  writeFileSync(join(dir, `${ID}.jsonl`), [
+    rivi({ type: 'user', message: { content: 'eka kysymys' }, timestamp: 't1' }),
+    rivi({ type: 'assistant', message: { model: 'claude-haiku-5-5', content: [{ type: 'text', text: 'vastaus' }] }, timestamp: 't2' }),
+  ].join('\n'));
+  writeFileSync(join(dir, `${ID2}.jsonl`), rivi({ type: 'user', message: { content: 'toinen' } }));
+  writeFileSync(join(dir, 'ei-tunnus.jsonl'), rivi({ type: 'user', message: { content: 'x' } }));
+  const v = luoViestit(a, { aja: vaarennos().aja });
+  const lista = v.keskustelut();
+  assert.deepEqual(lista.map((k) => k.id).sort(), [ID2, ID]);
+  const eka = lista.find((k) => k.id === ID);
+  assert.equal(eka.otsikko, 'eka kysymys');
+  assert.equal(eka.agentti, 'claude-haiku-5-5');
+  assert.equal(eka.viesteja, 2);
+  assert.equal(lista.find((k) => k.id === ID2).agentti, null);
+  const k = v.keskustelunViestit(ID);
+  assert.equal(k.agentti, 'claude-haiku-5-5');
+  assert.deepEqual(k.viestit.map((x) => x.teksti), ['eka kysymys', 'vastaus']);
+  // Paikallisen mallin keskustelu talletetaan palvelussa ja näkyy samassa listassa.
+  const p = await v.chat({ agentti: PAIKALLINEN, viesti: 'paikallinen kysymys' });
+  const pk = v.keskustelut().find((x) => x.id === p.keskustelu);
+  assert.equal(pk.agentti, PAIKALLINEN);
+  assert.equal(pk.otsikko, 'paikallinen kysymys');
+  assert.deepEqual(v.keskustelunViestit(p.keskustelu).viestit.map((x) => x.teksti), ['paikallinen kysymys', 'moi sinulle']);
+  assert.throws(() => v.keskustelunViestit('../x'), (e) => e.koodi === 400);
+  assert.throws(() => v.keskustelunViestit('00000000-0000-4000-8000-000000000009'), (e) => e.koodi === 404);
+  assert.deepEqual(luoViestit(ymparisto(), { aja: vaarennos().aja }).keskustelut(), []);
+});
+
+test('chat: malli, agentti ja jatko; viesti stdinissä, ei työkaluja', async () => {
+  const a = ymparisto();
+  const { aja, kutsut } = vaarennos();
+  const v = luoViestit(a, { aja });
+  assert.deepEqual(await v.chat({ agentti: 'claude-haiku-5-5', viesti: 'moi; rm -rf /' }),
+    { vastaus: 'hei', keskustelu: ID, agentti: 'claude-haiku-5-5', kustannus: 0.01 });
+  assert.deepEqual(kutsut[0].argumentit, ['-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
+    '--tools', '', '--model', 'claude-haiku-5-5']);
+  assert.equal(kutsut[0].syote, 'moi; rm -rf /');
+  assert.equal(kutsut[0].cwd, a.chatDir);
+  await v.chat({ agentti: 'claude-opus-5-5', viesti: 'x', keskustelu: ID });
+  assert.deepEqual(kutsut[1].argumentit.slice(7), ['--model', 'claude-opus-5-5', '--resume', ID]);
+  assert.equal((await v.agentit()).length, MALLIT.length + 1);
+  assert.equal((await v.agentit()).length, MALLIT.length + 1);
+  assert.equal(kutsut.filter((k) => k.komento === 'ssh').length, 1, 'mallilista välimuistista');
+});
+
+test('chat: paikallinen malli ssh:n yli — viestit JSON-rungossa, ajattelu pois, jatko samalla mallilla', async () => {
+  const a = ymparisto();
+  const { aja, kutsut } = vaarennos();
+  const v = luoViestit(a, { aja });
+  const palat = [];
+  const r = await v.chat({ agentti: PAIKALLINEN, viesti: "moi'; rm -rf /" }, { pala: (t) => palat.push(t) });
+  assert.equal(r.vastaus, 'moi sinulle');
+  assert.deepEqual(palat, ['moi', ' sinulle']);
+  // Ennen pyyntöä malli ladataan, ja muu ladattu malli puretaan (mallin vaihto).
+  assert.match(kutsut.at(-2).argumentit.at(-1), /grep -qF '"identifier":"qwen\/qwen3\.6-35b-a3b"' \|\| \{ \$L unload --all/);
+  const ajo = kutsut.at(-1);
+  assert.equal(ajo.komento, 'ssh');
+  assert.ok(!ajo.argumentit.some((x) => x.includes('rm -rf')), 'viesti komentorivillä');
+  assert.deepEqual(JSON.parse(ajo.syote), { model: 'qwen/qwen3.6-35b-a3b', stream: true, messages: [{ role: 'user', content: "moi'; rm -rf /" }] });
+  await v.chat({ agentti: PAIKALLINEN, viesti: 'jatko', keskustelu: r.keskustelu });
+  assert.deepEqual(JSON.parse(kutsut.at(-1).syote).messages.map((m) => m.role), ['user', 'assistant', 'user']);
+  await hylkaa(v.chat({ agentti: PAIKALLINEN, viesti: 'x', keskustelu: '00000000-0000-4000-8000-000000000009' }), 404);
+  await hylkaa(v.chat({ agentti: 'palvelin/ei-ole', viesti: 'x' }), 400);
+  // palvelin pois päältä: vain Claude-mallit.
+  const pois = luoViestit(a, { aja: vaarennos(undefined, { koodi: 255, stdout: '', stderr: 'timeout' }).aja });
+  assert.equal((await pois.agentit()).length, MALLIT.length);
+});
+
+test('chat: suoratoisto — palat sitä mukaa, ajattelu pois, tekstilohkot erotettu', async () => {
+  const a = ymparisto();
+  const palat = [];
+  let alkoi = 0;
+  const ohjain = new AbortController();
+  const { aja, kutsut } = vaarennos();
+  const v = luoViestit(a, { aja });
+  const tulos = await v.chat({ agentti: 'claude-haiku-5-5', viesti: 'x' }, { pala: (t) => palat.push(t), alku: () => alkoi++, signal: ohjain.signal });
+  assert.deepEqual(palat, ['h', 'ei']);
+  assert.equal(alkoi, 1);
+  assert.equal(tulos.vastaus, 'hei');
+  assert.equal(kutsut[0].signal, ohjain.signal);
+  const kaksi = [lohko('text'), delta('a'), lohko('text'), delta('b'), rivi({ type: 'result', result: 'a\n\nb', session_id: ID })].join('\n');
+  const palat2 = [];
+  await luoViestit(a, { aja: vaarennos({ koodi: 0, stdout: kaksi, stderr: '' }).aja }).chat({ agentti: 'claude-haiku-5-5', viesti: 'x' }, { pala: (t) => palat2.push(t) });
+  assert.equal(palat2.join(''), 'a\n\nb');
+  // Hylkäys ennen käynnistystä ei kutsu alkua.
+  await hylkaa(v.chat({ agentti: 'paha', viesti: 'x' }, { alku: () => alkoi++ }), 400);
+  assert.equal(alkoi, 1);
+});
+
+test('chat: hylkäykset', async () => {
+  const a = ymparisto();
+  const { aja, kutsut } = vaarennos();
+  const v = luoViestit(a, { aja });
+  await hylkaa(v.chat({ agentti: 'paha; rm', viesti: 'x' }), 400);
+  await hylkaa(v.chat({ agentti: 'claude-opus-5-5', viesti: '  ' }), 400);
+  await hylkaa(v.chat({ agentti: 'claude-opus-5-5', viesti: 'x', keskustelu: '--help' }), 400);
+  await hylkaa(v.chat({ agentti: 'claude-opus-5-5', viesti: 'x'.repeat(8001) }), 413);
+  assert.equal(kutsut.length, 0);
+  const virhe = luoViestit(a, { aja: vaarennos({ koodi: 1, stdout: '', stderr: 'auth\n' }).aja });
+  await hylkaa(virhe.chat({ agentti: 'claude-opus-5-5', viesti: 'x' }), 502);
+});
+
+test('skoopinViestit: auki tai ei', () => {
+  const v = luoViestit(ymparisto(), { aja: vaarennos().aja });
+  const auki = v.skoopinViestit('a');
+  assert.equal(auki.auki, true);
+  assert.equal(auki.voiLahettaa, true);
+  assert.equal(auki.istunto.id, 's1');
+  assert.equal(auki.viestit.length, 4);
+  assert.deepEqual(v.skoopinViestit('b'), { nimi: 'b', auki: false, istunto: null, voiLahettaa: false, viestit: [] });
+  assert.throws(() => v.skoopinViestit('c'), (e) => e.koodi === 404);
+});
+
+test('lahetaSkooppiin: kirjaimellisesti ruutuun, rivinvaihdot välilyönneiksi', async () => {
+  const { aja, kutsut } = vaarennos();
+  const v = luoViestit(ymparisto(), { aja });
+  assert.deepEqual(await v.lahetaSkooppiin('a', 'eka\n toka'), { ok: true, istunto: 's1' });
+  assert.deepEqual(kutsut.slice(1).map((k) => k.argumentit), [['send-keys', '-t', '%5', '-l', 'eka toka'], ['send-keys', '-t', '%5', 'Enter']]);
+  await hylkaa(v.lahetaSkooppiin('b', 'x'), 409);
+  await hylkaa(v.lahetaSkooppiin('a', ''), 400);
+  const sdk = ymparisto();
+  writeFileSync(join(sdk.istunnotDir, `${process.pid}.json`), JSON.stringify({ pid: process.pid, sessionId: 's1', cwd: '/x', name: 'a', entrypoint: 'sdk-cli', tmux: 'rc:@0.%0' }));
+  await hylkaa(luoViestit(sdk, { aja }).lahetaSkooppiin('a', 'x'), 409);
+  const eiTmux = luoViestit(ymparisto({ tmux: '' }), { aja });
+  await hylkaa(eiTmux.lahetaSkooppiin('a', 'x'), 409);
+});
+
+test('lahetaSkooppiin: auki oleva monivalinta suljetaan Escapella ennen tekstiä', async () => {
+  const a = ymparisto();
+  const polku = join(a.projektitDir, projektiNimi('/x'), 's1.jsonl');
+  const kysy = { type: 'tool_use', id: 'k1', name: 'AskUserQuestion', input: { questions: [{ question: 'Q?', options: [{ label: 'A' }] }] } };
+  writeFileSync(polku, rivi({ type: 'assistant', timestamp: 't', message: { content: [kysy] } }));
+  const { aja, kutsut } = vaarennos();
+  await luoViestit({ ...a, escapeTauko: 0 }, { aja }).lahetaSkooppiin('a', 'oma vastaus');
+  assert.deepEqual(kutsut.slice(1).map((k) => k.argumentit),
+    [['send-keys', '-t', '%5', 'Escape'], ['send-keys', '-t', '%5', '-l', 'oma vastaus'], ['send-keys', '-t', '%5', 'Enter']]);
+});
+
+test('palvelin: chat- ja viestipolut avaimella, iso runko sallittu', async () => {
+  const a = ymparisto();
+  const avain = 'k'.repeat(32);
+  const { aja } = vaarennos();
+  const srv = createServer(kasittelija({ ...a, avain }, undefined, luoViestit(a, { aja }))).listen(0, '127.0.0.1');
+  await new Promise((r) => srv.once('listening', r));
+  const hae = (polku, method = 'GET', runko = null, k = avain, ndjson = false) => new Promise((ok, ei) => {
+    const req = request({ host: '127.0.0.1', port: srv.address().port, path: polku, method, headers: { authorization: `Bearer ${k}` } }, (res) => {
+      let d = '';
+      res.on('data', (p) => { d += p; });
+      res.on('end', () => ok({ koodi: res.statusCode, tyyppi: res.headers['content-type'],
+        data: ndjson ? d.trim().split('\n').map((r) => JSON.parse(r)) : JSON.parse(d) }));
+    });
+    req.on('error', ei);
+    req.end(runko ? JSON.stringify(runko) : undefined);
+  });
+  try {
+    assert.equal((await hae('/api/agentit')).data.length, MALLIT.length + 1);
+    assert.equal((await hae('/api/agentit', 'GET', null, 'vaara')).koodi, 401);
+    const c = await hae('/api/chat', 'POST', { agentti: 'claude-haiku-5-5', viesti: 'x'.repeat(5000) });
+    assert.equal(c.koodi, 200);
+    assert.equal(c.data.vastaus, 'hei');
+    assert.equal((await hae('/api/skoopit/a/viestit')).data.auki, true);
+    // Suoratoisto: NDJSON-rivit, palat ja lopuksi valmis; hylkäys ennen käynnistystä tavallisena virhekoodina.
+    const virta = await hae('/api/chat/virta', 'POST', { agentti: 'claude-haiku-5-5', viesti: 'x' }, avain, true);
+    assert.equal(virta.koodi, 200);
+    assert.match(virta.tyyppi, /^application\/x-ndjson/);
+    assert.deepEqual(virta.data.map((r) => r.tyyppi), ['pala', 'pala', 'valmis']);
+    assert.equal(virta.data.filter((r) => r.tyyppi === 'pala').map((r) => r.teksti).join(''), 'hei');
+    assert.equal(virta.data.at(-1).keskustelu, ID);
+    const hylatty = await hae('/api/chat/virta', 'POST', { agentti: 'paha', viesti: 'x' });
+    assert.equal(hylatty.koodi, 400);
+    assert.equal(hylatty.data.virhe, 'tuntematon agentti');
+    assert.equal((await hae('/api/chat/virta', 'POST', { agentti: 'claude-haiku-5-5', viesti: 'x' }, 'vaara')).koodi, 401);
+    assert.equal((await hae('/api/chat/keskustelut')).koodi, 200);
+    assert.equal((await hae('/api/chat/keskustelut/x')).koodi, 400);
+    assert.equal((await hae('/api/skoopit/b/viestit')).data.auki, false);
+    assert.equal((await hae('/api/skoopit/a/viesti', 'POST', { teksti: 'moi' })).koodi, 200);
+    assert.equal((await hae('/api/skoopit/b/viesti', 'POST', { teksti: 'moi' })).koodi, 409);
+  } finally {
+    srv.close();
+  }
+});
+
+test('palvelin: katkennut virta ei pysäytä agenttia, ja kaynnissa liittyy siihen uudelleen', async () => {
+  const a = ymparisto();
+  const avain = 'k'.repeat(32);
+  let jatka;
+  const odota = new Promise((r) => { jatka = r; });
+  let ensimmainen;
+  const saatu = new Promise((r) => { ensimmainen = r; });
+  const aja = async (komento, argumentit, valinnat = {}) => {
+    const [alku, loppu] = [VIRTA.split('\n').slice(0, 5), VIRTA.split('\n').slice(5)];
+    for (const r of alku) if (r) valinnat.riville(r);
+    await odota;
+    for (const r of loppu) if (r) valinnat.riville(r);
+    return { koodi: 0, stdout: VIRTA, stderr: '' };
+  };
+  const srv = createServer(kasittelija({ ...a, avain }, undefined, luoViestit(a, { aja }))).listen(0, '127.0.0.1');
+  await new Promise((r) => srv.once('listening', r));
+  const ndjson = (polku, method, runko, kesken) => new Promise((ok, ei) => {
+    const req = request({ host: '127.0.0.1', port: srv.address().port, path: polku, method, headers: { authorization: `Bearer ${avain}` } }, (res) => {
+      let d = '';
+      res.on('data', (p) => { d += p; kesken?.(d, req); });
+      res.on('end', () => ok({ koodi: res.statusCode, rivit: d.trim().split('\n').filter(Boolean).map((r) => JSON.parse(r)) }));
+    });
+    req.on('error', ei);
+    req.end(runko ? JSON.stringify(runko) : undefined);
+  });
+  try {
+    assert.equal((await ndjson('/api/chat/kaynnissa', 'GET')).koodi, 404);
+    // Puhelin katkaisee yhteyden ensimmäisen palan jälkeen (näyttölukko).
+    ndjson('/api/chat/virta', 'POST', { agentti: 'claude-haiku-5-5', viesti: 'x' }, (d, req) => { if (d.includes('"h"')) { req.destroy(); ensimmainen(); } })
+      .catch(() => {});
+    await saatu;
+    const uudelleen = ndjson('/api/chat/kaynnissa', 'GET');
+    await new Promise((r) => setTimeout(r, 50));
+    jatka();
+    const { koodi, rivit } = await uudelleen;
+    assert.equal(koodi, 200);
+    assert.deepEqual(rivit.map((r) => r.tyyppi), ['pala', 'pala', 'valmis']);
+    assert.equal(rivit[0].teksti, 'h');
+    assert.equal(rivit.at(-1).keskustelu, ID);
+    // Valmis ajo on yhä liityttävissä: koko teksti yhtenä palana ja lopputulos.
+    const myohemmin = await ndjson('/api/chat/kaynnissa', 'GET');
+    assert.deepEqual(myohemmin.rivit, [{ tyyppi: 'pala', teksti: 'hei' }, rivit.at(-1)]);
+  } finally {
+    srv.close();
+  }
+});
