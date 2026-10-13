@@ -45,11 +45,14 @@ struct KysymysKortti: View {
     let kysymykset: [Kysymys]
     let vastaa: ((String) -> Void)?
     @State private var valinnat: [Int: Set<Int>] = [:]
-    @State private var muu = ""
+    // Oma vastaus kysymyskohtaisesti (käyttäjä 13.10.2026): kahden kysymyksen kortissa kentän valinta ei saa tyhjentää toista.
+    @State private var muut: [Int: String] = [:]
+    @FocusState private var fokus: Int?
     @State private var lahetetty = false
 
     private var heti: Bool { kysymykset.count == 1 && !kysymykset[0].monivalinta }
-    private var muuTeksti: String { muu.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private func muuTeksti(_ q: Int) -> String { (muut[q] ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var tyhja: Bool { kysymykset.indices.allSatisfy { (valinnat[$0] ?? []).isEmpty && muuTeksti($0).isEmpty } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -65,28 +68,32 @@ struct KysymysKortti: View {
                             .disabled(vastaa == nil || lahetetty)
                             .accessibilityIdentifier("kysymys-vaihtoehto-\(q)-\(i)")
                     }
+                    if vastaa != nil {
+                        TextField("Muu vastaus", text: Binding(get: { muut[q] ?? "" }, set: { muut[q] = $0 }), axis: .vertical)
+                            .lineLimit(1...4)
+                            .padding(8)
+                            .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 8))
+                            .focused($fokus, equals: q)
+                            .disabled(lahetetty)
+                            .accessibilityIdentifier("kysymys-muu-\(q)")
+                    }
                 }
             }
             if let vastaa {
-                HStack(spacing: 8) {
-                    TextField("Muu vastaus", text: $muu, axis: .vertical)
-                        .lineLimit(1...4)
-                        .padding(8)
-                        .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 8))
-                        .accessibilityIdentifier("kysymys-muu")
-                        // Oma vastaus korvaa valinnan (käyttäjä 13.10.2026): kirjoitus poistaa aiemmat valinnat.
-                        .onChange(of: muu) { if !muuTeksti.isEmpty { valinnat = [:] } }
+                HStack {
+                    Spacer()
                     Button("Lähetä") { laheta(vastaa) }
                         .buttonStyle(.borderedProminent)
                         .tint(Color.claude)
-                        .disabled(lahetetty || (muuTeksti.isEmpty && valinnat.values.allSatisfy(\.isEmpty)))
+                        .disabled(lahetetty || tyhja)
                         .accessibilityIdentifier("kysymys-laheta")
                 }
-                .disabled(lahetetty)
             }
             Label(lahetetty ? "Vastaus lähetetty" : "Odottaa vastausta", systemImage: "questionmark.bubble")
                 .font(.caption).foregroundStyle(Color.claude)
         }
+        // Oman vastauksen kentän valinta poistaa saman kysymyksen valinnat (käyttäjä 13.10.2026: valinnasta, ei kirjoituksesta).
+        .onChange(of: fokus) { if let q = fokus { valinnat[q] = [] } }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
@@ -112,27 +119,31 @@ struct KysymysKortti: View {
         .contentShape(Rectangle())
     }
 
+    // Valitun napautus poistaa valinnan (käyttäjä 13.10.2026); valinta tyhjentää saman kysymyksen oman vastauksen.
     private func valitse(_ q: Int, _ i: Int) {
         guard let vastaa else { return }
-        if heti && muuTeksti.isEmpty {
+        if heti && muuTeksti(0).isEmpty {
             lahetetty = true
             vastaa(kysymykset[0].vaihtoehdot[i].nimi)
             return
         }
         var joukko = valinnat[q] ?? []
-        if kysymykset[q].monivalinta { if joukko.contains(i) { joukko.remove(i) } else { joukko.insert(i) } } else { joukko = [i] }
+        if joukko.contains(i) { joukko.remove(i) } else if kysymykset[q].monivalinta { joukko.insert(i) } else { joukko = [i] }
         valinnat[q] = joukko
-        muu = ""
+        if !joukko.isEmpty {
+            muut[q] = ""
+            if fokus == q { fokus = nil }
+        }
     }
 
-    // Vastaus tekstinä: kysymys kerrallaan "otsikko: valinnat", lopuksi Muu-kentän teksti.
+    // Vastaus tekstinä: kysymys kerrallaan "otsikko: valinnat tai oma vastaus".
     private func laheta(_ vastaa: (String) -> Void) {
         var rivit: [String] = []
         for (q, k) in kysymykset.enumerated() {
-            let nimet = (valinnat[q] ?? []).sorted().map { k.vaihtoehdot[$0].nimi }
-            if !nimet.isEmpty { rivit.append(kysymykset.count == 1 ? nimet.joined(separator: ", ") : "\(k.otsikko ?? k.kysymys): \(nimet.joined(separator: ", "))") }
+            var osat = (valinnat[q] ?? []).sorted().map { k.vaihtoehdot[$0].nimi }
+            if !muuTeksti(q).isEmpty { osat.append(muuTeksti(q)) }
+            if !osat.isEmpty { rivit.append(kysymykset.count == 1 ? osat.joined(separator: ", ") : "\(k.otsikko ?? k.kysymys): \(osat.joined(separator: ", "))") }
         }
-        if !muuTeksti.isEmpty { rivit.append(muuTeksti) }
         guard !rivit.isEmpty else { return }
         lahetetty = true
         vastaa(rivit.joined(separator: " — "))
