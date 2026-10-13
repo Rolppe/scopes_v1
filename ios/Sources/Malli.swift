@@ -10,7 +10,10 @@ struct SkooppiYhteenveto: Decodable, Identifiable, Hashable {
     let suurinKonteksti: Int?
     // Rekisterin tai istunnon viimeisin muutos (ISO); sivupalkki järjestää skoopit ja chatit tällä.
     let aika: String?
+    // kasittely / odottaa / pakattu (SCOPES-LISTA-TILAVARIT); vanha palvelu ei lähetä tilaa → päätellään istunnoista.
+    let tila: String?
     var id: String { nimi }
+    var tilaNyt: String { tila ?? (istuntoja > 0 ? "kasittely" : "pakattu") }
 }
 
 struct Seuraava: Decodable, Hashable {

@@ -2,7 +2,8 @@
 // yksi haku molempiin. Chatin napautus avaa keskustelun chatissa, skoopin napautus skoopin viestit. Alareunassa
 // infra ja asetukset; yläreunassa suodatin All / Scope / Chat ja uusi skooppi (DEMO-SCOPES-LISTA 13.10.2026: otsikko
 // ja "Uusi chat" -rivi pois; uusi chat aloitetaan chatin omasta napista). Aika on palvelun pysähdysaika: keskustelu
-// nousee huipulle, kun vuoro valmistuu tai agentti kysyy.
+// nousee huipulle, kun vuoro valmistuu tai agentti kysyy. Kansioikonin väri on skoopin tila (SCOPES-LISTA-TILAVARIT,
+// käyttäjä 13.10.2026): käsittely oranssi ja hehkuu, käyttäjää odottava keltainen, pakattu harmaa ja aktiivisten alle.
 import SwiftUI
 
 private enum Kohde: Identifiable {
@@ -20,6 +21,11 @@ private enum Kohde: Identifiable {
         case let .chat(k): return isoPaiva(k.aika) ?? .distantPast
         case let .skooppi(s): return isoPaiva(s.aika) ?? .distantPast
         }
+    }
+    // Pakattu skooppi valuu aktiivisten (chatit ja auki olevat skoopit) alapuolelle.
+    var aktiivinen: Bool {
+        if case let .skooppi(s) = self { return s.tilaNyt != "pakattu" }
+        return true
     }
     func kuuluu(_ s: Suodatin) -> Bool {
         switch (s, self) {
@@ -55,7 +61,8 @@ struct Sivupalkki: View {
     private var kohteet: [Kohde] {
         let kaikki = (chatit.map(Kohde.chat) + skoopit.map(Kohde.skooppi)).filter { $0.kuuluu(suodatin) }
         let h = haku.trimmingCharacters(in: .whitespaces)
-        return (h.isEmpty ? kaikki : kaikki.filter { $0.osuu(h) }).sorted { $0.aika > $1.aika }
+        return (h.isEmpty ? kaikki : kaikki.filter { $0.osuu(h) })
+            .sorted { $0.aktiivinen != $1.aktiivinen ? $0.aktiivinen : $0.aika > $1.aika }
     }
 
     var body: some View {
@@ -144,7 +151,7 @@ struct Sivupalkki: View {
             }
         case let .skooppi(s):
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: s.istuntoja > 0 ? "folder.fill" : "folder").foregroundStyle(s.istuntoja > 0 ? Color.claude : .secondary).frame(width: 22)
+                KansioIkoni(tila: s.tilaNyt).frame(width: 22)
                 SkooppiRivi(skooppi: s)
             }
         }
@@ -163,5 +170,24 @@ struct Sivupalkki: View {
         do { chatit = try await c } catch { virheet.append(error.localizedDescription) }
         agentit = (try? await a) ?? agentit
         virhe = virheet.isEmpty ? nil : Array(Set(virheet)).joined(separator: "\n")
+    }
+}
+
+// Skoopin kansioikoni tilan mukaan; käsittelyssä oranssi hehku sykkii.
+private struct KansioIkoni: View {
+    let tila: String
+    var body: some View {
+        switch tila {
+        case "kasittely":
+            Image(systemName: "folder.fill").foregroundStyle(Color.claude)
+                .phaseAnimator([false, true]) { ikoni, hehku in
+                    ikoni.shadow(color: Color.claude.opacity(hehku ? 0.95 : 0.25), radius: hehku ? 7 : 2)
+                } animation: { _ in .easeInOut(duration: 0.9) }
+                .accessibilityLabel("käsittelyssä")
+        case "odottaa":
+            Image(systemName: "folder.fill").foregroundStyle(.yellow).accessibilityLabel("odottaa vastausta")
+        default:
+            Image(systemName: "folder").foregroundStyle(Color(.systemGray)).accessibilityLabel("pakattu")
+        }
     }
 }

@@ -193,7 +193,17 @@ function viimeisinMuutos(juuri, rekisteri, istunnot) {
   return ms ? new Date(ms).toISOString() : null;
 }
 
-// Skooppilista tiivistettynä: nimi, seuraava paketti, avoimien ja vikojen määrä, istuntojen suurin konteksti, aika.
+// Skoopin tila listan kansioikonia varten (SCOPES-LISTA-TILAVARIT, käyttäjä 13.10.2026): kasittely, jos jokin
+// pakkaamaton istunto on busy; odottaa, jos pakkaamaton istunto odottaa käyttäjää (waiting = kysymys tai lupa,
+// idle = vuoro valmis); muuten pakattu, myös ilman istuntoja. Pakatun istunnon /sa-herätys ei tee siitä käsittelyä;
+// automaattisiirron uusi istunto on pakkaamaton, joten skooppi pysyy aktiivisena siirron yli.
+export function skooppiTila(istunnot) {
+  const auki = istunnot.filter((i) => !i.pakattu);
+  if (auki.some((i) => i.tila === 'busy')) return 'kasittely';
+  return auki.length ? 'odottaa' : 'pakattu';
+}
+
+// Skooppilista tiivistettynä: nimi, seuraava paketti, avoimien ja vikojen määrä, istuntojen suurin konteksti, aika, tila.
 export function lista(asetukset) {
   const skoopit = lueSkoopit(asetukset.juuri);
   const kaikkiIstunnot = istunnot({ ...asetukset, skooppiNimet: Object.keys(skoopit) });
@@ -208,6 +218,7 @@ export function lista(asetukset) {
       istuntoja: s.istunnot.length,
       suurinKonteksti: tokenit.length ? Math.max(...tokenit) : null,
       aika: viimeisinMuutos(asetukset.juuri, skoopit[nimi][0], s.istunnot),
+      tila: skooppiTila(s.istunnot),
     };
   });
 }
