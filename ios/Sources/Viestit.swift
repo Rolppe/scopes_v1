@@ -194,7 +194,10 @@ struct Viestilista: View {
     var body: some View {
         ScrollViewReader { vierita in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 8) {
+                // Ei LazyVStack (CHAT-MUSTA 13.10.2026): laiska lista arvioi rivikorkeudet, ja scrollTo("loppu") osui
+                // vaihdossa ja uuden viestin jälkeen sisällön ohi, jolloin näkymä jäi mustaksi. Viestejä on enintään 120
+                // (palvelu/viestit.mjs), joten kaikki rivit mitataan kerralla.
+                VStack(alignment: .leading, spacing: 8) {
                     ForEach(Array(viestit.enumerated()), id: \.offset) { i, v in
                         Viestikupla(viesti: v, vastaa: vastaa, sulje: sulje,
                                     nayta: { nosta(vierita) }).id(i)
