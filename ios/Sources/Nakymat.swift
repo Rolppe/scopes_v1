@@ -287,7 +287,7 @@ struct KontekstiView: View {
                 }
             }
         }
-        .navigationTitle("Konteksti")
+        .navigationTitle(nimi)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ShareLink(item: konteksti.markdown(nimi)) { Image(systemName: "square.and.arrow.up") }
