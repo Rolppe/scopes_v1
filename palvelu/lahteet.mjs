@@ -115,16 +115,28 @@ export function pakattu(transkripti) {
   return tulos;
 }
 
-// Onko välimuistin herätys (/sa) päällä (käyttäjä 13.10.2026: kytkin pakkausnapin alle): agentin viimeinen rivin
-// alun `sa päällä` tai `sa pois` ratkaisee. Herätykset ovat istunnon muistissa, joten uusi istunto alkaa pois päältä.
+// Onko välimuistin herätys (/sa) päällä (käyttäjä 13.10.2026: kytkin pakkausnapin alle). Viimeinen merkki ratkaisee:
+// sa-tick-ajastimen CronCreate (päällä), käyttäjän `/sa pois` (pois) tai agentin rivin alun `sa päällä` / `sa pois`.
+// Teksti ei yksin riitä (V-294): työkalukutsun kanssa samassa viestissä ollut tekstilohko ei aina tallennu transkriptiin.
+// Herätykset ovat istunnon muistissa, joten uusi istunto alkaa pois päältä.
 export function hereilla(transkripti) {
   let tulos = false;
   for (const rivi of transkripti.split('\n')) {
     let j;
     try { j = JSON.parse(rivi); } catch { continue; }
-    if (j.type !== 'assistant' || j.isSidechain) continue;
+    if (j.isSidechain) continue;
     const c = j.message?.content;
-    const teksti = (typeof c === 'string' ? [c] : Array.isArray(c) ? c.filter((o) => o?.type === 'text').map((o) => o.text) : []).join('\n');
+    const osat = typeof c === 'string' ? [{ type: 'text', text: c }] : Array.isArray(c) ? c : [];
+    const teksti = osat.filter((o) => o?.type === 'text').map((o) => o.text).join('\n');
+    if (j.type === 'user') {
+      const k = /<command-name>\/sa<\/command-name>\s*<command-args>([^<]*)<\/command-args>/.exec(teksti);
+      if (k && k[1].trim() === 'pois') tulos = false;
+      continue;
+    }
+    if (j.type !== 'assistant') continue;
+    for (const o of osat) {
+      if (o?.type === 'tool_use' && o.name === 'CronCreate' && String(o.input?.prompt ?? '').startsWith('sa-tick')) tulos = true;
+    }
     for (const m of teksti.matchAll(/^[\s*`>]*sa (päällä|pois)(?![\p{L}\p{N}])/gmu)) tulos = m[1] === 'päällä';
   }
   return tulos;

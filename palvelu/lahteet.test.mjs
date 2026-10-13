@@ -172,6 +172,17 @@ test('hereilla: agentin viimeinen sa päällä / sa pois -rivi ratkaisee', () =>
   assert.equal(hereilla([k('sa päällä'), a('sa päällä', { isSidechain: true }), a('kytke sa päällä myöhemmin')].join('\n')), false);
 });
 
+test('hereilla: sa-tick-ajastin ja /sa pois ratkaisevat ilman tekstiriviä (V-294)', () => {
+  const r = (o) => JSON.stringify(o);
+  const cron = (prompt) => r({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'CronCreate', input: { cron: '7,47 */2 * * *', prompt } }] } });
+  const sa = (args) => r({ type: 'user', message: { content: `<command-message>sa</command-message>\n<command-name>/sa</command-name>\n<command-args>${args}</command-args>` } });
+  assert.equal(hereilla([cron('sa-tick: välimuistin herätys')].join('\n')), true);
+  assert.equal(hereilla([cron('sa-tick: x'), sa('pois')].join('\n')), false);
+  assert.equal(hereilla([cron('sa-tick: x'), sa('pois'), sa(''), cron('sa-tick: x')].join('\n')), true);
+  // Muu ajastin tai /sa ilman ajastinta ei kytke päälle.
+  assert.equal(hereilla([cron('muistutus: deploy'), sa('')].join('\n')), false);
+});
+
 test('pakattu: PAKKAUS: vahvistettu viimeisen käyttäjän viestin jälkeen', () => {
   const r = (o) => JSON.stringify(o);
   const k = (teksti, muut = {}) => r({ type: 'user', message: { content: teksti }, ...muut });
