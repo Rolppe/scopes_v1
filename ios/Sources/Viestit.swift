@@ -205,6 +205,9 @@ struct Viestilista: View {
                 .padding(.horizontal)
                 .padding(.vertical, 8)
             }
+            // Lista pysyy alareunassaan, kun sen korkeus muuttuu (CHAT-NOUSU-TODENNUS 13.10.2026): näppäimistön avautuessa
+            // keskustelu nousee kutistuksen mukana eikä jää lyhyeksi, jos kutistus ehtii vasta keyboardDidShow'n jälkeen.
+            .defaultScrollAnchor(.bottom, for: .sizeChanges)
             // Näppäimistö pois napautuksella tai vedolla viestilistassa (käyttäjä 13.10.2026); kortin painikkeet toimivat yhä.
             .scrollDismissesKeyboard(.interactively)
             .gesture(NappaimistoPois())
