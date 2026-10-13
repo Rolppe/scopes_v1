@@ -32,6 +32,7 @@ struct SkooppiNakymaView: View {
     @State private var kaynnissa: Toiminto?
     @State private var tulos: ToimintoVastaus?
     @State private var toimintoVirhe: String?
+    @State private var hereillaToive: Bool?
 
     var body: some View {
         List {
@@ -39,7 +40,12 @@ struct SkooppiNakymaView: View {
             Section("Toiminnot") {
                 Button("Pura uuteen istuntoon") { vahvista = .pura }.accessibilityIdentifier("toiminto-pura")
                 Button("Pakkaa istunto") { vahvista = .pakkaa }.accessibilityIdentifier("toiminto-pakkaa")
-                if kaynnissa != nil { ProgressView(kaynnissa == .pura ? "Avataan istuntoa…" : "Lähetetään /pakkaa…") }
+                // Automaattisiirto ja herätyskytkin pakkausnapin alla (käyttäjä 13.10.2026).
+                Button("Automaattisiirto") { vahvista = .automaattisiirto }.accessibilityIdentifier("toiminto-automaattisiirto")
+                Toggle("Pidä muisti hereillä", isOn: Binding(get: { hereilla }, set: { p in Task { await kytke(p) } }))
+                    .disabled(avoinIstunto == nil)
+                    .accessibilityIdentifier("toiminto-hereilla")
+                if let k = kaynnissa { ProgressView(k == .pura ? "Avataan istuntoa…" : "Lähetetään \(komento(k))…") }
                 if let toimintoVirhe { Text(toimintoVirhe).foregroundStyle(.red).accessibilityIdentifier("toiminto-virhe") }
                 if let tulos { ToimintoTulos(tulos: tulos) }
             }
@@ -95,10 +101,36 @@ struct SkooppiNakymaView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await lataa() }
         .task { await lataa() }
-        .confirmationDialog(vahvista == .pura ? "Avataanko skoopille uusi istunto (/pura)?" : "Lähetetäänkö skoopin istuntoon /pakkaa?",
+        .confirmationDialog(vahvista == .pura ? "Avataanko skoopille uusi istunto (/pura)?" : "Lähetetäänkö skoopin istuntoon \(vahvista.map(komento) ?? "")?",
                             isPresented: Binding(get: { vahvista != nil }, set: { if !$0 { vahvista = nil } }),
                             titleVisibility: .visible, presenting: vahvista) { t in
-            Button(t == .pura ? "Pura" : "Pakkaa") { Task { await aja(t) } }.accessibilityIdentifier("vahvista")
+            Button(t == .pura ? "Pura" : t == .pakkaa ? "Pakkaa" : "Siirrä") { Task { await aja(t) } }.accessibilityIdentifier("vahvista")
+        }
+    }
+
+    // Kytkin näyttää skoopin auki olevan istunnon herätystilan; ilman istuntoa se on pois ja lukittu.
+    private var avoinIstunto: Istunto? { nakyma?.istunnot.first { $0.pakattu != true } }
+    private var hereilla: Bool { hereillaToive ?? avoinIstunto?.hereilla ?? false }
+
+    // Istunto vastaa /sa:han omalla vuorollaan, joten kytkin pysyy valitussa asennossa, kunnes palvelu näkee
+    // vastauksen (enintään minuutti) tai lähetys epäonnistuu.
+    private func kytke(_ paalle: Bool) async {
+        hereillaToive = paalle
+        await aja(paalle ? .herata : .herataPois)
+        for _ in 0..<20 where toimintoVirhe == nil && avoinIstunto?.hereilla != paalle {
+            try? await Task.sleep(for: .seconds(3))
+            await lataa()
+        }
+        hereillaToive = nil
+    }
+
+    private func komento(_ t: Toiminto) -> String {
+        switch t {
+        case .pura: "/pura"
+        case .pakkaa: "/pakkaa"
+        case .automaattisiirto: "/automaattisiirto"
+        case .herata: "/sa"
+        case .herataPois: "/sa pois"
         }
     }
 
@@ -146,7 +178,7 @@ struct ToimintoTulos: View {
                 Text("Istunto avattu.").accessibilityIdentifier("toiminto-tulos")
                 Link("Avaa istunto Claudessa", destination: url)
             } else if let i = tulos.istunto {
-                Text("/pakkaa lähetetty istuntoon \(i.prefix(8)).").accessibilityIdentifier("toiminto-tulos")
+                Text("\(tulos.komento ?? "/pakkaa") lähetetty istuntoon \(i.prefix(8)).").accessibilityIdentifier("toiminto-tulos")
             }
         }
     }

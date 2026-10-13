@@ -1,9 +1,11 @@
 // Skooppien hallintatoiminnot puhelimesta (DEMO-SCOPES-HALLINTA 13.10.2026). Turvamalli (käyttäjä 13.10.2026,
-// "vain valmiit toiminnot"): palvelu ajaa vain nämä kolme valmista toimintoa, eikä puhelimelta tule komentoa,
+// "vain valmiit toiminnot"): palvelu ajaa vain nämä valmiit toiminnot, eikä puhelimelta tule komentoa,
 // lippua tai vapaata tekstiä mihinkään komentoriviin.
 //   pura   — olemassa olevalle skoopille uusi Remote Control -istunto tmuxiin, ensimmäinen viesti `/pura <skooppi>`;
 //            skoopin pakatut tmux-istunnot suljetaan ensin `/exit`illä (pakkaamaton istunto estää purun)
 //   pakkaa — skoopin ainoaan vapaaseen tmux-istuntoon kirjoitetaan `/pakkaa`
+//   automaattisiirto, herata, herata-pois — samoin `/automaattisiirto` (pakkaus ja sessionvaihto), `/sa` ja `/sa pois`
+//            (välimuistin herätys päälle ja pois; käyttäjä 13.10.2026: nappi ja kytkin pakkausnapin alle)
 //   uusi   — uusi istunto, ensimmäinen viesti `/pura uusi <nimi>`; nimi on tiukka [a-z0-9-]-sanoja ja vielä vapaa
 // Skoopin nimi tarkistetaan skoopit.json:n avaimista (uudella: muodosta ja vapaudesta), ja komennot ajetaan
 // argumenttitaulukkona ilman kuorta. Yksi toiminto kerrallaan; jokainen yritys kirjataan lokiin, myös hylätty.
@@ -83,6 +85,19 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
     return { osoite };
   }
 
+  // Valmis komento skoopin ainoaan vapaaseen tmux-istuntoon, kun sen vuoro on valmis.
+  async function istuntoon(nimi, komento) {
+    const skoopit = lueSkoopit(asetukset.juuri);
+    if (!skoopit[nimi]) throw new Hylatty(404, 'tuntematon skooppi');
+    const omat = skoopinIstunnot(nimi, skoopit).filter((i) => i.ruutu && !i.pakattu);
+    if (omat.length !== 1) throw new Hylatty(409, omat.length ? 'skoopissa on useita tmux-istuntoja' : `skoopilla ei ole tmux-istuntoa, johon ${komento} voi lähettää`);
+    const [i] = omat;
+    if (i.tila !== 'idle') throw new Hylatty(409, `istunto on varattu (${i.tila ?? 'tila tuntematon'}); yritä vuoron jälkeen`);
+    await tarkistaRuutu(i);
+    await kirjoita(i, komento);
+    return { istunto: i.id, komento };
+  }
+
   const toteutus = {
     async pura(nimi) {
       const skoopit = lueSkoopit(asetukset.juuri);
@@ -97,17 +112,10 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
       for (const i of suljettavat) { await tarkistaRuutu(i); await kirjoita(i, '/exit'); }
       return { ...await avaaIstunto(nimi, `/pura ${nimi}`), suljettiin: suljettavat.map((i) => i.id) };
     },
-    async pakkaa(nimi) {
-      const skoopit = lueSkoopit(asetukset.juuri);
-      if (!skoopit[nimi]) throw new Hylatty(404, 'tuntematon skooppi');
-      const omat = skoopinIstunnot(nimi, skoopit).filter((i) => i.ruutu && !i.pakattu);
-      if (omat.length !== 1) throw new Hylatty(409, omat.length ? 'skoopissa on useita tmux-istuntoja' : 'skoopilla ei ole tmux-istuntoa, johon pakkauksen voi lähettää');
-      const [i] = omat;
-      if (i.tila !== 'idle') throw new Hylatty(409, `istunto on varattu (${i.tila ?? 'tila tuntematon'}); yritä vuoron jälkeen`);
-      await tarkistaRuutu(i);
-      await kirjoita(i, '/pakkaa');
-      return { istunto: i.id };
-    },
+    pakkaa: (nimi) => istuntoon(nimi, '/pakkaa'),
+    automaattisiirto: (nimi) => istuntoon(nimi, '/automaattisiirto'),
+    herata: (nimi) => istuntoon(nimi, '/sa'),
+    'herata-pois': (nimi) => istuntoon(nimi, '/sa pois'),
     async uusi(nimi) {
       if (typeof nimi !== 'string' || !UUSI_NIMI.test(nimi)) throw new Hylatty(400, 'nimi: 1–4 sanaa pienaakkosia, numeroita tai viivoja');
       const skoopit = lueSkoopit(asetukset.juuri);

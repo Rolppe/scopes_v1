@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request } from 'node:http';
 import { createServer } from 'node:http';
-import { istunnonSkooppi, istunnot, jasennaSeuraava, konteksti, kontekstinOsat, kontekstiTiedostot, lista, osiin, pakattu, projektiNimi, pysahdys, seuraavaRivi, skooppiTila, taulukko, tokeneiksi, yksi } from './lahteet.mjs';
+import { istunnonSkooppi, istunnot, jasennaSeuraava, konteksti, kontekstinOsat, kontekstiTiedostot, hereilla, lista, osiin, pakattu, projektiNimi, pysahdys, seuraavaRivi, skooppiTila, taulukko, tokeneiksi, yksi } from './lahteet.mjs';
 import { avainKelpaa, kasittelija } from './palvelin.mjs';
 
 const REK = `# R
@@ -100,7 +100,7 @@ function ymparisto() {
 test('istunnot: vain elävät, skooppi ja konteksti transkriptista', () => {
   const a = ymparisto();
   const i = istunnot({ ...a, skooppiNimet: ['a', 'b'] });
-  assert.deepEqual(i, [{ id: 's1', nimi: 'kone-1', tila: 'idle', skooppi: 'a', konteksti: { tokenit: 50005, aika: 't' }, pysahdys: null, pakattu: false, alkoi: 0,
+  assert.deepEqual(i, [{ id: 's1', nimi: 'kone-1', tila: 'idle', skooppi: 'a', konteksti: { tokenit: 50005, aika: 't' }, pysahdys: null, pakattu: false, hereilla: false, alkoi: 0,
     pid: process.pid, vanhempi: process.ppid, ruutu: null, polku: join(a.projektitDir, '-x-y', 's1.jsonl') }]);
 });
 
@@ -158,6 +158,18 @@ test('avain: vain täsmälleen oikea Bearer kelpaa', () => {
   assert.equal(avainKelpaa('Bearer abcd', 'abc'), false);
   assert.equal(avainKelpaa('abc', 'abc'), false);
   assert.equal(avainKelpaa(undefined, 'abc'), false);
+});
+
+test('hereilla: agentin viimeinen sa päällä / sa pois -rivi ratkaisee', () => {
+  const r = (o) => JSON.stringify(o);
+  const a = (teksti, muut = {}) => r({ type: 'assistant', message: { content: [{ type: 'text', text: teksti }] }, ...muut });
+  const k = (teksti) => r({ type: 'user', message: { content: teksti } });
+  assert.equal(hereilla(''), false);
+  assert.equal(hereilla([k('/sa'), a('sa päällä — herätys 40 min välein, uusinta 20.10.')].join('\n')), true);
+  assert.equal(hereilla([a('Raportti.\nsa päällä — herätys'), k('sa-tick: x'), a('ok')].join('\n')), true);
+  assert.equal(hereilla([a('sa päällä jo'), a('sa pois — poistettu 3 työtä')].join('\n')), false);
+  // Käyttäjän teksti, ali-agentti ja maininta lauseen keskellä eivät muuta tilaa.
+  assert.equal(hereilla([k('sa päällä'), a('sa päällä', { isSidechain: true }), a('kytke sa päällä myöhemmin')].join('\n')), false);
 });
 
 test('pakattu: PAKKAUS: vahvistettu viimeisen käyttäjän viestin jälkeen', () => {

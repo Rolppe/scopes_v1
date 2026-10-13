@@ -33,6 +33,9 @@ struct Istunto: Decodable, Identifiable, Hashable {
     let nimi: String?
     let tila: String?
     let konteksti: Konteksti?
+    let pakattu: Bool?
+    // Välimuistin herätys (/sa) päällä; vanha palvelu ei lähetä → nil.
+    let hereilla: Bool?
 }
 
 // Rekisterin taulukkorivi: otsikkosolu → arvo. Otsikot vaihtelevat skoopeittain ("Asia", "Vika", "Tila", …).
@@ -126,9 +129,10 @@ func prosentti(_ osa: Int, _ kaikki: Int) -> String {
     return p < 1 ? "<1 %" : "\(Int(p.rounded())) %"
 }
 
-// Palvelun kolme valmista toimintoa (toiminnot.mjs); muita ei ole.
+// Palvelun valmiit toiminnot (toiminnot.mjs); muita ei ole.
 enum Toiminto: String {
-    case pura, pakkaa
+    case pura, pakkaa, automaattisiirto, herata
+    case herataPois = "herata-pois"
 }
 
 struct ToimintoVastaus: Decodable, Hashable {
@@ -136,6 +140,7 @@ struct ToimintoVastaus: Decodable, Hashable {
     let nimi: String
     let osoite: String?
     let istunto: String?
+    let komento: String?
 }
 
 // Chat ja skoopin viestit (viestit.mjs, DEMO-SCOPES-VALILEHDET).

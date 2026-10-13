@@ -87,6 +87,16 @@ test('pakkaa: /pakkaa vain skoopin vapaaseen, täsmäävään tmux-ruutuun', asy
   assert.equal(vieras.kutsut.filter((k) => k[1] === 'send-keys').length, 0);
 });
 
+test('automaattisiirto ja herätys: valmis komento samaan ruutuun kuin /pakkaa', async () => {
+  for (const [toiminto, komento] of [['automaattisiirto', '/automaattisiirto'], ['herata', '/sa'], ['herata-pois', '/sa pois']]) {
+    const v = vaarennos();
+    const r = await luoToiminnot(ymparisto(), { aja: v.aja })(toiminto, 'a');
+    assert.deepEqual([r.istunto, r.komento], ['s1', komento]);
+    assert.deepEqual(v.kutsut.slice(1), [['tmux', 'send-keys', '-t', '%5', '-l', komento], ['tmux', 'send-keys', '-t', '%5', 'Enter']]);
+    await hylkaa(luoToiminnot(ymparisto({ tila: 'busy' }), { aja: v.aja })(toiminto, 'a'), 409);
+  }
+});
+
 test('uusi: tiukka nimi, ei olemassa olevaa', async () => {
   const a = ymparisto();
   const v = vaarennos();
@@ -139,6 +149,7 @@ test('palvelin: POST-reitit vaativat avaimen ja ohjautuvat toimintoihin', async 
   try {
     assert.equal((await laheta('/api/skoopit/a%20b/pura'))[0], 200);
     assert.equal((await laheta('/api/skoopit/a/pakkaa'))[0], 200);
+    assert.equal((await laheta('/api/skoopit/a/herata-pois'))[0], 200);
     assert.equal((await laheta('/api/uusi', '{"nimi":"koe"}'))[0], 200);
     assert.deepEqual(await laheta('/api/skoopit/x/pura'), [409, { virhe: 'varattu' }]);
     assert.equal((await laheta('/api/skoopit/a/poista'))[0], 404);
@@ -146,6 +157,6 @@ test('palvelin: POST-reitit vaativat avaimen ja ohjautuvat toimintoihin', async 
     assert.equal((await laheta('/api/uusi', JSON.stringify({ nimi: 'x'.repeat(2000) })))[0], 413);
     assert.equal((await laheta('/api/skoopit/a/pura', '', 'v'.repeat(32)))[0], 401);
     assert.equal((await laheta('/api/skoopit/a/pura', '', avain, 'DELETE'))[0], 405);
-    assert.deepEqual(kutsut, [['pura', 'a b'], ['pakkaa', 'a'], ['uusi', 'koe'], ['pura', 'x']]);
+    assert.deepEqual(kutsut, [['pura', 'a b'], ['pakkaa', 'a'], ['herata-pois', 'a'], ['uusi', 'koe'], ['pura', 'x']]);
   } finally { srv.close(); }
 });
