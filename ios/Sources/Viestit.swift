@@ -208,19 +208,17 @@ struct Viestilista: View {
             // Näppäimistö pois napautuksella tai vedolla viestilistassa (käyttäjä 13.10.2026); kortin painikkeet toimivat yhä.
             .scrollDismissesKeyboard(.interactively)
             .gesture(NappaimistoPois())
-            .onChange(of: viestit.count) { vierita.scrollTo(odottaa ? AnyHashable("odottaa") : AnyHashable(viestit.count - 1), anchor: .bottom) }
+            .onChange(of: viestit.count) { nosta(vierita) }
             // Suoratoistossa viimeinen kupla kasvaa ilman uutta viestiä.
-            .onChange(of: viestit.last?.teksti) { if !odottaa, !viestit.isEmpty { vierita.scrollTo(viestit.count - 1, anchor: .bottom) } }
-            .onAppear { if !viestit.isEmpty { vierita.scrollTo(viestit.count - 1, anchor: .bottom) } }
-            // Kortti nousee niin ylös kuin käsin vetäen (käyttäjä 13.10.2026): vieritys vasta, kun näppäimistö on auki,
-            // koska ajastettu vieritys ehti ennen kuin lista oli kutistunut näppäimistön verran.
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
-                if kysymysAuki { nosta(vierita) }
-            }
+            .onChange(of: viestit.last?.teksti) { nosta(vierita) }
+            // Kortin lähetys tai sulku (käyttäjä 13.10.2026): kortti katoaa ja vastaus nousee näkyviin listan loppuun.
+            .onChange(of: viestit.last?.vastattu) { nosta(vierita) }
+            .onAppear { if !viestit.isEmpty { vierita.scrollTo("loppu", anchor: .bottom) } }
+            // Näppäimistön avautuminen nostaa keskustelun niin ylös kuin käsin vetäen, sekä kortin kentästä että
+            // syöttökentästä (käyttäjä 13.10.2026); vieritys vasta näppäimistön jälkeen, kun lista on jo kutistunut.
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in nosta(vierita) }
         }
     }
-
-    private var kysymysAuki: Bool { viestit.last.map { !($0.kysymykset ?? []).isEmpty && $0.vastattu != true } ?? false }
 
     private func nosta(_ vierita: ScrollViewProxy) { withAnimation { vierita.scrollTo("loppu", anchor: .bottom) } }
 }
