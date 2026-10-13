@@ -197,9 +197,10 @@ struct Viestilista: View {
                 LazyVStack(alignment: .leading, spacing: 8) {
                     ForEach(Array(viestit.enumerated()), id: \.offset) { i, v in
                         Viestikupla(viesti: v, vastaa: vastaa, sulje: sulje,
-                                    nayta: { withAnimation { vierita.scrollTo(i, anchor: .bottom) } }).id(i)
+                                    nayta: { nosta(vierita) }).id(i)
                     }
                     if odottaa { ProgressView().padding(.leading, 12).id("odottaa") }
+                    Color.clear.frame(height: 1).id("loppu")
                 }
                 .padding(.horizontal)
                 .padding(.vertical, 8)
@@ -211,8 +212,17 @@ struct Viestilista: View {
             // Suoratoistossa viimeinen kupla kasvaa ilman uutta viestiä.
             .onChange(of: viestit.last?.teksti) { if !odottaa, !viestit.isEmpty { vierita.scrollTo(viestit.count - 1, anchor: .bottom) } }
             .onAppear { if !viestit.isEmpty { vierita.scrollTo(viestit.count - 1, anchor: .bottom) } }
+            // Kortti nousee niin ylös kuin käsin vetäen (käyttäjä 13.10.2026): vieritys vasta, kun näppäimistö on auki,
+            // koska ajastettu vieritys ehti ennen kuin lista oli kutistunut näppäimistön verran.
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                if kysymysAuki { nosta(vierita) }
+            }
         }
     }
+
+    private var kysymysAuki: Bool { viestit.last.map { !($0.kysymykset ?? []).isEmpty && $0.vastattu != true } ?? false }
+
+    private func nosta(_ vierita: ScrollViewProxy) { withAnimation { vierita.scrollTo("loppu", anchor: .bottom) } }
 }
 
 // Napautus muualle kuin tekstikenttään sulkee näppäimistön. Ei peru kosketuksia, joten painikkeet toimivat, ja
