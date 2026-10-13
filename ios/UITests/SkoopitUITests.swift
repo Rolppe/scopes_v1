@@ -166,8 +166,8 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertTrue(avaa.waitForExistence(timeout: 15), "skoopin näkymässä ei ole kontekstia")
         kuva("skooppi-konteksti")
         avaa.tap()
-        XCTAssertTrue(app.navigationBars["Konteksti"].waitForExistence(timeout: 5), "kontekstinäkymä ei auennut")
-        XCTAssertTrue(app.buttons["konteksti-jaa"].exists, "jakopainike puuttuu")
+        XCTAssertTrue(app.buttons["konteksti-jaa"].waitForExistence(timeout: 5), "kontekstinäkymä ei auennut")
+        XCTAssertTrue(app.navigationBars["scopes"].exists, "kontekstinäkymän otsikko ei ole skoopin nimi")
         kuva("konteksti")
         let osa = app.buttons["konteksti-osa-0-0"]
         for _ in 0..<6 where !osa.isHittable { app.swipeUp() }
