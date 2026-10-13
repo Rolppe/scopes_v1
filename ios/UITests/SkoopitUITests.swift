@@ -99,12 +99,17 @@ final class SkoopitUITests: XCTestCase {
         let haku = app.searchFields.firstMatch
         XCTAssertTrue(haku.waitForExistence(timeout: 5))
         haku.tap()
-        haku.typeText("scopes")
-        let rivi = app.buttons["skooppi-scopes"]
-        XCTAssertTrue(rivi.waitForExistence(timeout: 15), "haku ei löytänyt skooppia")
+        // Auki oleva skooppi: testiä ajavan istunnon skooppi. Juuriskooppi "scopes" pakattiin, kun työ jaettiin
+        // alaskooppeihin (13.10.2026), joten oletus on alaskooppi; muu skooppi: SCOPES_KOE_AUKI="<skooppi>" bash …/testi.sh
+        let auki = ProcessInfo.processInfo.environment["SCOPES_KOE_AUKI"] ?? "scopes lista"
+        haku.typeText(auki)
+        let rivi = app.buttons["skooppi-\(auki)"]
+        XCTAssertTrue(rivi.waitForExistence(timeout: 15), "haku ei löytänyt skooppia \(auki)")
         rivi.tap()
-        // Napautus avaa skoopin viestit (DEMO-SCOPES-VALILEHDET); tämä skooppi on auki testin ajan.
-        XCTAssertTrue(app.staticTexts["viestit-istunto"].waitForExistence(timeout: 15), "skoopin viestit eivät latautuneet")
+        // Napautus avaa skoopin viestit (DEMO-SCOPES-VALILEHDET).
+        XCTAssertTrue(app.staticTexts["viestit-istunto"].waitForExistence(timeout: 15),
+                      app.staticTexts["pakattu"].exists || app.staticTexts["ei-auki"].exists
+                          ? "\(auki) ei ole auki: aja SCOPES_KOE_AUKI=\"<auki oleva skooppi>\"" : "skoopin viestit eivät latautuneet")
         // Syöttökenttä vain tmux-istunnolle; muuten (esim. Remote Control -istunto) vain luku -teksti.
         XCTAssertTrue(app.textFields["viestit-kentta"].exists || app.textViews["viestit-kentta"].exists || app.staticTexts["viestit-vain-luku"].exists, "syöttökenttä puuttuu")
         // Testiä ajava istunto käyttää työkaluja, joten sen viesteissä on työkalurivejä (DEMO-SCOPES-PARANNUKSET).
