@@ -115,6 +115,21 @@ export function pakattu(transkripti) {
   return tulos;
 }
 
+// Onko välimuistin herätys (/sa) päällä (käyttäjä 13.10.2026: kytkin pakkausnapin alle): agentin viimeinen rivin
+// alun `sa päällä` tai `sa pois` ratkaisee. Herätykset ovat istunnon muistissa, joten uusi istunto alkaa pois päältä.
+export function hereilla(transkripti) {
+  let tulos = false;
+  for (const rivi of transkripti.split('\n')) {
+    let j;
+    try { j = JSON.parse(rivi); } catch { continue; }
+    if (j.type !== 'assistant' || j.isSidechain) continue;
+    const c = j.message?.content;
+    const teksti = (typeof c === 'string' ? [c] : Array.isArray(c) ? c.filter((o) => o?.type === 'text').map((o) => o.text) : []).join('\n');
+    for (const m of teksti.matchAll(/^[\s*`>]*sa (päällä|pois)(?![\p{L}\p{N}])/gmu)) tulos = m[1] === 'päällä';
+  }
+  return tulos;
+}
+
 // Istunnon skooppi: nimi, joka on skooppi, tai transkriptin viimeisin /pura-argumentti ("uusi" ja --liput pois).
 // Transkriptin JSON-rivillä rivinvaihto on kirjoitettu merkeillä \n, joten väli hyväksyy molemmat.
 export function istunnonSkooppi(nimi, transkripti, skooppiNimet) {
@@ -136,7 +151,7 @@ function elossa(pid, procStart, proc) {
   } catch { return null; }
 }
 
-// Elävät istunnot: [{ id, nimi, tila, skooppi, konteksti, pysahdys, pakattu, alkoi, pid, vanhempi, ruutu, polku }]. polku = transkripti (viestit.mjs); alkoi = startedAt (ms). ruutu = tmux-ruutu (%26) tai null;
+// Elävät istunnot: [{ id, nimi, tila, skooppi, konteksti, pysahdys, pakattu, hereilla, alkoi, pid, vanhempi, ruutu, polku }]. polku = transkripti (viestit.mjs); alkoi = startedAt (ms). ruutu = tmux-ruutu (%26) tai null;
 // pid, vanhempi ja ruutu ovat hallintatoimintoja varten (toiminnot.mjs: /pakkaa oikeaan ruutuun).
 export function istunnot({ istunnotDir, projektitDir, skooppiNimet, proc = '/proc' }) {
   if (!existsSync(istunnotDir)) return [];
@@ -157,6 +172,7 @@ export function istunnot({ istunnotDir, projektitDir, skooppiNimet, proc = '/pro
       konteksti: konteksti(transkripti),
       pysahdys: pysahdys(transkripti),
       pakattu: pakattu(transkripti),
+      hereilla: hereilla(transkripti),
       alkoi: s.startedAt ?? 0,
       pid: s.pid,
       vanhempi,

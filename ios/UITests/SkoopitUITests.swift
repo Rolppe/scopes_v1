@@ -506,6 +506,14 @@ final class SkoopitUITests: XCTestCase {
         app.buttons["tiedot"].tap()
         XCTAssertTrue(app.buttons["toiminto-pakkaa"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.buttons["toiminto-pura"].exists)
+        // Automaattisiirto pakkausnapin alla ja herätyskytkin sen alla; ilman istuntoa kytkin on pois ja lukittu.
+        let siirto = app.buttons["toiminto-automaattisiirto"], herata = app.switches["toiminto-hereilla"]
+        XCTAssertTrue(siirto.exists && herata.exists, "automaattisiirto tai herätyskytkin puuttuu")
+        XCTAssertLessThan(app.buttons["toiminto-pakkaa"].frame.minY, siirto.frame.minY)
+        XCTAssertLessThan(siirto.frame.minY, herata.frame.minY)
+        XCTAssertFalse(herata.isEnabled)
+        XCTAssertEqual(herata.value as? String, "0")
+        kuva("toiminnot")
         app.buttons["toiminto-pakkaa"].tap()
         XCTAssertTrue(app.buttons["Pakkaa"].firstMatch.waitForExistence(timeout: 5), "vahvistus puuttuu")
         kuva("pakkaa-vahvistus")

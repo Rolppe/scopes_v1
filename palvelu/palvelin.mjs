@@ -8,7 +8,8 @@
 //   GET /api/skoopit          skooppilista tiivistettynä
 //   GET /api/skoopit/<nimi>   yhden skoopin rekisteri (seuraava, avoimet, viat) ja istunnot
 //   POST /api/skoopit/<nimi>/pura     uusi istunto, ensimmäinen viesti /pura <nimi> → { osoite }
-//   POST /api/skoopit/<nimi>/pakkaa   /pakkaa skoopin vapaaseen tmux-istuntoon → { istunto }
+//   POST /api/skoopit/<nimi>/pakkaa   /pakkaa skoopin vapaaseen tmux-istuntoon → { istunto, komento }
+//   POST /api/skoopit/<nimi>/automaattisiirto | herata | herata-pois   samoin /automaattisiirto, /sa, /sa pois
 //   POST /api/uusi  {"nimi": "…"}     uusi istunto, ensimmäinen viesti /pura uusi <nimi> → { osoite }
 //   GET /api/kayttoraja               Clauden 5 h ja viikkoraja { viisiTuntia, viikko: { kaytto %, nollautuu } | null } (kayttoraja.mjs)
 //   GET /api/agentit                  chatin mallit: Claude ja palvelimen LM Studio (DEMO-SCOPES-UI)
@@ -134,7 +135,7 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         if (v) return vastaa(200, await viestit.lahetaSkooppiin(decodeURIComponent(v[1]), (await runko(req, 32_768)).teksti));
         const kp = polku.match(/^\/api\/skoopit\/([^/]+)\/kysymys-pois$/);
         if (kp) return vastaa(200, await viestit.suljeKysymys(decodeURIComponent(kp[1])));
-        const t = polku.match(/^\/api\/skoopit\/([^/]+)\/(pura|pakkaa)$/);
+        const t = polku.match(/^\/api\/skoopit\/([^/]+)\/(pura|pakkaa|automaattisiirto|herata|herata-pois)$/);
         if (t) return vastaa(200, await suorita(t[2], decodeURIComponent(t[1])));
         return vastaa(404, { virhe: 'tuntematon toiminto' });
       }
