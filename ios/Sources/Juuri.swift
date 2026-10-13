@@ -78,6 +78,9 @@ struct JuuriView: View {
                     .accessibilityHidden(!navigaatio.sivupalkkiAuki)
             }
         }
+        // Käynnistys (käyttäjä 13.10.2026): kun mikään keskustelu ei ole kesken, äppi aukeaa listaan eikä tyhjään chattiin.
+        // Juurinäkymä ilmestyy kerran käynnistyksessä, joten paluu taustalta ei avaa palkkia.
+        .task { if navigaatio.nakyma == .chat && navigaatio.nykyinenChat == nil { navigaatio.sivupalkkiAuki = true } }
         .sheet(isPresented: $navigaatio.asetuksetAuki) { AsetuksetView() }
         .sheet(isPresented: $navigaatio.uusiSkooppiAuki) { UusiSkooppiView() }
     }
