@@ -145,6 +145,33 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Asetukset"].waitForExistence(timeout: 5))
     }
 
+    // Skoopin konteksti (SCOPES-INFRA-KONTEKSTI): infran skoopin lisätiedoista kontekstinäkymään, siitä tiedoston osan
+    // tekstiin. Juuriskooppi "scopes" on aina olemassa ja sillä on rekisteri.
+    func testSkoopinKonteksti() throws {
+        let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        let app = kaynnista(avain: avain)
+        nayta(app, "sivupalkki-infra")
+        XCTAssertTrue(app.buttons["infra-avaa-claude"].waitForExistence(timeout: 15), "infrapuu ei latautunut")
+        // Puu on aakkosjärjestyksessä ja lista laiska: "scopes" tulee näkyviin vierittämällä.
+        let skooppi = app.buttons["infra-scopes"]
+        for _ in 0..<8 where !(skooppi.exists && skooppi.isHittable) { app.swipeUp() }
+        XCTAssertTrue(skooppi.isHittable, "infrapuussa ei ole skooppia scopes")
+        skooppi.tap()
+        let avaa = app.buttons["konteksti-avaa"]
+        XCTAssertTrue(avaa.waitForExistence(timeout: 15), "skoopin näkymässä ei ole kontekstia")
+        kuva("skooppi-konteksti")
+        avaa.tap()
+        XCTAssertTrue(app.navigationBars["Konteksti"].waitForExistence(timeout: 5), "kontekstinäkymä ei auennut")
+        XCTAssertTrue(app.buttons["konteksti-jaa"].exists, "jakopainike puuttuu")
+        kuva("konteksti")
+        let osa = app.buttons["konteksti-osa-0-0"]
+        for _ in 0..<6 where !osa.isHittable { app.swipeUp() }
+        XCTAssertTrue(osa.isHittable, "rekisterin ensimmäinen osa ei näy")
+        osa.tap()
+        XCTAssertTrue(app.staticTexts["konteksti-teksti"].waitForExistence(timeout: 5), "osan teksti ei näy")
+        kuva("konteksti-teksti")
+    }
+
     // Monivalinta korttina (DEMO-SCOPES-LISTA). Vastattu kortti piilotetaan, joten kortti näkyy vain, kun skoopin
     // istunto odottaa vastausta: kysymys on viimeinen viesti ja lista on vieritetty sen kohdalle. Oikea data:
     // SCOPES_KOE_KYSYMYS nimeää skoopin, jonka istunto kysyy ajon aikana; SCOPES_KOE_KORTTI_ODOTA (s) odottaa sitä.

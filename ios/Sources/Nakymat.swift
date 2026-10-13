@@ -54,6 +54,23 @@ struct SkooppiNakymaView: View {
                         Text("ei mitään").foregroundStyle(.secondary)
                     }
                 }
+                if let k = n.konteksti {
+                    Section("Konteksti") {
+                        NavigationLink {
+                            KontekstiView(nimi: nimi, konteksti: k)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack {
+                                    Text("Tiedostot \(k.ryhmat.count), istunnot \(k.istunnot.count)")
+                                    Spacer()
+                                    Text("≈ \(tokenit(k.tokenit))").monospacedDigit().foregroundStyle(.secondary)
+                                }
+                                OsuusPalkki(osat: k.ryhmat.map(\.tokenit))
+                            }
+                        }
+                        .accessibilityIdentifier("konteksti-avaa")
+                    }
+                }
                 Section("Istunnot (\(n.istunnot.count))") {
                     if n.istunnot.isEmpty { Text("ei käynnissä olevia istuntoja").foregroundStyle(.secondary) }
                     ForEach(n.istunnot) { i in
@@ -221,3 +238,128 @@ struct AsetuksetView: View {
         }
     }
 }
+
+// Skoopin konteksti (SCOPES-INFRA-KONTEKSTI 13.10.2026): tiedostot, jotka skoopin purku ja työ lataavat, otsikoittain
+// tokeniosuuksineen; napautus näyttää osan tekstin. Elävien istuntojen mitattu konteksti osa-alueittain. Jaa-painike
+// antaa koko kontekstin yhtenä markdownina.
+struct KontekstiView: View {
+    let nimi: String
+    let konteksti: SkoopinKonteksti
+
+    var body: some View {
+        List {
+            Section {
+                OsuusPalkki(osat: konteksti.ryhmat.map(\.tokenit))
+                ForEach(Array(konteksti.ryhmat.enumerated()), id: \.element.id) { n, r in
+                    OsuusRivi(nimi: r.nimi, alaotsikko: r.polku, maara: r.tokenit, kaikki: konteksti.tokenit, vari: osuusVari(n))
+                }
+            } header: {
+                Text("Tiedostot ≈ \(tokenit(konteksti.tokenit)) tokenia")
+            } footer: {
+                Text("Tokenit arvioitu merkkimäärästä (≈ 1,8 merkkiä/token).")
+            }
+            ForEach(konteksti.istunnot) { i in
+                let kaikki = i.mitattu ?? i.osat.reduce(0) { $0 + $1.tokenit }
+                Section {
+                    OsuusPalkki(osat: i.osat.map(\.tokenit))
+                    ForEach(Array(i.osat.enumerated()), id: \.offset) { n, o in
+                        OsuusRivi(nimi: o.nimi, maara: o.tokenit, kaikki: kaikki, vari: osuusVari(n))
+                    }
+                } header: {
+                    Text("Istunto \(i.nimi ?? String(i.id.prefix(8)))" + (i.mitattu.map { " — \(tokenit($0)) tokenia" } ?? ""))
+                } footer: {
+                    Text("Yhteismäärä on mitattu istunnon viimeisestä vastauksesta, osat arvioitu transkriptista. Jäännös on työkalumääritykset ja agentin ajattelu, joita transkriptissa ei ole tekstinä.")
+                }
+                .accessibilityIdentifier("konteksti-istunto")
+            }
+            ForEach(Array(konteksti.ryhmat.enumerated()), id: \.element.id) { n, r in
+                Section {
+                    ForEach(Array(r.osat.enumerated()), id: \.offset) { m, o in
+                        NavigationLink {
+                            KontekstiTeksti(otsikko: o.otsikko, teksti: o.teksti)
+                        } label: {
+                            OsuusRivi(nimi: o.otsikko, maara: o.tokenit, kaikki: r.tokenit, vari: osuusVari(n))
+                        }
+                        .accessibilityIdentifier("konteksti-osa-\(n)-\(m)")
+                    }
+                } header: {
+                    Text("\(r.nimi) · \(r.polku)")
+                }
+            }
+        }
+        .navigationTitle("Konteksti")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ShareLink(item: konteksti.markdown(nimi)) { Image(systemName: "square.and.arrow.up") }
+                .accessibilityIdentifier("konteksti-jaa")
+        }
+    }
+}
+
+struct KontekstiTeksti: View {
+    let otsikko: String
+    let teksti: String
+    var body: some View {
+        ScrollView {
+            Text(verbatim: teksti)
+                .font(.footnote.monospaced())
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+                .accessibilityIdentifier("konteksti-teksti")
+        }
+        .navigationTitle(otsikko)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { ShareLink(item: teksti) { Image(systemName: "square.and.arrow.up") } }
+    }
+}
+
+// Osuusrivi: nimi, tokenit ja prosentti sekä ohut palkki koko määrästä.
+struct OsuusRivi: View {
+    let nimi: String
+    var alaotsikko: String? = nil
+    let maara: Int
+    let kaikki: Int
+    var vari: Color = .accentColor
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Circle().fill(vari).frame(width: 8, height: 8)
+                Text(nimi).lineLimit(2)
+                Spacer()
+                Text(tokenit(maara)).monospacedDigit()
+                Text(prosentti(maara, kaikki)).monospacedDigit().foregroundStyle(.secondary).frame(minWidth: 44, alignment: .trailing)
+            }
+            if let alaotsikko { Text(alaotsikko).font(.caption.monospaced()).foregroundStyle(.secondary) }
+            GeometryReader { g in
+                Capsule().fill(vari.opacity(0.2))
+                    .overlay(alignment: .leading) {
+                        Capsule().fill(vari).frame(width: kaikki > 0 ? g.size.width * CGFloat(maara) / CGFloat(kaikki) : 0)
+                    }
+            }
+            .frame(height: 4)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// Pinopalkki: osat vierekkäin osuuksiensa levyisinä, värit samassa järjestyksessä kuin osuusrivit.
+struct OsuusPalkki: View {
+    let osat: [Int]
+    var body: some View {
+        let kaikki = max(osat.reduce(0, +), 1)
+        GeometryReader { g in
+            HStack(spacing: 1) {
+                ForEach(Array(osat.enumerated()), id: \.offset) { n, o in
+                    Rectangle().fill(osuusVari(n)).frame(width: max(0, g.size.width * CGFloat(o) / CGFloat(kaikki) - 1))
+                }
+            }
+        }
+        .frame(height: 10)
+        .clipShape(RoundedRectangle(cornerRadius: 3))
+    }
+}
+
+private let osuusVarit: [Color] = [.blue, .orange, .green, .purple, .pink, .teal, .indigo, .brown, .gray]
+func osuusVari(_ n: Int) -> Color { osuusVarit[n % osuusVarit.count] }

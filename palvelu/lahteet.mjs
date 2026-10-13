@@ -5,9 +5,11 @@
 //   juuri/claude/siirto/state/skoopit.json   skooppi → rekisteritiedostot (ensimmäinen on päärekisteri)
 //   istunnot/<pid>.json                      Claude Coden elävät istunnot (sessionId, name, cwd, procStart)
 //   projektit/<cwd, jossa / _ . → ->/<id>.jsonl   istunnon transkripti (konteksti ja /pura-argumentti)
+//   juuri/<rekisterit, HISTORIA, ARKISTO>, juuri/Infra/skills/keskustelun-siirto/references, juuri/claude/TYOTAVAT.md
+//                                             skoopin kontekstitiedostot (skoopinKonteksti)
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 // "SEURAAVA PAKETTI[ [tunniste]]: ID — kuvaus — polut: … — aloitus: …" → { id, kuvaus, polut, aloitus, teksti }.
 export function jasennaSeuraava(teksti) {
@@ -210,8 +212,148 @@ export function lista(asetukset) {
   });
 }
 
+// Skoopin konteksti (SCOPES-INFRA-KONTEKSTI 13.10.2026): kaikki tiedostot, jotka skoopin purku ja työ lataavat,
+// otsikoittain osina tokeniarvioineen, sekä elävien istuntojen mitattu konteksti osa-alueittain.
+// Tokenit arvioidaan merkkimäärästä, ei tokenisoijalla: 1,8 merkkiä/token on mitattu 13.10.2026 kymmenen
+// työkalutuloksen (suomenkielinen markdown, Swift, JSON) usage-kasvusta, vaihteluväli 1,5–2,2.
+const MERKKIA_TOKENIIN = 1.8;
+export const tokeneiksi = (merkit) => Math.ceil(merkit / MERKKIA_TOKENIIN);
+
+// Markdown `##`-otsikoittain: [{ otsikko, teksti, tokenit }]. Ensimmäistä otsikkoa edeltävä osa on "Alku";
+// koodiaidan sisällä oleva otsikko ei aloita osaa. Yli ISO_OSA tokenin luku pilkotaan vielä `###`-otsikoittain
+// ("Luku › Alaluku"), jotta esim. HISTORIA.md:n yksi pitkä luku ei näy yhtenä möhkäleenä.
+const ISO_OSA = 3000;
+function otsikoittain(teksti, taso, alkuOtsikko) {
+  const osat = [];
+  let nykyinen = { otsikko: alkuOtsikko, rivit: [] };
+  let aidattu = false;
+  const kuvio = new RegExp(`^#{${taso}}\\s+(.+?)\\s*#*\\s*$`);
+  for (const rivi of teksti.split('\n')) {
+    if (/^\s*(```|~~~)/.test(rivi)) aidattu = !aidattu;
+    const m = !aidattu && rivi.match(kuvio);
+    if (m) { osat.push(nykyinen); nykyinen = { otsikko: m[1], rivit: [rivi] }; } else nykyinen.rivit.push(rivi);
+  }
+  osat.push(nykyinen);
+  return osat
+    .map(({ otsikko, rivit }) => ({ otsikko, teksti: rivit.join('\n').trim() }))
+    .filter((o) => o.teksti)
+    .map((o) => ({ ...o, tokenit: tokeneiksi(o.teksti.length) }));
+}
+
+export function osiin(teksti) {
+  return otsikoittain(teksti, 2, 'Alku').flatMap((o) => {
+    if (o.tokenit <= ISO_OSA) return [o];
+    const ala = otsikoittain(o.teksti, 3, o.otsikko);
+    return ala.length > 1 ? ala.map((a, i) => (i === 0 ? a : { ...a, otsikko: `${o.otsikko} › ${a.otsikko}` })) : [o];
+  });
+}
+
+// Skoopin kontekstitiedostot järjestyksessä: rekisterit (skoopit.json), päärekisterin viereiset HISTORIA.md ja
+// ARKISTO.md, viitetiedosto (pisin sanaetuliite: "infra iot" → infra-iot.md, muuten infra.md) ja kaikille yhteiset.
+// Vain olemassa olevat, kukin kerran.
+const VIITTEET = 'Infra/skills/keskustelun-siirto/references';
+export function kontekstiTiedostot(nimi, rekisterit, juuri) {
+  const tulos = rekisterit.map((polku) => ({ laji: 'rekisteri', polku }));
+  const hakemisto = dirname(rekisterit[0] ?? '');
+  tulos.push({ laji: 'historia', polku: join(hakemisto, 'HISTORIA.md') }, { laji: 'arkisto', polku: join(hakemisto, 'ARKISTO.md') });
+  const sanat = nimi.split(' ');
+  for (let n = sanat.length; n > 0; n--) {
+    const polku = `${VIITTEET}/${sanat.slice(0, n).join('-')}.md`;
+    if (existsSync(join(juuri, polku))) { tulos.push({ laji: 'viite', polku }); break; }
+  }
+  tulos.push({ laji: 'yhteinen', polku: `${VIITTEET}/yhteiset.md` }, { laji: 'yhteinen', polku: 'claude/TYOTAVAT.md' });
+  const nahty = new Set();
+  return tulos.filter((t) => !nahty.has(t.polku) && nahty.add(t.polku) && existsSync(join(juuri, t.polku)));
+}
+
+// Istunnon konteksti osa-alueittain viimeisimmästä tiivistyksestä (compact_boundary) alkaen. Osat arvioidaan
+// transkriptin tekstistä: viestit, työkalukutsut ja -tulokset, Claude Coden liitteet (CLAUDE.md ja muisti, taito- ja
+// työkalulistat, muistutukset) ja viimeisin järjestelmäkehote (prompt_snapshot). Mitatusta kokonaismäärästä
+// (viimeisin usage) jäävä osa on jäännös: työkalumääritykset ja agentin ajattelu, joita transkripti ei sisällä
+// tekstinä. Jos arvio ylittää mitatun, osat skaalataan mitattuun.
+const JARJESTELMAN = /^\s*(<(system-reminder|local-command|task-notification|command-)|sa-tick:|sa-uusinta:)/;
+const KUVA_MERKKEINA = 1500 * MERKKIA_TOKENIIN;
+const ISTUNNON_OSAT = [
+  ['kehote', 'Järjestelmäkehote'],
+  ['ohjeet', 'Ohjeet: CLAUDE.md ja muisti'],
+  ['listat', 'Taito-, agentti- ja työkalulistat'],
+  ['muistutukset', 'Muistutukset, komennot ja tiivistelmä'],
+  ['kayttaja', 'Käyttäjän viestit'],
+  ['agentti', 'Agentin vastaukset'],
+  ['kutsut', 'Työkalukutsut'],
+  ['tulokset', 'Työkalutulokset'],
+];
+// Liitteet, joilla ei ole mallille näkyvää tekstiä (tila- ja kirjanpitorivejä), ohitetaan.
+const EI_MALLILLE = new Set(['prompt_snapshot', 'deferred_tools_record', 'credential_org', 'command_permissions', 'auto_mode', 'queued_command']);
+const LISTAT = {
+  skill_listing: (a) => a.content,
+  agent_listing_delta: (a) => a.addedLines,
+  deferred_tools_delta: (a) => a.addedLines,
+  mcp_instructions_delta: (a) => a.addedBlocks,
+};
+const pituus = (x) => (typeof x === 'string' ? x.length : Array.isArray(x) ? x.reduce((s, y) => s + pituus(y), 0) : 0);
+const sisaltoMerkit = (c) => (typeof c === 'string' ? c.length
+  : Array.isArray(c) ? c.reduce((s, o) => s + (o?.type === 'text' ? o.text.length : o?.type === 'image' ? KUVA_MERKKEINA : 0), 0) : 0);
+
+export function kontekstinOsat(transkripti, mitattu) {
+  const merkit = Object.fromEntries(ISTUNNON_OSAT.map(([k]) => [k, 0]));
+  const rivit = transkripti.split('\n');
+  const alku = rivit.findLastIndex((r) => r.includes('"compact_boundary"')) + 1;
+  rivit.forEach((rivi, n) => {
+    let j;
+    try { j = JSON.parse(rivi); } catch { return; }
+    if (j.isSidechain) return;
+    // Järjestelmäkehote on istunnon nykyinen, joten viimeisin tilannekuva kelpaa myös ennen tiivistystä.
+    if (j.attachment?.type === 'prompt_snapshot') { merkit.kehote = pituus(j.attachment.systemPrompt); return; }
+    if (n < alku) return;
+    const c = j.message?.content;
+    if (j.type === 'attachment') {
+      const a = j.attachment ?? {};
+      if (a.type === 'instructions') merkit.ohjeet += (a.files ?? []).reduce((s, f) => s + pituus(f.content), 0);
+      else if (LISTAT[a.type]) merkit.listat += pituus(LISTAT[a.type](a));
+      else if (!EI_MALLILLE.has(a.type)) merkit.muistutukset += JSON.stringify(a).length;
+    } else if (j.type === 'user') {
+      for (const o of typeof c === 'string' ? [{ type: 'text', text: c }] : Array.isArray(c) ? c : []) {
+        if (o?.type === 'tool_result') merkit.tulokset += sisaltoMerkit(o.content);
+        else if (o?.type === 'text') merkit[j.isMeta || j.isCompactSummary || JARJESTELMAN.test(o.text) ? 'muistutukset' : 'kayttaja'] += o.text.length;
+        else if (o?.type === 'image') merkit.kayttaja += KUVA_MERKKEINA;
+      }
+    } else if (j.type === 'assistant' && Array.isArray(c)) {
+      for (const o of c) {
+        if (o?.type === 'text') merkit.agentti += o.text.length;
+        else if (o?.type === 'tool_use') merkit.kutsut += (o.name ?? '').length + JSON.stringify(o.input ?? {}).length;
+      }
+    }
+  });
+  let osat = ISTUNNON_OSAT.map(([k, nimi]) => ({ nimi, tokenit: tokeneiksi(merkit[k]) }));
+  if (mitattu == null) return osat;
+  const summa = osat.reduce((s, o) => s + o.tokenit, 0);
+  if (summa > mitattu) osat = osat.map((o) => ({ ...o, tokenit: Math.round((o.tokenit * mitattu) / summa) }));
+  return [...osat, { nimi: 'Työkalumääritykset ja ajattelu (jäännös)', tokenit: Math.max(0, mitattu - summa) }];
+}
+
+export function skoopinKonteksti(nimi, { juuri, rekisterit, istunnot: skoopinIstunnot }) {
+  const ryhmat = kontekstiTiedostot(nimi, rekisterit, juuri).map(({ laji, polku }) => {
+    let teksti = '';
+    try { teksti = readFileSync(join(juuri, polku), 'utf8'); } catch { /* poistui kesken */ }
+    const osat = osiin(teksti);
+    return { laji, polku, tokenit: osat.reduce((s, o) => s + o.tokenit, 0), osat };
+  });
+  return {
+    tokenit: ryhmat.reduce((s, r) => s + r.tokenit, 0),
+    ryhmat,
+    istunnot: skoopinIstunnot.map((i) => {
+      let transkripti = '';
+      try { transkripti = readFileSync(i.polku, 'utf8'); } catch { /* uusi istunto ilman transkriptia */ }
+      const mitattu = i.konteksti?.tokenit ?? null;
+      return { id: i.id, nimi: i.nimi, mitattu, osat: kontekstinOsat(transkripti, mitattu) };
+    }),
+  };
+}
+
 export function yksi(nimi, asetukset) {
   const skoopit = lueSkoopit(asetukset.juuri);
   const kaikkiIstunnot = istunnot({ ...asetukset, skooppiNimet: Object.keys(skoopit) });
-  return skooppi(nimi, { juuri: asetukset.juuri, skoopit, kaikkiIstunnot });
+  const s = skooppi(nimi, { juuri: asetukset.juuri, skoopit, kaikkiIstunnot });
+  return s && { ...s, konteksti: skoopinKonteksti(nimi, { juuri: asetukset.juuri, rekisterit: s.rekisterit, istunnot: s.istunnot }) };
 }

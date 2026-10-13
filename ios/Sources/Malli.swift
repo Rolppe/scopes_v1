@@ -51,6 +51,76 @@ struct SkooppiNakyma: Decodable, Hashable {
     let avoimet: [Taulukkorivi]
     let viat: [Taulukkorivi]
     let istunnot: [Istunto]
+    // Puuttuu vanhemmalta palvelulta (ennen SCOPES-INFRA-KONTEKSTI).
+    let konteksti: SkoopinKonteksti?
+}
+
+// Skoopin konteksti (SCOPES-INFRA-KONTEKSTI 13.10.2026, lahteet.mjs skoopinKonteksti): tiedostot otsikoittain
+// tokeniarvioineen ja elävien istuntojen konteksti osa-alueittain. Tiedostojen tokenit ovat arvioita merkkimäärästä;
+// istunnon `mitattu` on viimeisimmän vastauksen todellinen kontekstikoko.
+struct KontekstiOsa: Decodable, Hashable {
+    let otsikko: String
+    let teksti: String
+    let tokenit: Int
+}
+
+struct KontekstiRyhma: Decodable, Hashable, Identifiable {
+    let laji: String
+    let polku: String
+    let tokenit: Int
+    let osat: [KontekstiOsa]
+    var id: String { polku }
+    var nimi: String {
+        switch laji {
+        case "rekisteri": "Rekisteri"
+        case "historia": "Historia"
+        case "arkisto": "Arkisto"
+        case "viite": "Siirron viitetiedosto"
+        case "yhteinen": "Yhteiset ohjeet"
+        default: laji
+        }
+    }
+}
+
+struct IstunnonOsa: Decodable, Hashable {
+    let nimi: String
+    let tokenit: Int
+}
+
+struct IstunnonKonteksti: Decodable, Hashable, Identifiable {
+    let id: String
+    let nimi: String?
+    let mitattu: Int?
+    let osat: [IstunnonOsa]
+}
+
+struct SkoopinKonteksti: Decodable, Hashable {
+    let tokenit: Int
+    let ryhmat: [KontekstiRyhma]
+    let istunnot: [IstunnonKonteksti]
+
+    // Koko konteksti yhtenä markdownina jaettavaksi: ensin osuudet, sitten tiedostot kokonaan.
+    func markdown(_ skooppi: String) -> String {
+        var r = ["# Skoopin \(skooppi) konteksti", "", "Tiedostot yhteensä ≈ \(tokenit) tokenia (arvio merkkimäärästä).", ""]
+        for g in ryhmat { r.append("- \(g.nimi) `\(g.polku)`: ≈ \(g.tokenit) tokenia (\(prosentti(g.tokenit, tokenit)))") }
+        for i in istunnot {
+            r += ["", "## Istunto \(i.nimi ?? String(i.id.prefix(8)))" + (i.mitattu.map { " — mitattu \($0) tokenia" } ?? ""), ""]
+            let kaikki = i.mitattu ?? i.osat.reduce(0) { $0 + $1.tokenit }
+            for o in i.osat { r.append("- \(o.nimi): ≈ \(o.tokenit) tokenia (\(prosentti(o.tokenit, kaikki)))") }
+        }
+        for g in ryhmat {
+            r += ["", "---", "", "<!-- \(g.nimi): \(g.polku), ≈ \(g.tokenit) tokenia -->", ""]
+            r.append(g.osat.map(\.teksti).joined(separator: "\n\n"))
+        }
+        return r.joined(separator: "\n")
+    }
+}
+
+// Osuus prosentteina: alle prosentti "<1 %", muuten kokonaislukuna.
+func prosentti(_ osa: Int, _ kaikki: Int) -> String {
+    guard kaikki > 0, osa > 0 else { return "0 %" }
+    let p = Double(osa) * 100 / Double(kaikki)
+    return p < 1 ? "<1 %" : "\(Int(p.rounded())) %"
 }
 
 // Palvelun kolme valmista toimintoa (toiminnot.mjs); muita ei ole.
