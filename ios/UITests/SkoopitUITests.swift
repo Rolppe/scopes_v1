@@ -230,6 +230,44 @@ final class SkoopitUITests: XCTestCase {
     // Monivalinta korttina (DEMO-SCOPES-LISTA). Vastattu kortti piilotetaan, joten kortti näkyy vain, kun skoopin
     // istunto odottaa vastausta: kysymys on viimeinen viesti ja lista on vieritetty sen kohdalle. Oikea data:
     // SCOPES_KOE_KYSYMYS nimeää skoopin, jonka istunto kysyy ajon aikana; SCOPES_KOE_KORTTI_ODOTA (s) odottaa sitä.
+    // Syöttökentän napautus nostaa keskustelun näppäimistön yläpuolelle (CHAT-NOUSU-TODENNUS 13.10.2026): viimeisen
+    // tekstin alareuna on kentän yläreunan tuntumassa eikä jää kentän tai näppäimistön alle tai kauas sen yläpuolelle.
+    func testNappaimistoNostaaKeskustelun() throws {
+        let ymp = ProcessInfo.processInfo.environment
+        let avain = try XCTUnwrap(ymp["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        let skooppi = ymp["SCOPES_KOE_AUKI"] ?? "scopes lista"
+        let app = kaynnista(avain: avain)
+        etsi(app, skooppi)
+        let rivi = app.buttons["skooppi-\(skooppi)"]
+        XCTAssertTrue(rivi.waitForExistence(timeout: 15), "haku ei löytänyt skooppia")
+        rivi.tap()
+        XCTAssertTrue(app.staticTexts["viestit-istunto"].waitForExistence(timeout: 15), "\(skooppi) ei ole auki")
+        let kentta = app.textFields["viestit-kentta"].exists ? app.textFields["viestit-kentta"] : app.textViews["viestit-kentta"]
+        guard kentta.waitForExistence(timeout: 5) else { throw XCTSkip("syöttökenttää ei ole (kortti auki tai vain luku)") }
+        // Haun näppäimistö voi jäädä auki: suljetaan napautuksella listaan, jotta kentän napautus avaa sen alusta.
+        if app.keyboards.firstMatch.exists {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
+            XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5), "näppäimistö ei sulkeutunut")
+        }
+        sleep(2)
+        kuva("nousu-ennen")
+        kentta.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "näppäimistö ei auennut")
+        sleep(2)
+        kuva("nousu-jalkeen")
+        let yla = kentta.frame.minY
+        let istunto = app.staticTexts["viestit-istunto"].frame.maxY
+        // Keskustelun tekstit alkavat kentän yläreunan yläpuolelta; kentän paikkamerkki ja näppäimistön tekstit sen alapuolelta.
+        var alin: CGFloat = 0
+        var nimi = ""
+        for t in app.staticTexts.allElementsBoundByIndex {
+            let f: CGRect = t.frame
+            if f.minY > istunto, f.minY < yla, f.height > 0, f.maxY > alin { alin = f.maxY; nimi = String(t.label.prefix(40)) }
+        }
+        XCTAssertLessThanOrEqual(alin, yla + 2, "viimeinen teksti jää kentän alle: \(nimi) \(alin), kenttä \(yla)")
+        XCTAssertGreaterThan(alin, yla - 60, "keskustelu ei noussut kentän tuntumaan: \(nimi) \(alin), kenttä \(yla)")
+    }
+
     func testKysymysKortti() throws {
         let ymp = ProcessInfo.processInfo.environment
         let avain = try XCTUnwrap(ymp["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
