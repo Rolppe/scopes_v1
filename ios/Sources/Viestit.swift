@@ -537,6 +537,48 @@ struct ChatView: View {
     }
 }
 
+// Käyttörajarenkaat kolmen pisteen vieressä (CHAT-KAYTTORAJA, käyttäjä 13.10.2026): ulompi keltainen = 5 h raja,
+// sisempi punainen = Clauden viikkoraja; rengas täyttyy ylhäältä myötäpäivään. Napautus näyttää prosentit ja
+// nollautumishetket. Ilman lukemaa renkaat ovat tyhjiä.
+struct KayttorajaRenkaat: View {
+    let raja: Kayttoraja?
+
+    var body: some View {
+        Menu {
+            Text(rivi("5 h", raja?.viisiTuntia, muoto: .dateTime.hour().minute()))
+            Text(rivi("Viikko", raja?.viikko, muoto: .dateTime.weekday(.abbreviated).hour().minute()))
+        } label: {
+            ZStack {
+                rengas(raja?.viisiTuntia, vari: .yellow, koko: 21)
+                rengas(raja?.viikko, vari: .red, koko: 11)
+            }
+            .frame(width: 24, height: 24)
+        }
+        .accessibilityLabel("Käyttöraja")
+        .accessibilityValue("5 h \(prosentti(raja?.viisiTuntia)), viikko \(prosentti(raja?.viikko))")
+        .accessibilityIdentifier("kayttoraja")
+    }
+
+    private func rengas(_ r: Kayttoraja.Raja?, vari: Color, koko: CGFloat) -> some View {
+        ZStack {
+            Circle().stroke(vari.opacity(0.25), lineWidth: 3)
+            Circle().trim(from: 0, to: min(max((r?.kaytto ?? 0) / 100, 0), 1))
+                .stroke(vari, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+        }
+        .frame(width: koko, height: koko)
+    }
+
+    private func prosentti(_ r: Kayttoraja.Raja?) -> String { r.map { "\(Int($0.kaytto.rounded())) %" } ?? "ei tiedossa" }
+
+    private func rivi(_ nimi: String, _ r: Kayttoraja.Raja?, muoto: Date.FormatStyle) -> String {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let aika = r?.nollautuu.flatMap { iso.date(from: $0) }.map { " · nollautuu \($0.formatted(muoto))" } ?? ""
+        return "\(nimi): \(prosentti(r))\(aika)"
+    }
+}
+
 struct SkooppiViestitView: View {
     let nimi: String
     @EnvironmentObject private var asetukset: Asetukset
@@ -545,6 +587,7 @@ struct SkooppiViestitView: View {
     @State private var lahettaa = false
     @State private var puretaan = false
     @State private var virhe: String?
+    @State private var kayttoraja: Kayttoraja?
 
     private var asiakas: Asiakas { Asiakas(osoite: asetukset.osoite, avain: asetukset.avain) }
 
@@ -589,10 +632,20 @@ struct SkooppiViestitView: View {
         .navigationTitle(nimi)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) { KayttorajaRenkaat(raja: kayttoraja) }
             // Kolme pistettä kuten Claude-äpissä (käyttäjä 13.10.2026), avaa skoopin tiedot.
-            NavigationLink(value: SkooppiReitti.tiedot(nimi)) { Image(systemName: "ellipsis") }
-                .accessibilityLabel("Skoopin tiedot")
-                .accessibilityIdentifier("tiedot")
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink(value: SkooppiReitti.tiedot(nimi)) { Image(systemName: "ellipsis") }
+                    .accessibilityLabel("Skoopin tiedot")
+                    .accessibilityIdentifier("tiedot")
+            }
+        }
+        .task {
+            // Käyttöraja minuutin välein: palvelu välimuistittaa, eikä rengas tarvitse tarkempaa.
+            while !Task.isCancelled {
+                if let k = try? await asiakas.kayttoraja() { kayttoraja = k }
+                try? await Task.sleep(for: .seconds(60))
+            }
         }
         .task {
             // Päivitys 5 s välein, kun näkymä on auki (istunnon vastaukset tulevat transkriptiin).

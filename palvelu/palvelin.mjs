@@ -10,6 +10,7 @@
 //   POST /api/skoopit/<nimi>/pura     uusi istunto, ensimmäinen viesti /pura <nimi> → { osoite }
 //   POST /api/skoopit/<nimi>/pakkaa   /pakkaa skoopin vapaaseen tmux-istuntoon → { istunto }
 //   POST /api/uusi  {"nimi": "…"}     uusi istunto, ensimmäinen viesti /pura uusi <nimi> → { osoite }
+//   GET /api/kayttoraja               Clauden 5 h ja viikkoraja { viisiTuntia, viikko: { kaytto %, nollautuu } | null } (kayttoraja.mjs)
 //   GET /api/agentit                  chatin mallit: Claude ja palvelimen LM Studio (DEMO-SCOPES-UI)
 //   POST /api/chat {"agentti","viesti","keskustelu"?}   agentin vastaus → { vastaus, keskustelu }
 //   POST /api/chat/virta (sama runko)  vastaus NDJSON-virtana kirjain kerrallaan (DEMO-SCOPES-SUORATOISTO)
@@ -31,6 +32,7 @@ import { createServer } from 'node:http';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { luoKayttoraja } from './kayttoraja.mjs';
 import { lista, yksi } from './lahteet.mjs';
 import { Hylatty, luoToiminnot } from './toiminnot.mjs';
 import { luoViestit } from './viestit.mjs';
@@ -71,7 +73,7 @@ function runko(req, raja = 1024) {
   });
 }
 
-export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset)) {
+export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset), kayttoraja = luoKayttoraja()) {
   // Chat suoratoistona (DEMO-SCOPES-SUORATOISTO): NDJSON-rivit {tyyppi: 'pala', teksti} …, lopuksi
   // {tyyppi: 'valmis', vastaus, keskustelu, …} tai {tyyppi: 'virhe', virhe}. Hylkäys ennen agentin käynnistystä
   // palaa tavallisena virhekoodina. Yhteyden katketessa (puhelimen näyttölukko, äpin vaihto) agentti jatkaa, ja
@@ -138,6 +140,7 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
       }
       if (polku === '/api/skoopit') return vastaa(200, lista(asetukset));
       if (polku === '/api/agentit') return vastaa(200, await viestit.agentit());
+      if (polku === '/api/kayttoraja') return vastaa(200, await kayttoraja());
       if (polku === '/api/chat/kaynnissa') return liity(res);
       if (polku === '/api/chat/keskustelut') return vastaa(200, viestit.keskustelut());
       const kk = polku.match(/^\/api\/chat\/keskustelut\/([^/]+)$/);

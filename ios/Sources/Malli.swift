@@ -206,6 +206,16 @@ struct SkooppiViestit: Decodable {
     let viestit: [Viesti]
 }
 
+// Clauden käyttörajat prosentteina (CHAT-KAYTTORAJA): null, kun palvelu ei ole saanut lukemaa.
+struct Kayttoraja: Decodable {
+    struct Raja: Decodable {
+        let kaytto: Double
+        let nollautuu: String?
+    }
+    let viisiTuntia: Raja?
+    let viikko: Raja?
+}
+
 struct LahetysVastaus: Decodable {
     let istunto: String
 }

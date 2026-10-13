@@ -33,6 +33,8 @@ struct Asiakas {
     // Chat (DEMO-SCOPES-VALILEHDET): agentin vastaus voi kestää minuutteja.
     func agentit() async throws -> [Agentti] { try await hae("/api/agentit") }
 
+    func kayttoraja() async throws -> Kayttoraja { try await hae("/api/kayttoraja") }
+
     // Vastaus kirjain kerrallaan (DEMO-SCOPES-SUORATOISTO): palvelu kirjoittaa NDJSON-rivejä sitä mukaa kuin agentti
     // kirjoittaa. Hylkäys ennen agentin käynnistystä tulee tavallisena virhekoodina.
     func chatVirta(agentti: String, viesti: String, keskustelu: String?) async throws -> AsyncThrowingStream<ChatTapahtuma, Error> {
