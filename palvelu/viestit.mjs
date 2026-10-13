@@ -127,15 +127,18 @@ export function keskustelu(transkripti, maara = 120) {
 export function luoViestit(asetukset, { aja = ajaKomento } = {}) {
   let chatKaynnissa = false;
 
+  // Skoopin pakkaamattomat istunnot uusin ensin: pakattu istunto ei ole enää skoopin keskustelu (käyttäjä 13.10.2026),
+  // ja automaattisiirron jälkeen uusi istunto korvaa vanhan samassa näkymässä.
   const skoopinIstunnot = (nimi) => {
     const skoopit = lueSkoopit(asetukset.juuri);
     if (!skoopit[nimi]) throw new Hylatty(404, 'tuntematon skooppi');
     return istunnot({ ...asetukset, skooppiNimet: Object.keys(skoopit) }).filter((i) => i.skooppi === nimi);
   };
+  const avoimet = (nimi) => skoopinIstunnot(nimi).filter((i) => !i.pakattu).sort((a, b) => b.alkoi - a.alkoi);
 
   // Ainoa tmux-istunto, jonka ruudun prosessi on istunnon claude tai sen vanhempi (sama sääntö kuin pakkaa).
   async function tmuxIstunto(nimi) {
-    const omat = skoopinIstunnot(nimi).filter((i) => i.ruutu);
+    const omat = avoimet(nimi).filter((i) => i.ruutu);
     if (omat.length !== 1) throw new Hylatty(409, omat.length ? 'skoopissa on useita tmux-istuntoja' : 'skooppi ei ole auki tmuxissa');
     const [i] = omat;
     const r = await aja('tmux', ['display-message', '-p', '-t', i.ruutu, '#{pane_pid}']);
@@ -294,17 +297,18 @@ export function luoViestit(asetukset, { aja = ajaKomento } = {}) {
       }
     },
 
-    // Skoopin istunnon viestit. Ei istuntoa → { auki: false }, jolloin äppi tarjoaa purun.
+    // Skoopin istunnon viestit, uusin pakkaamaton istunto. Ei sellaista → { auki: false }, jolloin äppi tarjoaa purun;
+    // pakattu: true, kun skoopissa on vain pakattuja istuntoja (keskustelu tyhjennetään, Pura sulkee ne ensin).
     skoopinViestit(nimi) {
-      const omat = skoopinIstunnot(nimi);
-      if (!omat.length) return { nimi, auki: false, istunto: null, voiLahettaa: false, viestit: [] };
-      const i = omat.find((x) => x.ruutu) ?? omat[0];
+      const omat = avoimet(nimi);
+      if (!omat.length) return { nimi, auki: false, pakattu: skoopinIstunnot(nimi).length > 0, istunto: null, voiLahettaa: false, viestit: [] };
+      const [i] = omat;
       let transkripti = '';
       try { transkripti = readFileSync(i.polku, 'utf8'); } catch { /* uusi istunto ilman transkriptia */ }
       return {
         nimi, auki: true,
         istunto: { id: i.id, nimi: i.nimi, tila: i.tila, konteksti: i.konteksti },
-        voiLahettaa: omat.filter((x) => x.ruutu).length === 1,
+        voiLahettaa: Boolean(i.ruutu) && omat.filter((x) => x.ruutu).length === 1,
         viestit: keskustelu(transkripti),
       };
     },

@@ -94,6 +94,25 @@ export function pysahdys(transkripti) {
   return null;
 }
 
+// Onko istunto pakattu (käyttäjä 13.10.2026: pakkauksen jälkeen äppi tyhjentää skoopin keskustelun ja tarjoaa
+// purun): agentin viimeinen `PAKKAUS: vahvistettu` -rivi on viimeisen käyttäjän viestin jälkeen. Työkalutulokset,
+// meta-rivit, komentokääreen tulosteet ja /sa-herätykset eivät ole käyttäjän viestejä.
+const EI_KAYTTAJAN = /^(<(local-command|system-reminder|task-notification)|sa-tick:|sa-uusinta:)/;
+export function pakattu(transkripti) {
+  let tulos = false;
+  for (const rivi of transkripti.split('\n')) {
+    let j;
+    try { j = JSON.parse(rivi); } catch { continue; }
+    if (j.isSidechain || j.isMeta) continue;
+    const c = j.message?.content;
+    const teksti = (typeof c === 'string' ? [c] : Array.isArray(c) ? c.filter((o) => o?.type === 'text').map((o) => o.text) : []).join('\n').trim();
+    if (!teksti) continue;
+    if (j.type === 'assistant' && /^[\s*`>]*PAKKAUS:[*`\s]*vahvistettu/m.test(teksti)) tulos = true;
+    else if (j.type === 'user' && !EI_KAYTTAJAN.test(teksti)) tulos = false;
+  }
+  return tulos;
+}
+
 // Istunnon skooppi: nimi, joka on skooppi, tai transkriptin viimeisin /pura-argumentti ("uusi" ja --liput pois).
 // Transkriptin JSON-rivillä rivinvaihto on kirjoitettu merkeillä \n, joten väli hyväksyy molemmat.
 export function istunnonSkooppi(nimi, transkripti, skooppiNimet) {
@@ -115,7 +134,7 @@ function elossa(pid, procStart, proc) {
   } catch { return null; }
 }
 
-// Elävät istunnot: [{ id, nimi, tila, skooppi, konteksti, pysahdys, pid, vanhempi, ruutu, polku }]. polku = transkripti (viestit.mjs). ruutu = tmux-ruutu (%26) tai null;
+// Elävät istunnot: [{ id, nimi, tila, skooppi, konteksti, pysahdys, pakattu, alkoi, pid, vanhempi, ruutu, polku }]. polku = transkripti (viestit.mjs); alkoi = startedAt (ms). ruutu = tmux-ruutu (%26) tai null;
 // pid, vanhempi ja ruutu ovat hallintatoimintoja varten (toiminnot.mjs: /pakkaa oikeaan ruutuun).
 export function istunnot({ istunnotDir, projektitDir, skooppiNimet, proc = '/proc' }) {
   if (!existsSync(istunnotDir)) return [];
@@ -135,6 +154,8 @@ export function istunnot({ istunnotDir, projektitDir, skooppiNimet, proc = '/pro
       skooppi: istunnonSkooppi(s.name ?? '', transkripti, skooppiNimet),
       konteksti: konteksti(transkripti),
       pysahdys: pysahdys(transkripti),
+      pakattu: pakattu(transkripti),
+      alkoi: s.startedAt ?? 0,
       pid: s.pid,
       vanhempi,
       // Remote Controlin SDK-ajo (entrypoint sdk-cli) perii daemonin tmux-ruudun, joten ruutu vain CLI-istunnoille.

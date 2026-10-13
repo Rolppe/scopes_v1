@@ -233,8 +233,32 @@ test('skoopinViestit: auki tai ei', () => {
   assert.equal(auki.voiLahettaa, true);
   assert.equal(auki.istunto.id, 's1');
   assert.equal(auki.viestit.length, 4);
-  assert.deepEqual(v.skoopinViestit('b'), { nimi: 'b', auki: false, istunto: null, voiLahettaa: false, viestit: [] });
+  assert.deepEqual(v.skoopinViestit('b'), { nimi: 'b', auki: false, pakattu: false, istunto: null, voiLahettaa: false, viestit: [] });
   assert.throws(() => v.skoopinViestit('c'), (e) => e.koodi === 404);
+});
+
+// Käyttäjä 13.10.2026: pakkauksen jälkeen skoopin keskustelu tyhjenee ja Pura jatkaa samassa näkymässä;
+// automaattisiirron uusi istunto korvaa vanhan.
+test('skoopinViestit: pakattu istunto piiloon, uusin pakkaamaton näkyy', async () => {
+  const a = ymparisto();
+  const kansio = join(a.projektitDir, projektiNimi('/x'));
+  const PAKATTU = `${TRANSKRIPTI}\n${rivi({ type: 'assistant', message: { content: [{ type: 'text', text: 'PAKKAUS: vahvistettu — commit abc' }] } })}`;
+  writeFileSync(join(kansio, 's1.jsonl'), PAKATTU);
+  const v = luoViestit(a, { aja: vaarennos().aja });
+  assert.deepEqual(v.skoopinViestit('a'), { nimi: 'a', auki: false, pakattu: true, istunto: null, voiLahettaa: false, viestit: [] });
+  await hylkaa(v.lahetaSkooppiin('a', 'x'), 409);
+  // Uusi istunto (automaattisiirto tai Pura) samassa skoopissa: se näkyy, ja viestit menevät sen ruutuun.
+  writeFileSync(join(a.istunnotDir, `${process.ppid}.json`), JSON.stringify({ pid: process.ppid, sessionId: 's2', cwd: '/x', name: 'a', status: 'idle', startedAt: 2, tmux: 'siirto-a-2:@2.%6' }));
+  writeFileSync(join(kansio, 's2.jsonl'), rivi({ type: 'user', message: { content: '<command-name>/pura</command-name>\n<command-args>a --autojatko</command-args>' } }));
+  const uusi = v.skoopinViestit('a');
+  assert.equal(uusi.istunto.id, 's2');
+  assert.equal(uusi.voiLahettaa, true);
+  assert.deepEqual(uusi.viestit.map((x) => x.teksti), ['/pura a --autojatko']);
+  // Vanha istunto ei vielä pakattu (siirron päällekkäisyys): uusin näkyy, mutta lähetys odottaa yhtä ruutua.
+  writeFileSync(join(kansio, 's1.jsonl'), TRANSKRIPTI);
+  const kaksi = v.skoopinViestit('a');
+  assert.equal(kaksi.istunto.id, 's2');
+  assert.equal(kaksi.voiLahettaa, false);
 });
 
 test('lahetaSkooppiin: kirjaimellisesti ruutuun, rivinvaihdot välilyönneiksi', async () => {

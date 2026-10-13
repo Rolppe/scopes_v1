@@ -1,7 +1,8 @@
 // Skooppien hallintatoiminnot puhelimesta (DEMO-SCOPES-HALLINTA 13.10.2026). Turvamalli (käyttäjä 13.10.2026,
 // "vain valmiit toiminnot"): palvelu ajaa vain nämä kolme valmista toimintoa, eikä puhelimelta tule komentoa,
 // lippua tai vapaata tekstiä mihinkään komentoriviin.
-//   pura   — olemassa olevalle skoopille uusi Remote Control -istunto tmuxiin, ensimmäinen viesti `/pura <skooppi>`
+//   pura   — olemassa olevalle skoopille uusi Remote Control -istunto tmuxiin, ensimmäinen viesti `/pura <skooppi>`;
+//            skoopin pakatut tmux-istunnot suljetaan ensin `/exit`illä (pakkaamaton istunto estää purun)
 //   pakkaa — skoopin ainoaan vapaaseen tmux-istuntoon kirjoitetaan `/pakkaa`
 //   uusi   — uusi istunto, ensimmäinen viesti `/pura uusi <nimi>`; nimi on tiukka [a-z0-9-]-sanoja ja vielä vapaa
 // Skoopin nimi tarkistetaan skoopit.json:n avaimista (uudella: muodosta ja vapaudesta), ja komennot ajetaan
@@ -59,6 +60,19 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
   const skoopinIstunnot = (nimi, skoopit) =>
     istunnot({ ...asetukset, skooppiNimet: Object.keys(skoopit) }).filter((i) => i.skooppi === nimi);
 
+  // Ruudun prosessin on oltava istunnon claude tai sen vanhempi, ettei näppäily osu väärään ruutuun.
+  async function tarkistaRuutu(i) {
+    const r = await aja('tmux', ['display-message', '-p', '-t', i.ruutu, '#{pane_pid}']);
+    const ruudunPid = Number(r.stdout.trim());
+    if (r.koodi !== 0 || !(ruudunPid === i.pid || ruudunPid === i.vanhempi)) throw new Hylatty(409, 'istunnon tmux-ruutu ei täsmää');
+  }
+  async function kirjoita(i, teksti) {
+    for (const a of [['-l', teksti], ['Enter']]) {
+      const t = await aja('tmux', ['send-keys', '-t', i.ruutu, ...a]);
+      if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
+    }
+  }
+
   async function avaaIstunto(skooppi, viesti) {
     const t = await aja('bash', [autovaihto, 'vaihda', skooppi, '--ei-sulje', '--viesti', viesti]);
     const osoite = istuntoOsoite(t.stdout);
@@ -73,24 +87,25 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
     async pura(nimi) {
       const skoopit = lueSkoopit(asetukset.juuri);
       if (!skoopit[nimi]) throw new Hylatty(404, 'tuntematon skooppi');
-      if (skoopinIstunnot(nimi, skoopit).length) throw new Hylatty(409, 'skoopissa on jo käynnissä oleva istunto');
-      return avaaIstunto(nimi, `/pura ${nimi}`);
+      const omat = skoopinIstunnot(nimi, skoopit);
+      if (omat.some((i) => !i.pakattu)) throw new Hylatty(409, 'skoopissa on jo käynnissä oleva istunto');
+      // Pakattu istunto suljetaan ennen uutta (käyttäjä 13.10.2026): äpissä skoopin keskustelu jatkuu samassa
+      // näkymässä uudella istunnolla. Remote Control -istuntoa ilman ruutua ei voi sulkea; se jää piiloon.
+      const suljettavat = omat.filter((i) => i.ruutu);
+      const varattu = suljettavat.find((i) => i.tila !== 'idle');
+      if (varattu) throw new Hylatty(409, `pakattu istunto on vielä varattu (${varattu.tila ?? 'tila tuntematon'}); yritä vuoron jälkeen`);
+      for (const i of suljettavat) { await tarkistaRuutu(i); await kirjoita(i, '/exit'); }
+      return { ...await avaaIstunto(nimi, `/pura ${nimi}`), suljettiin: suljettavat.map((i) => i.id) };
     },
     async pakkaa(nimi) {
       const skoopit = lueSkoopit(asetukset.juuri);
       if (!skoopit[nimi]) throw new Hylatty(404, 'tuntematon skooppi');
-      const omat = skoopinIstunnot(nimi, skoopit).filter((i) => i.ruutu);
+      const omat = skoopinIstunnot(nimi, skoopit).filter((i) => i.ruutu && !i.pakattu);
       if (omat.length !== 1) throw new Hylatty(409, omat.length ? 'skoopissa on useita tmux-istuntoja' : 'skoopilla ei ole tmux-istuntoa, johon pakkauksen voi lähettää');
       const [i] = omat;
       if (i.tila !== 'idle') throw new Hylatty(409, `istunto on varattu (${i.tila ?? 'tila tuntematon'}); yritä vuoron jälkeen`);
-      // Ruudun prosessin on oltava istunnon claude tai sen vanhempi, ettei /pakkaa osu väärään ruutuun.
-      const r = await aja('tmux', ['display-message', '-p', '-t', i.ruutu, '#{pane_pid}']);
-      const ruudunPid = Number(r.stdout.trim());
-      if (r.koodi !== 0 || !(ruudunPid === i.pid || ruudunPid === i.vanhempi)) throw new Hylatty(409, 'istunnon tmux-ruutu ei täsmää');
-      for (const a of [['-l', '/pakkaa'], ['Enter']]) {
-        const t = await aja('tmux', ['send-keys', '-t', i.ruutu, ...a]);
-        if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
-      }
+      await tarkistaRuutu(i);
+      await kirjoita(i, '/pakkaa');
       return { istunto: i.id };
     },
     async uusi(nimi) {
