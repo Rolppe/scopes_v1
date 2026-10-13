@@ -334,6 +334,18 @@ export function luoViestit(asetukset, { aja = ajaKomento } = {}) {
       }
       return { ok: true, istunto: i.id };
     },
+
+    // Kortin X (käyttäjä 13.10.2026, kuten Claude-äpissä): Escape sulkee auki olevan monivalinnan vastaamatta.
+    async suljeKysymys(nimi) {
+      const i = await tmuxIstunto(nimi);
+      let transkripti = '';
+      try { transkripti = readFileSync(i.polku, 'utf8'); } catch { /* ei transkriptia */ }
+      const viimeinen = keskustelu(transkripti, 1)[0];
+      if (viimeinen?.rooli !== 'kysymys' || viimeinen.vastattu) throw new Hylatty(409, 'ei auki olevaa kysymystä');
+      const t = await aja('tmux', ['send-keys', '-t', i.ruutu, 'Escape']);
+      if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
+      return { ok: true, istunto: i.id };
+    },
   };
 }
 

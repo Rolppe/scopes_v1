@@ -18,6 +18,7 @@
 //   GET /api/chat/keskustelut/<id>    yhden chat-keskustelun viestit ja agentti
 //   GET /api/skoopit/<nimi>/viestit   skoopin istunnon viestit; { auki: false }, jos istuntoa ei ole
 //   POST /api/skoopit/<nimi>/viesti {"teksti"}   viesti skoopin tmux-istuntoon (viestit.mjs)
+//   POST /api/skoopit/<nimi>/kysymys-pois         auki olevan monivalinnan sulku Escapella (kortin X)
 //
 // Ympäristö: SCOPES_JUURI (projektijuuri; oletus kaksi hakemistoa tämän tiedoston yläpuolella),
 // SCOPES_OSOITE (oletus 127.0.0.1), SCOPES_PORTTI (oletus 8787), CLAUDE_ISTUNNOT_DIR, CLAUDE_PROJEKTIT_DIR,
@@ -129,6 +130,8 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         if (polku === '/api/chat/virta') return await virtaa(res, await runko(req, 32_768));
         const v = polku.match(/^\/api\/skoopit\/([^/]+)\/viesti$/);
         if (v) return vastaa(200, await viestit.lahetaSkooppiin(decodeURIComponent(v[1]), (await runko(req, 32_768)).teksti));
+        const kp = polku.match(/^\/api\/skoopit\/([^/]+)\/kysymys-pois$/);
+        if (kp) return vastaa(200, await viestit.suljeKysymys(decodeURIComponent(kp[1])));
         const t = polku.match(/^\/api\/skoopit\/([^/]+)\/(pura|pakkaa)$/);
         if (t) return vastaa(200, await suorita(t[2], decodeURIComponent(t[1])));
         return vastaa(404, { virhe: 'tuntematon toiminto' });
