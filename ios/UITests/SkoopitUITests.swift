@@ -270,6 +270,43 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertGreaterThan(alin, yla - 60, "keskustelu ei noussut kentän tuntumaan: \(nimi) \(alin), kenttä \(yla)")
     }
 
+    // Skoopin vaihto ei jätä viestinäkymää mustaksi (CHAT-MUSTA 13.10.2026): jokaisen vaihdon jälkeen istuntorivin ja
+    // ruudun alareunan välissä näkyy viestitekstiä. Kaksi auki olevaa skooppia: SCOPES_KOE_AUKI ja SCOPES_KOE_AUKI2.
+    func testSkoopinVaihtoEiMustaa() throws {
+        let ymp = ProcessInfo.processInfo.environment
+        let avain = try XCTUnwrap(ymp["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        let skoopit = [ymp["SCOPES_KOE_AUKI"] ?? "scopes lista", ymp["SCOPES_KOE_AUKI2"] ?? "scopes chat"]
+        let app = kaynnista(avain: avain)
+        for kierros in 0..<6 {
+            let skooppi = skoopit[kierros % 2]
+            // Haku jää aktiiviseksi valinnan jälkeen, jolloin palkissa ei ole suodatinta: palkki avataan näkyvästä
+            // nuolesta (piilotetun chatin nuoli on myös hierarkiassa) ja auki-tila luetaan hakukentästä.
+            let haku = app.searchFields.firstMatch
+            if !osuttava(haku, true, timeout: kierros == 0 ? 15 : 1) {
+                let nuoli = app.buttons.matching(identifier: "sivupalkki").allElementsBoundByIndex.first { $0.isHittable }
+                try XCTUnwrap(nuoli, "näkyvä sivupalkin nuoli puuttuu").tap()
+            }
+            XCTAssertTrue(osuttava(haku, true), "sivupalkki ei auennut")
+            haku.tap()
+            if app.buttons["Clear text"].exists { app.buttons["Clear text"].tap() }
+            haku.typeText(skooppi)
+            let rivi = app.buttons["skooppi-\(skooppi)"]
+            XCTAssertTrue(rivi.waitForExistence(timeout: 15), "haku ei löytänyt skooppia \(skooppi)")
+            rivi.tap()
+            XCTAssertTrue(app.staticTexts["viestit-istunto"].waitForExistence(timeout: 15), "\(skooppi) ei ole auki")
+            sleep(2)
+            let yla = app.staticTexts["viestit-istunto"].frame.maxY
+            let ala = app.windows.firstMatch.frame.maxY
+            let nakyvat = app.staticTexts.allElementsBoundByIndex.filter { t in
+                let f: CGRect = t.frame
+                return f.height > 0 && f.maxY > yla && f.minY < ala && t.identifier != "viestit-istunto"
+            }
+            if nakyvat.isEmpty { kuva("musta-\(kierros)") }
+            XCTAssertFalse(nakyvat.isEmpty, "viestinäkymä tyhjä vaihdon \(kierros) jälkeen (\(skooppi))")
+        }
+        kuva("vaihto-lopuksi")
+    }
+
     func testKysymysKortti() throws {
         let ymp = ProcessInfo.processInfo.environment
         let avain = try XCTUnwrap(ymp["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
