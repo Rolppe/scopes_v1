@@ -75,6 +75,34 @@ final class SkoopitUITests: XCTestCase {
         kuva("kaynnistys-lista")
     }
 
+    // Listan avaus piilottaa näppäimistön; paluu samaan keskusteluun palauttaa kursorin kenttään ja näppäimistön,
+    // toiseen näkymään vaihto ei (käyttäjä 13.10.2026).
+    func testListaPiilottaaNappaimiston() throws {
+        let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        let app = kaynnista(avain: avain)
+        chattiin(app)
+        let kentta = app.textFields["chat-kentta"].exists ? app.textFields["chat-kentta"] : app.textViews["chat-kentta"]
+        XCTAssertTrue(kentta.waitForExistence(timeout: 15))
+        kentta.tap()
+        kentta.typeText("kesken")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "näppäimistö ei auennut")
+        app.buttons["sivupalkki"].firstMatch.tap()
+        XCTAssertTrue(osuttava(app.buttons["suodatin-all"], true), "sivupalkki ei auennut")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5), "näppäimistö jäi listan päälle")
+        kuva("lista-ilman-nappaimistoa")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        XCTAssertTrue(osuttava(app.buttons["suodatin-all"], false), "palkki ei sulkeutunut")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "näppäimistö ei palannut")
+        XCTAssertTrue(kentta.value(forKey: "hasKeyboardFocus") as? Bool == true, "kursori ei palannut kenttään")
+        kentta.typeText(" jatkuu")
+        XCTAssertEqual(kentta.value as? String, "kesken jatkuu", "kursori ei palannut samaan kohtaan")
+        kuva("nappaimisto-palasi")
+        // Toiseen näkymään vaihto ei palauta näppäimistöä.
+        nayta(app, "sivupalkki-infra")
+        XCTAssertTrue(osuttava(app.buttons["suodatin-all"], false), "palkki ei sulkeutunut")
+        XCTAssertFalse(app.keyboards.firstMatch.waitForExistence(timeout: 2), "näppäimistö palasi toiseen näkymään")
+    }
+
     func testListaJaSkooppi() throws {
         let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
         let app = kaynnista(avain: avain)
