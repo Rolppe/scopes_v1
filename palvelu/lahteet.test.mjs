@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request } from 'node:http';
 import { createServer } from 'node:http';
-import { istunnonSkooppi, istunnot, jasennaSeuraava, konteksti, kontekstinOsat, kontekstiTiedostot, lista, osiin, pakattu, projektiNimi, pysahdys, seuraavaRivi, taulukko, tokeneiksi, yksi } from './lahteet.mjs';
+import { istunnonSkooppi, istunnot, jasennaSeuraava, konteksti, kontekstinOsat, kontekstiTiedostot, lista, osiin, pakattu, projektiNimi, pysahdys, seuraavaRivi, skooppiTila, taulukko, tokeneiksi, yksi } from './lahteet.mjs';
 import { avainKelpaa, kasittelija } from './palvelin.mjs';
 
 const REK = `# R
@@ -110,13 +110,22 @@ test('lista ja yksi: tiivistelmä ja skoopin näkymä', () => {
   // aika = rekisterin muokkausaika (istunnon aika 't' ei ole päiväys, joten se ei voita).
   for (const r of l) assert.match(r.aika, /^\d{4}-\d\d-\d\dT/);
   assert.deepEqual(l.map(({ aika, ...r }) => r), [
-    { nimi: 'a', seuraava: 'A-PAKETTI', avoimia: 1, vikoja: 1, istuntoja: 1, suurinKonteksti: 50005 },
-    { nimi: 'b', seuraava: 'B-PAKETTI', avoimia: 1, vikoja: 1, istuntoja: 0, suurinKonteksti: null },
+    { nimi: 'a', seuraava: 'A-PAKETTI', avoimia: 1, vikoja: 1, istuntoja: 1, suurinKonteksti: 50005, tila: 'odottaa' },
+    { nimi: 'b', seuraava: 'B-PAKETTI', avoimia: 1, vikoja: 1, istuntoja: 0, suurinKonteksti: null, tila: 'pakattu' },
   ]);
   const s = yksi('a', a);
   assert.equal(s.seuraava.id, 'A-PAKETTI');
   assert.equal(s.istunnot[0].id, 's1');
   assert.equal(yksi('puuttuu', a), null);
+});
+
+test('skooppiTila: busy käsittelyssä, muu pakkaamaton odottaa, pakattu tai ei istuntoja harmaa', () => {
+  assert.equal(skooppiTila([]), 'pakattu');
+  assert.equal(skooppiTila([{ tila: 'busy', pakattu: true }]), 'pakattu');
+  assert.equal(skooppiTila([{ tila: 'idle', pakattu: false }]), 'odottaa');
+  assert.equal(skooppiTila([{ tila: 'waiting', pakattu: false }]), 'odottaa');
+  assert.equal(skooppiTila([{ tila: 'idle', pakattu: true }, { tila: 'busy', pakattu: false }]), 'kasittely');
+  assert.equal(skooppiTila([{ tila: 'waiting', pakattu: false }, { tila: 'busy', pakattu: false }]), 'kasittely');
 });
 
 test('palvelin: polut ja virhekoodit', async () => {

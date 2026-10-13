@@ -119,6 +119,8 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertTrue(chatRivit.firstMatch.waitForNonExistence(timeout: 5), "Scope-suodatin näyttää chatit")
         XCTAssertTrue(skooppiRivit.firstMatch.exists, "Scope-suodatin piilotti skoopit")
         kuva("suodatin-scope")
+        // Pakattu skooppi valuu aktiivisten alle (SCOPES-LISTA-TILAVARIT): ensimmäinen skooppi on auki, koska testiä ajava istunto on.
+        XCTAssertFalse(skooppiRivit.firstMatch.label.contains("pakattu"), "pakattu skooppi ylimpänä: \(skooppiRivit.firstMatch.label)")
         app.buttons["suodatin-chat"].tap()
         XCTAssertTrue(skooppiRivit.firstMatch.waitForNonExistence(timeout: 5), "Chat-suodatin näyttää skoopit")
         XCTAssertTrue(chatRivit.firstMatch.exists, "Chat-suodatin piilotti chatit")
