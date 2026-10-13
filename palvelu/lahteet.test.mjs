@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request } from 'node:http';
 import { createServer } from 'node:http';
-import { istunnonSkooppi, istunnot, jasennaSeuraava, konteksti, lista, pakattu, projektiNimi, pysahdys, seuraavaRivi, taulukko, yksi } from './lahteet.mjs';
+import { istunnonSkooppi, istunnot, jasennaSeuraava, konteksti, kontekstinOsat, kontekstiTiedostot, lista, osiin, pakattu, projektiNimi, pysahdys, seuraavaRivi, taulukko, tokeneiksi, yksi } from './lahteet.mjs';
 import { avainKelpaa, kasittelija } from './palvelin.mjs';
 
 const REK = `# R
@@ -164,4 +164,69 @@ test('pakattu: PAKKAUS: vahvistettu viimeisen käyttäjän viestin jälkeen', ()
   // Taidon teksti käyttäjän viestissä tai rivin maininta lauseen keskellä ei ole pakkaus.
   assert.equal(pakattu([k('rivi `PAKKAUS: vahvistettu` tulee loppuun'), a('Ei vielä: PAKKAUS: vahvistettu tulee myöhemmin')].join('\n')), false);
   assert.equal(pakattu(''), false);
+});
+
+test('osiin: ##-otsikoittain, koodiaita ei pilko, iso luku ###-otsikoittain', () => {
+  const o = osiin('# T\nalku\n## A\na\n```\n## ei\n```\n## B\nb');
+  assert.deepEqual(o.map((x) => x.otsikko), ['Alku', 'A', 'B']);
+  assert.equal(o[1].teksti, '## A\na\n```\n## ei\n```');
+  assert.equal(o[2].tokenit, tokeneiksi('## B\nb'.length));
+  const iso = 'x'.repeat(6000);
+  assert.deepEqual(osiin(`## H\n${iso}\n### a\n${iso}\n### b\nb`).map((x) => x.otsikko), ['H', 'H › a', 'H › b']);
+  assert.deepEqual(osiin(''), []);
+});
+
+test('kontekstiTiedostot: rekisterit, HISTORIA ja ARKISTO, pisin viite, yhteiset; vain olemassa olevat', () => {
+  const a = ymparisto();
+  const v = join(a.juuri, 'Infra/skills/keskustelun-siirto/references');
+  mkdirSync(v, { recursive: true });
+  for (const t of ['a.md', 'yhteiset.md']) writeFileSync(join(v, t), '# v');
+  writeFileSync(join(a.juuri, 'a/HISTORIA.md'), '# H');
+  assert.deepEqual(kontekstiTiedostot('a x', ['a/R.md', 'a/R.md'], a.juuri), [
+    { laji: 'rekisteri', polku: 'a/R.md' },
+    { laji: 'historia', polku: 'a/HISTORIA.md' },
+    { laji: 'viite', polku: 'Infra/skills/keskustelun-siirto/references/a.md' },
+    { laji: 'yhteinen', polku: 'Infra/skills/keskustelun-siirto/references/yhteiset.md' },
+  ]);
+});
+
+test('kontekstinOsat: osa-alueet tiivistyksestä alkaen, jäännös ja skaalaus mitattuun', () => {
+  const r = (o) => JSON.stringify(o);
+  const t = [
+    r({ type: 'user', message: { content: 'ennen tiivistystä'.repeat(100) } }),
+    r({ type: 'attachment', attachment: { type: 'prompt_snapshot', systemPrompt: ['k'.repeat(18)] } }),
+    r({ type: 'system', subtype: 'compact_boundary' }),
+    r({ type: 'attachment', attachment: { type: 'instructions', files: [{ content: 'o'.repeat(36) }] } }),
+    r({ type: 'attachment', attachment: { type: 'skill_listing', content: 'l'.repeat(18) } }),
+    r({ type: 'attachment', attachment: { type: 'credential_org', organizationUuid: 'x'.repeat(900) } }),
+    r({ type: 'user', message: { content: 'kysymys!!' } }),
+    r({ type: 'user', message: { content: '<system-reminder>m</system-reminder>' } }),
+    r({ type: 'assistant', message: { content: [{ type: 'text', text: 'v'.repeat(18) }, { type: 'tool_use', name: 'Bash', input: {} }] } }),
+    r({ type: 'user', message: { content: [{ type: 'tool_result', content: [{ type: 'text', text: 't'.repeat(180) }] }] } }),
+    r({ type: 'assistant', isSidechain: true, message: { content: [{ type: 'text', text: 's'.repeat(9000) }] } }),
+  ].join('\n');
+  const osat = Object.fromEntries(kontekstinOsat(t, 1000).map((o) => [o.nimi, o.tokenit]));
+  assert.equal(osat['Järjestelmäkehote'], 10);
+  assert.equal(osat['Ohjeet: CLAUDE.md ja muisti'], 20);
+  assert.equal(osat['Taito-, agentti- ja työkalulistat'], 10);
+  assert.equal(osat['Käyttäjän viestit'], 5);
+  assert.equal(osat['Muistutukset, komennot ja tiivistelmä'], tokeneiksi(36));
+  assert.equal(osat['Agentin vastaukset'], 10);
+  assert.equal(osat['Työkalukutsut'], tokeneiksi(6));
+  assert.equal(osat['Työkalutulokset'], 100);
+  assert.equal(Object.values(osat).reduce((s, x) => s + x, 0), 1000);
+  // Ilman mittausta ei jäännöstä; arvio yli mitatun skaalataan.
+  assert.equal(kontekstinOsat(t, null).length, 8);
+  const pieni = kontekstinOsat(t, 50);
+  assert.equal(pieni.at(-1).tokenit, 0);
+  assert.ok(pieni.reduce((s, o) => s + o.tokenit, 0) <= 52);
+});
+
+test('yksi: konteksti ryhmittäin ja istunnoittain', () => {
+  const a = ymparisto();
+  const k = yksi('a', a).konteksti;
+  assert.deepEqual(k.ryhmat.map((r) => [r.laji, r.polku, r.osat.map((o) => o.otsikko)]),
+    [['rekisteri', 'a/R.md', ['Alku', 'Avoimet asiat', 'Viat', 'Historia']]]);
+  assert.equal(k.tokenit, k.ryhmat[0].tokenit);
+  assert.deepEqual(k.istunnot.map((i) => [i.id, i.mitattu, i.osat.at(-1).nimi]), [['s1', 50005, 'Työkalumääritykset ja ajattelu (jäännös)']]);
 });
