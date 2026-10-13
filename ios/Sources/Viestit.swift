@@ -464,8 +464,10 @@ struct SkooppiViestitView: View {
                             .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("viestit-istunto")
                     }
                     Viestilista(viestit: t.viestit, vastaa: t.voiLahettaa ? { v in Task { await laheta(v) } } : nil)
+                    // Auki oleva kysymyskortti korvaa syöttökentän (käyttäjä 13.10.2026): vapaa vastaus kulkee kortin Muu-kentästä.
+                    let kysymysAuki = t.viestit.contains { !($0.kysymykset ?? []).isEmpty && $0.vastattu != true }
                     if t.voiLahettaa {
-                        Syottorivi(teksti: $teksti, estetty: lahettaa, tunnus: "viestit") { Task { await laheta() } }
+                        if !kysymysAuki { Syottorivi(teksti: $teksti, estetty: lahettaa, tunnus: "viestit") { Task { await laheta() } } }
                     } else {
                         Text("Istunto ei ole tmuxissa: viestit vain luettavissa.").font(.caption).foregroundStyle(.secondary).padding()
                             .accessibilityIdentifier("viestit-vain-luku")

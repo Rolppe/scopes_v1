@@ -54,6 +54,11 @@ final class SkoopitUITests: XCTestCase {
         add(liite)
     }
 
+    // Lisätietojen latautumisen merkki: seuraava paketti tai sen puuttuminen ("ei mitään"), V-266.
+    private func seuraava(_ app: XCUIApplication) -> XCUIElement {
+        app.staticTexts.matching(NSPredicate(format: "identifier IN {'seuraava-id', 'seuraava-ei'}")).firstMatch
+    }
+
     func testListaJaSkooppi() throws {
         let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
         let app = kaynnista(avain: avain)
@@ -90,7 +95,7 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["tyokalu-rivi"].firstMatch.waitForExistence(timeout: 15), "työkalurivit puuttuvat")
         kuva("viestit")
         app.buttons["tiedot"].tap()
-        XCTAssertTrue(app.staticTexts["seuraava-id"].waitForExistence(timeout: 15), "skoopin näkymä ei latautunut")
+        XCTAssertTrue(seuraava(app).waitForExistence(timeout: 15), "skoopin näkymä ei latautunut")
         kuva("skooppi")
     }
 
@@ -123,12 +128,12 @@ final class SkoopitUITests: XCTestCase {
         kuva("infra")
         avaa.tap()
         XCTAssertTrue(app.buttons["infra-avaa-claude demo"].waitForExistence(timeout: 5), "nuoli ei avannut alaskooppeja")
-        XCTAssertFalse(app.staticTexts["seuraava-id"].exists, "nuoli siirtyi lisätietoihin")
+        XCTAssertFalse(seuraava(app).exists, "nuoli siirtyi lisätietoihin")
         app.buttons["infra-avaa-claude demo"].tap()
         XCTAssertTrue(app.buttons["infra-claude demo linkedin"].waitForExistence(timeout: 5), "toinen taso ei auennut")
         kuva("infra-auki")
         app.buttons["infra-claude demo linkedin"].tap()
-        XCTAssertTrue(app.staticTexts["seuraava-id"].waitForExistence(timeout: 15), "infran lisätiedot eivät auenneet")
+        XCTAssertTrue(seuraava(app).waitForExistence(timeout: 15), "infran lisätiedot eivät auenneet")
         // Nuoli on näkymän juuressa; lisätiedoista palataan ensin takaisin. Kiinni olevan palkin suodatinnapit ovat
         // myös navigointipalkeissa (ruudun ulkopuolella), joten paluu = vasemmanpuoleisin osuttava nappi.
         let paluu = app.navigationBars.buttons.allElementsBoundByIndex.filter { $0.isHittable }.min { $0.frame.minX < $1.frame.minX }
@@ -190,6 +195,8 @@ final class SkoopitUITests: XCTestCase {
         guard kortti.waitForExistence(timeout: odota) else { throw XCTSkip("skoopin istunto ei odota monivalintaa") }
         // Muu-kenttä vain, kun äppi saa lähettää istuntoon (voiLahettaa); vaihtoehdot aina.
         XCTAssertTrue(app.buttons["kysymys-vaihtoehto-0-0"].exists, "kortista puuttuu vaihtoehto")
+        // Auki oleva kortti piilottaa syöttökentän (käyttäjä 13.10.2026).
+        XCTAssertFalse(app.textViews["viestit-kentta"].exists || app.textFields["viestit-kentta"].exists, "syöttökenttä näkyy kortin rinnalla")
         kuva("kysymys-kortti")
     }
 
