@@ -104,7 +104,17 @@ struct Sivupalkki: View {
             }
             .refreshable { await lataa() }
         }
-        .task(id: "\(auki)" + asetukset.osoite + asetukset.avain) { if auki || chatit.isEmpty && skoopit.isEmpty { await lataa() } }
+        // Auki ollessaan palkki hakee tilat 5 s välein (SCOPES-LISTA-TILA-ELAVA, käyttäjä 13.10.2026: hehku puuttui,
+        // kunnes palkki avattiin uudelleen). Sulkeminen vaihtaa id:n ja peruu silmukan.
+        .task(id: "\(auki)" + asetukset.osoite + asetukset.avain) {
+            guard auki || chatit.isEmpty && skoopit.isEmpty else { return }
+            await lataa()
+            while auki, !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(5))
+                if Task.isCancelled { break }
+                await lataa()
+            }
+        }
     }
 
     // Kolme rinnakkaista nappia otsikon paikalla; valittu korostettu.
