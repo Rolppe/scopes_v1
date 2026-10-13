@@ -150,11 +150,37 @@ struct Viestilista: View {
                 .padding(.horizontal)
                 .padding(.vertical, 8)
             }
+            // Näppäimistö pois napautuksella tai vedolla viestilistassa (käyttäjä 13.10.2026); kortin painikkeet toimivat yhä.
+            .scrollDismissesKeyboard(.interactively)
+            .gesture(NappaimistoPois())
             .onChange(of: viestit.count) { vierita.scrollTo(odottaa ? AnyHashable("odottaa") : AnyHashable(viestit.count - 1), anchor: .bottom) }
             // Suoratoistossa viimeinen kupla kasvaa ilman uutta viestiä.
             .onChange(of: viestit.last?.teksti) { if !odottaa, !viestit.isEmpty { vierita.scrollTo(viestit.count - 1, anchor: .bottom) } }
             .onAppear { if !viestit.isEmpty { vierita.scrollTo(viestit.count - 1, anchor: .bottom) } }
         }
+    }
+}
+
+// Napautus muualle kuin tekstikenttään sulkee näppäimistön. Ei peru kosketuksia, joten painikkeet toimivat, ja
+// tekstikentän oma napautus (kortin Muu-kenttä) ohitetaan, ettei juuri avattu näppäimistö sulkeudu.
+struct NappaimistoPois: UIGestureRecognizerRepresentable {
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Valvoja { Valvoja() }
+    func makeUIGestureRecognizer(context: Context) -> UITapGestureRecognizer {
+        let t = UITapGestureRecognizer()
+        t.cancelsTouchesInView = false
+        t.delegate = context.coordinator
+        return t
+    }
+    func handleUIGestureRecognizerAction(_ t: UITapGestureRecognizer, context: Context) {
+        if t.state == .ended { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
+    }
+    final class Valvoja: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive kosketus: UITouch) -> Bool {
+            var n = kosketus.view
+            while let v = n { if v is UITextView || v is UITextField { return false }; n = v.superview }
+            return true
+        }
+        func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith toinen: UIGestureRecognizer) -> Bool { true }
     }
 }
 

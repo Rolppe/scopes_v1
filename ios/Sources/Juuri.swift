@@ -144,6 +144,13 @@ struct SivuttaisVeto: UIGestureRecognizerRepresentable {
             let v = p.velocity(in: nil)
             return abs(v.x) > 2 * abs(v.y)
         }
+        // Tekstikentän kosketukset kuuluvat kentälle: kursorin raahaus ja valinta (kopioi, leikkaa, liitä) katkesivat,
+        // kun vaakaveto otti ne (käyttäjä 13.10.2026).
+        func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive kosketus: UITouch) -> Bool {
+            var n = kosketus.view
+            while let v = n { if v is UITextView || v is UITextField { return false }; n = v.superview }
+            return true
+        }
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy toinen: UIGestureRecognizer) -> Bool {
             toinen.view is UIScrollView
         }
