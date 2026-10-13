@@ -585,7 +585,9 @@ struct SkooppiViestitView: View {
         .navigationTitle(nimi)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            NavigationLink(value: SkooppiReitti.tiedot(nimi)) { Image(systemName: "info.circle") }
+            // Kolme pistettä kuten Claude-äpissä (käyttäjä 13.10.2026), avaa skoopin tiedot.
+            NavigationLink(value: SkooppiReitti.tiedot(nimi)) { Image(systemName: "ellipsis") }
+                .accessibilityLabel("Skoopin tiedot")
                 .accessibilityIdentifier("tiedot")
         }
         .task {
