@@ -10,6 +10,7 @@
 //   POST /api/skoopit/<nimi>/pura     uusi istunto, ensimmäinen viesti /pura <nimi> → { osoite }
 //   POST /api/skoopit/<nimi>/pakkaa   /pakkaa skoopin vapaaseen tmux-istuntoon → { istunto, komento }
 //   POST /api/skoopit/<nimi>/automaattisiirto | herata | herata-pois   samoin /automaattisiirto, /sa, /sa pois
+//            varatulle istunnolle jonoon → { istunto, komento, jonossa: true }; GET-näkymän jonossa: [{ komento, aika }]
 //   POST /api/uusi  {"nimi": "…"}     uusi istunto, ensimmäinen viesti /pura uusi <nimi> → { osoite }
 //   GET /api/kayttoraja               Clauden 5 h ja viikkoraja { viisiTuntia, viikko: { kaytto %, nollautuu } | null } (kayttoraja.mjs)
 //   GET /api/agentit                  chatin mallit: Claude ja palvelimen LM Studio (DEMO-SCOPES-UI)
@@ -151,7 +152,7 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
       const m = polku.match(/^\/api\/skoopit\/(.+)$/);
       if (m) {
         const s = yksi(decodeURIComponent(m[1]), asetukset);
-        return s ? vastaa(200, s) : vastaa(404, { virhe: 'tuntematon skooppi' });
+        return s ? vastaa(200, { ...s, jonossa: suorita.jono?.(decodeURIComponent(m[1])) ?? [] }) : vastaa(404, { virhe: 'tuntematon skooppi' });
       }
       return vastaa(404, { virhe: 'tuntematon polku' });
     } catch (e) {

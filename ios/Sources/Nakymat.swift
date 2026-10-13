@@ -45,6 +45,10 @@ struct SkooppiNakymaView: View {
                 Toggle("Pidä muisti hereillä", isOn: Binding(get: { hereilla }, set: { p in Task { await kytke(p) } }))
                     .disabled(avoinIstunto == nil)
                     .accessibilityIdentifier("toiminto-hereilla")
+                ForEach(nakyma?.jonossa ?? [], id: \.self) { j in
+                    Text("\(j.komento) odottaa vuoroa: lähtee, kun istunto vapautuu.")
+                        .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("toiminto-jonossa")
+                }
                 if let k = kaynnissa { ProgressView(k == .pura ? "Avataan istuntoa…" : "Lähetetään \(komento(k))…") }
                 if let toimintoVirhe { Text(toimintoVirhe).foregroundStyle(.red).accessibilityIdentifier("toiminto-virhe") }
                 if let tulos { ToimintoTulos(tulos: tulos) }
@@ -110,14 +114,19 @@ struct SkooppiNakymaView: View {
 
     // Kytkin näyttää skoopin auki olevan istunnon herätystilan; ilman istuntoa se on pois ja lukittu.
     private var avoinIstunto: Istunto? { nakyma?.istunnot.first { $0.pakattu != true } }
-    private var hereilla: Bool { hereillaToive ?? avoinIstunto?.hereilla ?? false }
+    // Jonossa odottava /sa tai /sa pois näyttää jo valitun asennon (V-294).
+    private var hereilla: Bool {
+        hereillaToive ?? nakyma?.jonossa?.last { $0.komento.hasPrefix("/sa") }.map { $0.komento == "/sa" }
+            ?? avoinIstunto?.hereilla ?? false
+    }
 
     // Istunto vastaa /sa:han omalla vuorollaan, joten kytkin pysyy valitussa asennossa, kunnes palvelu näkee
-    // vastauksen (enintään minuutti) tai lähetys epäonnistuu.
+    // vastauksen (enintään minuutti) tai lähetys epäonnistuu. Varatun istunnon komento jää palvelun jonoon, ja
+    // asento luetaan silloin jonosta.
     private func kytke(_ paalle: Bool) async {
         hereillaToive = paalle
         await aja(paalle ? .herata : .herataPois)
-        for _ in 0..<20 where toimintoVirhe == nil && avoinIstunto?.hereilla != paalle {
+        for _ in 0..<20 where toimintoVirhe == nil && tulos?.jonossa != true && avoinIstunto?.hereilla != paalle {
             try? await Task.sleep(for: .seconds(3))
             await lataa()
         }
@@ -177,6 +186,8 @@ struct ToimintoTulos: View {
             if let o = tulos.osoite, let url = URL(string: o) {
                 Text("Istunto avattu.").accessibilityIdentifier("toiminto-tulos")
                 Link("Avaa istunto Claudessa", destination: url)
+            } else if let i = tulos.istunto, tulos.jonossa == true {
+                Text("Istunto \(i.prefix(8)) on varattu: \(tulos.komento ?? "komento") lähtee, kun se vapautuu.").accessibilityIdentifier("toiminto-tulos")
             } else if let i = tulos.istunto {
                 Text("\(tulos.komento ?? "/pakkaa") lähetetty istuntoon \(i.prefix(8)).").accessibilityIdentifier("toiminto-tulos")
             }

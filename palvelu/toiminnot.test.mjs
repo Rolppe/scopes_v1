@@ -93,8 +93,54 @@ test('automaattisiirto ja herätys: valmis komento samaan ruutuun kuin /pakkaa',
     const r = await luoToiminnot(ymparisto(), { aja: v.aja })(toiminto, 'a');
     assert.deepEqual([r.istunto, r.komento], ['s1', komento]);
     assert.deepEqual(v.kutsut.slice(1), [['tmux', 'send-keys', '-t', '%5', '-l', komento], ['tmux', 'send-keys', '-t', '%5', 'Enter']]);
-    await hylkaa(luoToiminnot(ymparisto({ tila: 'busy' }), { aja: v.aja })(toiminto, 'a'), 409);
   }
+});
+
+test('jono: varatulle istunnolle herätys ja siirto odottavat vapautumista, /pakkaa hylätään (V-294)', async () => {
+  const a = ymparisto({ tila: 'waiting' });
+  const tila = (t) => writeFileSync(join(a.istunnotDir, `${process.pid}.json`),
+    JSON.stringify({ pid: process.pid, sessionId: 's1', cwd: '/x', name: 'a', status: t, tmux: 'siirto-a-1:@1.%5' }));
+  const v = vaarennos();
+  const suorita = luoToiminnot(a, { aja: v.aja, jonoVali: 0 });
+  await hylkaa(suorita('pakkaa', 'a'), 409);
+  assert.deepEqual(await suorita('automaattisiirto', 'a'), { ok: true, toiminto: 'automaattisiirto', nimi: 'a', istunto: 's1', komento: '/automaattisiirto', jonossa: true });
+  await suorita('herata', 'a');
+  await suorita('herata-pois', 'a');
+  assert.equal((await suorita('herata', 'a')).jonossa, true);
+  // Kytkimen uusin asento korvaa vanhemman; siirto jää omaan paikkaansa.
+  assert.deepEqual(suorita.jono('a').map((j) => j.komento), ['/automaattisiirto', '/sa']);
+  assert.deepEqual(suorita.jono('b'), []);
+  await suorita.puraJono();
+  assert.equal(v.kutsut.length, 0);
+  // Vapaa istunto: ensin herätys, siirto vasta seuraavalla kierroksella.
+  tila('idle');
+  await suorita.puraJono();
+  assert.deepEqual(v.kutsut.filter((k) => k[1] === 'send-keys').map((k) => k.at(-1)), ['/sa', 'Enter']);
+  assert.deepEqual(suorita.jono('a').map((j) => j.komento), ['/automaattisiirto']);
+  await suorita.puraJono();
+  assert.deepEqual(v.kutsut.filter((k) => k[1] === 'send-keys').map((k) => k.at(-1)), ['/sa', 'Enter', '/automaattisiirto', 'Enter']);
+  assert.deepEqual(suorita.jono('a'), []);
+  const rivit = readFileSync(a.toimintoloki, 'utf8').trim().split('\n').map((r) => JSON.parse(r));
+  assert.deepEqual(rivit.filter((r) => r.jonosta).map((r) => [r.toiminto, r.tulos]), [['herata', 'ok'], ['automaattisiirto', 'ok']]);
+});
+
+test('jono: komento putoaa, kun istunto päättyy; vapaa istunto ohittaa jonon', async () => {
+  const a = ymparisto({ tila: 'busy' });
+  const v = vaarennos();
+  const suorita = luoToiminnot(a, { aja: v.aja, jonoVali: 0 });
+  await suorita('herata', 'a');
+  writeFileSync(join(a.istunnotDir, `${process.pid}.json`), JSON.stringify({ pid: process.pid, sessionId: 's2', cwd: '/x', name: 'a', status: 'idle', tmux: 'siirto-a-1:@1.%5' }));
+  await suorita.puraJono();
+  assert.deepEqual(suorita.jono('a'), []);
+  assert.equal(v.kutsut.length, 0);
+  // Vapaaseen istuntoon lähetetty komento poistaa saman ryhmän jonorivin.
+  const b = ymparisto({ tila: 'busy' });
+  const v2 = vaarennos();
+  const s2 = luoToiminnot(b, { aja: v2.aja, jonoVali: 0 });
+  await s2('herata', 'a');
+  writeFileSync(join(b.istunnotDir, `${process.pid}.json`), JSON.stringify({ pid: process.pid, sessionId: 's1', cwd: '/x', name: 'a', status: 'idle', tmux: 'siirto-a-1:@1.%5' }));
+  assert.equal((await s2('herata-pois', 'a')).jonossa, undefined);
+  assert.deepEqual(s2.jono('a'), []);
 });
 
 test('uusi: tiukka nimi, ei olemassa olevaa', async () => {

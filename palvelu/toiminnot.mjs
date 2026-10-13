@@ -5,7 +5,9 @@
 //            skoopin pakatut tmux-istunnot suljetaan ensin `/exit`illä (pakkaamaton istunto estää purun)
 //   pakkaa — skoopin ainoaan vapaaseen tmux-istuntoon kirjoitetaan `/pakkaa`
 //   automaattisiirto, herata, herata-pois — samoin `/automaattisiirto` (pakkaus ja sessionvaihto), `/sa` ja `/sa pois`
-//            (välimuistin herätys päälle ja pois; käyttäjä 13.10.2026: nappi ja kytkin pakkausnapin alle)
+//            (välimuistin herätys päälle ja pois; käyttäjä 13.10.2026: nappi ja kytkin pakkausnapin alle). Varatulle
+//            istunnolle nämä menevät jonoon ja lähtevät, kun istunto on vapaa (käyttäjä 13.10.2026, V-294: autojatko
+//            pysähtyy kysymykseen, joten hylkäys esti kytkimen juuri silloin, kun sitä tarvitaan)
 //   uusi   — uusi istunto, ensimmäinen viesti `/pura uusi <nimi>`; nimi on tiukka [a-z0-9-]-sanoja ja vielä vapaa
 // Skoopin nimi tarkistetaan skoopit.json:n avaimista (uudella: muodosta ja vapaudesta), ja komennot ajetaan
 // argumenttitaulukkona ilman kuorta. Yksi toiminto kerrallaan; jokainen yritys kirjataan lokiin, myös hylätty.
@@ -50,9 +52,15 @@ export function ajaKomento(komento, argumentit, { aikaraja = 150_000, syote = nu
 // autovaihto.sh:n tulosteesta Remote Control -osoite (OK: <url>).
 export const istuntoOsoite = (stdout) => /^OK: (https:\/\/claude\.ai\/code\/session_[A-Za-z0-9]+)$/m.exec(stdout)?.[1] ?? null;
 
-export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toimintoloki } = {}) {
+// Jonotettavat komennot ryhmittäin: ryhmän uusin korvaa vanhemman (kytkin pois ja päälle → vain /sa), ja herätys lähtee
+// ennen siirtoa, koska /automaattisiirto päättää istunnon.
+const JONO_RYHMA = { '/sa': 'herätys', '/sa pois': 'herätys', '/automaattisiirto': 'siirto' };
+
+export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toimintoloki, jonoVali = 5_000 } = {}) {
   const autovaihto = join(asetukset.juuri, 'claude/siirto/tools/autovaihto.sh');
   let kaynnissa = null;
+  const jono = new Map(); // `${skooppi}\n${ryhmä}` → { nimi, istunto, komento, toiminto, aika }
+  let ajastin = null;
 
   const kirjaa = (rivi) => {
     if (!loki) return;
@@ -85,17 +93,54 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
     return { osoite };
   }
 
-  // Valmis komento skoopin ainoaan vapaaseen tmux-istuntoon, kun sen vuoro on valmis.
-  async function istuntoon(nimi, komento) {
+  // Valmis komento skoopin ainoaan vapaaseen tmux-istuntoon, kun sen vuoro on valmis; jonotettava komento odottaa
+  // varatun istunnon vapautumista.
+  async function istuntoon(nimi, komento, toiminto) {
     const skoopit = lueSkoopit(asetukset.juuri);
     if (!skoopit[nimi]) throw new Hylatty(404, 'tuntematon skooppi');
     const omat = skoopinIstunnot(nimi, skoopit).filter((i) => i.ruutu && !i.pakattu);
     if (omat.length !== 1) throw new Hylatty(409, omat.length ? 'skoopissa on useita tmux-istuntoja' : `skoopilla ei ole tmux-istuntoa, johon ${komento} voi lähettää`);
     const [i] = omat;
-    if (i.tila !== 'idle') throw new Hylatty(409, `istunto on varattu (${i.tila ?? 'tila tuntematon'}); yritä vuoron jälkeen`);
+    const ryhma = JONO_RYHMA[komento];
+    if (ryhma) jono.delete(`${nimi}\n${ryhma}`);
+    if (i.tila !== 'idle') {
+      if (!ryhma) throw new Hylatty(409, `istunto on varattu (${i.tila ?? 'tila tuntematon'}); yritä vuoron jälkeen`);
+      jono.set(`${nimi}\n${ryhma}`, { nimi, istunto: i.id, komento, toiminto, aika: Date.now() });
+      if (jonoVali && !ajastin) { ajastin = setInterval(() => { puraJono().catch(() => {}); }, jonoVali); ajastin.unref(); }
+      return { istunto: i.id, komento, jonossa: true };
+    }
     await tarkistaRuutu(i);
     await kirjoita(i, komento);
     return { istunto: i.id, komento };
+  }
+
+  // Lähettää jonosta yhden komennon kerrallaan istuntoon, joka on taas vapaa; komento putoaa, jos istunto päättyi
+  // tai pakattiin. Yksi lähetys kierrosta kohden, koska komento varaa istunnon ennen seuraavaa.
+  async function puraJono() {
+    if (kaynnissa) return;
+    const jarjestys = [...jono].sort(([, a], [, b]) => (a.komento === '/automaattisiirto') - (b.komento === '/automaattisiirto'));
+    for (const [avain, j] of jarjestys) {
+      const i = skoopinIstunnot(j.nimi, lueSkoopit(asetukset.juuri)).find((x) => x.id === j.istunto);
+      if (!i || i.pakattu || !i.ruutu) {
+        jono.delete(avain);
+        kirjaa({ toiminto: j.toiminto, nimi: j.nimi, tulos: 'hylätty', syy: 'jonossa ollut istunto päättyi', istunto: j.istunto });
+        continue;
+      }
+      if (i.tila !== 'idle') continue;
+      jono.delete(avain);
+      kaynnissa = j.toiminto;
+      try {
+        await tarkistaRuutu(i);
+        await kirjoita(i, j.komento);
+        kirjaa({ toiminto: j.toiminto, nimi: j.nimi, tulos: 'ok', istunto: i.id, komento: j.komento, jonosta: true });
+      } catch (e) {
+        kirjaa({ toiminto: j.toiminto, nimi: j.nimi, tulos: 'hylätty', syy: e.message, jonosta: true });
+      } finally {
+        kaynnissa = null;
+      }
+      break;
+    }
+    if (!jono.size && ajastin) { clearInterval(ajastin); ajastin = null; }
   }
 
   const toteutus = {
@@ -112,10 +157,10 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
       for (const i of suljettavat) { await tarkistaRuutu(i); await kirjoita(i, '/exit'); }
       return { ...await avaaIstunto(nimi, `/pura ${nimi}`), suljettiin: suljettavat.map((i) => i.id) };
     },
-    pakkaa: (nimi) => istuntoon(nimi, '/pakkaa'),
-    automaattisiirto: (nimi) => istuntoon(nimi, '/automaattisiirto'),
-    herata: (nimi) => istuntoon(nimi, '/sa'),
-    'herata-pois': (nimi) => istuntoon(nimi, '/sa pois'),
+    pakkaa: (nimi) => istuntoon(nimi, '/pakkaa', 'pakkaa'),
+    automaattisiirto: (nimi) => istuntoon(nimi, '/automaattisiirto', 'automaattisiirto'),
+    herata: (nimi) => istuntoon(nimi, '/sa', 'herata'),
+    'herata-pois': (nimi) => istuntoon(nimi, '/sa pois', 'herata-pois'),
     async uusi(nimi) {
       if (typeof nimi !== 'string' || !UUSI_NIMI.test(nimi)) throw new Hylatty(400, 'nimi: 1–4 sanaa pienaakkosia, numeroita tai viivoja');
       const skoopit = lueSkoopit(asetukset.juuri);
@@ -124,7 +169,7 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
     },
   };
 
-  return async function suorita(toiminto, nimi) {
+  async function suorita(toiminto, nimi) {
     if (!Object.hasOwn(toteutus, toiminto)) throw new Hylatty(404, 'tuntematon toiminto');
     if (kaynnissa) { kirjaa({ toiminto, nimi, tulos: 'hylätty', syy: 'toinen toiminto käynnissä' }); throw new Hylatty(429, `toinen toiminto on käynnissä (${kaynnissa})`); }
     kaynnissa = toiminto;
@@ -138,5 +183,9 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
     } finally {
       kaynnissa = null;
     }
-  };
+  }
+  // Skoopin jonossa odottavat komennot näkymää varten (palvelin.mjs: GET /api/skoopit/<nimi> → jonossa).
+  suorita.jono = (nimi) => [...jono.values()].filter((j) => j.nimi === nimi).map(({ komento, aika }) => ({ komento, aika }));
+  suorita.puraJono = puraJono;
+  return suorita;
 }

@@ -59,6 +59,13 @@ struct SkooppiNakyma: Decodable, Hashable {
     let istunnot: [Istunto]
     // Puuttuu vanhemmalta palvelulta (ennen SCOPES-INFRA-KONTEKSTI).
     let konteksti: SkoopinKonteksti?
+    // Varatulle istunnolle jonotetut komennot (/sa, /sa pois, /automaattisiirto; V-294); vanha palvelu ei lähetä → nil.
+    let jonossa: [Jonorivi]?
+}
+
+struct Jonorivi: Decodable, Hashable {
+    let komento: String
+    let aika: Double
 }
 
 // Skoopin konteksti (SCOPES-INFRA-KONTEKSTI 13.10.2026, lahteet.mjs skoopinKonteksti): tiedostot otsikoittain
@@ -141,6 +148,8 @@ struct ToimintoVastaus: Decodable, Hashable {
     let osoite: String?
     let istunto: String?
     let komento: String?
+    // true: istunto oli varattu, komento lähtee palvelun jonosta, kun istunto vapautuu (V-294).
+    let jonossa: Bool?
 }
 
 // Chat ja skoopin viestit (viestit.mjs, DEMO-SCOPES-VALILEHDET).
