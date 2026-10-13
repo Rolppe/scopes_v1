@@ -13,10 +13,11 @@ final class SkoopitUITests: XCTestCase {
     }
 
     // Sivupalkki vasemman yläkulman nuolesta (DEMO-SCOPES-SIVUPALKKI); kohde = palkin painikkeen tunnus.
+    // Käynnistys avaa palkin itse, kun keskustelu ei ole kesken; silloin nuolta ei paineta (se osuisi himmennykseen).
     private func palkki(_ app: XCUIApplication) {
         let nuoli = app.buttons["sivupalkki"].firstMatch
         XCTAssertTrue(nuoli.waitForExistence(timeout: 15), "sivupalkin nuoli puuttuu")
-        nuoli.tap()
+        if !osuttava(app.buttons["suodatin-all"], true, timeout: 1) { nuoli.tap() }
         XCTAssertTrue(osuttava(app.buttons["suodatin-all"], true), "sivupalkki ei auennut")
         // Suodatin muistetaan käynnistysten yli; testit alkavat kaikista.
         if !app.buttons["suodatin-all"].isSelected { app.buttons["suodatin-all"].tap() }
@@ -31,6 +32,13 @@ final class SkoopitUITests: XCTestCase {
             usleep(200_000)
         }
         return false
+    }
+
+    // Chattiin käynnistyksen jälkeen: palkki suljetaan napauttamalla himmennystä sen oikealla puolella.
+    private func chattiin(_ app: XCUIApplication) {
+        XCTAssertTrue(osuttava(app.buttons["suodatin-all"], true, timeout: 15), "lista ei auennut käynnistyksessä")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        XCTAssertTrue(osuttava(app.buttons["suodatin-all"], false), "palkki ei sulkeutunut")
     }
 
     private func nayta(_ app: XCUIApplication, _ kohde: String) {
@@ -57,6 +65,14 @@ final class SkoopitUITests: XCTestCase {
     // Lisätietojen latautumisen merkki: seuraava paketti tai sen puuttuminen ("ei mitään"), V-266.
     private func seuraava(_ app: XCUIApplication) -> XCUIElement {
         app.staticTexts.matching(NSPredicate(format: "identifier IN {'seuraava-id', 'seuraava-ei'}")).firstMatch
+    }
+
+    // Käynnistys ilman kesken olevaa keskustelua avaa listan (käyttäjä 13.10.2026); palkkia ei avata käsin.
+    func testKaynnistysAvaaListan() throws {
+        let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        let app = kaynnista(avain: avain)
+        XCTAssertTrue(osuttava(app.buttons["suodatin-all"], true, timeout: 15), "lista ei auennut käynnistyksessä")
+        kuva("kaynnistys-lista")
     }
 
     func testListaJaSkooppi() throws {
@@ -103,6 +119,7 @@ final class SkoopitUITests: XCTestCase {
     func testValilehdetJaInfraPuu() throws {
         let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
         let app = kaynnista(avain: avain)
+        chattiin(app)
         // Painallus keskelle ei avaa palkkia; veto keskeltä oikealle avaa; napautus himmennykseen sulkee.
         let keski = app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5))
         keski.tap()
@@ -204,6 +221,7 @@ final class SkoopitUITests: XCTestCase {
     func testChatVastaa() throws {
         let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
         let app = kaynnista(avain: avain)
+        chattiin(app)
         let agentti = app.buttons["chat-agentti"]
         XCTAssertTrue(agentti.waitForExistence(timeout: 15))
         agentti.tap()
@@ -239,6 +257,7 @@ final class SkoopitUITests: XCTestCase {
     func testChatSuoratoisto() throws {
         let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
         let app = kaynnista(avain: avain)
+        chattiin(app)
         let agentti = app.buttons["chat-agentti"]
         XCTAssertTrue(agentti.waitForExistence(timeout: 15))
         agentti.tap()
@@ -267,6 +286,7 @@ final class SkoopitUITests: XCTestCase {
     func testChatKestaaTaustan() throws {
         let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
         let app = kaynnista(avain: avain)
+        chattiin(app)
         let agentti = app.buttons["chat-agentti"]
         XCTAssertTrue(agentti.waitForExistence(timeout: 15))
         agentti.tap()
