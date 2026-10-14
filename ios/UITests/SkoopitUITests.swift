@@ -263,6 +263,31 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Asetukset"].waitForExistence(timeout: 5))
     }
 
+    // Pääskooppien järjestys (käyttäjä 14.10.2026): pitkä painallus irrottaa kortin, raahaus siirtää sen (.onMove).
+    // Lopuksi claude palautetaan ensimmäiseksi, jotta muut testit näkevät saman järjestyksen.
+    func testInfraJarjestys() throws {
+        let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        let app = kaynnista(avain: avain)
+        nayta(app, "sivupalkki-infra")
+        let claude = app.buttons["infra-claude"], infra = app.buttons["infra-infra"]
+        XCTAssertTrue(claude.waitForExistence(timeout: 15), "infrapuu ei latautunut")
+        XCTAssertTrue(infra.exists)
+        XCTAssertLessThan(claude.frame.minY, infra.frame.minY, "claude ei ole infran yläpuolella lähtötilassa")
+        func raahaa(_ mista: XCUIElement, _ mihin: XCUIElement) {
+            let alku = mista.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5))
+            alku.press(forDuration: 1.5, thenDragTo: mihin.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.6)),
+                       withVelocity: .slow, thenHoldForDuration: 1.0)
+            usleep(800_000)
+        }
+        raahaa(claude, infra)
+        kuva("infra-jarjestys")
+        XCTAssertGreaterThan(claude.frame.minY, infra.frame.minY, "claude ei siirtynyt infran alle")
+        let ensimmainen = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'infra-' AND NOT identifier BEGINSWITH 'infra-avaa-'"))
+            .allElementsBoundByIndex.filter { $0.isHittable }.min { $0.frame.minY < $1.frame.minY }
+        raahaa(claude, try XCTUnwrap(ensimmainen))
+        XCTAssertLessThan(claude.frame.minY, infra.frame.minY, "claude ei palannut ylös")
+    }
+
     // Skoopin konteksti (SCOPES-INFRA-KONTEKSTI): infran skoopin lisätiedoista kontekstinäkymään, siitä tiedoston osan
     // tekstiin. Juuriskooppi "scopes" on aina olemassa ja sillä on rekisteri.
     func testSkoopinKonteksti() throws {
