@@ -9,9 +9,10 @@
 //   node scopes/localregister/lr.mjs testaa [--juuri DIR]
 //   node scopes/localregister/lr.mjs tiiviste [--juuri DIR]
 //   node scopes/localregister/lr.mjs tulosta <rekisteripolku> [--juuri DIR]
+//   node scopes/localregister/lr.mjs siivoa [--juuri DIR]   (hautakivet tiiviiksi, MUOTO §4)
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -303,7 +304,30 @@ export function poistaRekisteri(juuri, laite, polku) {
 
 export function lueYksikot(juuri, polku) {
   const hak = rekisterihakemisto(juuri, polku);
-  return readdirSync(hak).filter((f) => f.endsWith('.json') && f !== '_meta.json').map((f) => lueJson(join(hak, f)));
+  return readdirSync(hak).filter((f) => f.endsWith('.json') && !f.startsWith('_')).map((f) => lueJson(join(hak, f)));
+}
+
+// ---- Hautakivien siivous (LOCALREGISTER-HAUTAKIVET, MUOTO §4) --------------------------------------
+//
+// Hautakivi tiivistyy omasta tiedostostaan (4 kt:n lohko) rekisterin `_siivotut.json`-merkinnäksi
+// `{ id: versio }`. Merkintä pysyy, joten tieto poistosta ei katoa: listat kertovat sen muille laitteille, jotka
+// poistavat oman kopionsa, ja vastaanotto ei herätä siivottua yksikköä vanhalla tai samalla versiolla.
+// Tiivisteet eivät sisällä merkintöjä: laite, jolla kiveä ei koskaan ollut, on silti yhtenevä.
+// Siivotaan vain kivet, joita gitissä ei ole (`lahdeSisalto` null) ja joissa ei ole ristiriitaa: gitissä yhä
+// oleva rivi syntyisi muuten uudelleentuonnissa uudestaan, ja riita odottaa käyttäjää (K4).
+
+const siivotutPolku = (juuri, polku) => join(rekisterihakemisto(juuri, polku), '_siivotut.json');
+export const lueSiivotut = (juuri, polku) => (existsSync(siivotutPolku(juuri, polku)) ? lueJson(siivotutPolku(juuri, polku)) : {});
+const siivottava = (y) => y.poistettu && !y.rinnakkaiset?.length && y.lahdeSisalto == null;
+
+export function siivoa(juuri, polku) {
+  const kivet = lueYksikot(juuri, polku).filter(siivottava);
+  if (!kivet.length) return 0;
+  const siivotut = lueSiivotut(juuri, polku);
+  for (const y of kivet) siivotut[y.id] = y.versio;
+  kirjoitaJson(siivotutPolku(juuri, polku), siivotut); // ensin merkintä, sitten poisto: keskeytys ei hävitä tietoa
+  for (const y of kivet) unlinkSync(join(rekisterihakemisto(juuri, polku), `${y.id}.json`));
+  return kivet.length;
 }
 
 export const lueMeta = (juuri, polku) => lueJson(join(rekisterihakemisto(juuri, polku), '_meta.json'));
@@ -353,6 +377,7 @@ export function lista(juuri, polku) {
   return {
     meta: lueMeta(juuri, polku),
     yksikot: lueYksikot(juuri, polku).map((y) => ({ id: y.id, versio: y.versio, rinnakkaiset: (y.rinnakkaiset ?? []).map((r) => r.versio) })),
+    siivotut: lueSiivotut(juuri, polku),
   };
 }
 
@@ -380,6 +405,23 @@ export function vastaanota(juuri, { metat = [], yksikot = [] }) {
     if (!/^[a-z0-9]+-\d+$/.test(tullut.id)) throw new Error(`virheellinen tunnus: ${tullut.id}`);
     const p = join(hak, `${tullut.id}.json`);
     const { lahdeSisalto, lahdeVersio, ...siirto } = tullut;
+    const siivotut = existsSync(p) ? {} : lueSiivotut(juuri, tullut.rekisteri);
+    if (siivotut[tullut.id]) {
+      // Siivottu hautakivi (MUOTO §4): vanhempi tai sama versio on jo poistettu; uudempi herättää yksikön;
+      // rinnakkainen muokkaus palauttaa kiven ja tallentaa muokkauksen riidaksi (K4).
+      const kivi = siivotut[tullut.id];
+      const suhde = vertaa(siirto.versio, kivi);
+      if (suhde === 'sama' || suhde === 'vanhempi') { tulos.ohitettu++; continue; }
+      const sisar = { sisalto: siirto.sisalto, poistettu: siirto.poistettu, versio: siirto.versio, muutettu: siirto.muutettu, muuttaja: siirto.muuttaja };
+      kirjoitaJson(p, suhde === 'uudempi'
+        ? { ...siirto, lahdeSisalto: null, lahdeVersio: null }
+        : { ...siirto, poistettu: true, versio: kivi, muutettu: null, muuttaja: null, rinnakkaiset: [sisar], lahdeSisalto: null, lahdeVersio: null });
+      delete siivotut[tullut.id];
+      kirjoitaJson(siivotutPolku(juuri, tullut.rekisteri), siivotut);
+      tulos.otettu++; tulos.muuttuneet.add(tullut.rekisteri);
+      if (suhde === 'rinnakkainen') tulos.ristiriidat.push(tullut.id);
+      continue;
+    }
     if (!existsSync(p)) {
       kirjoitaJson(p, { ...siirto, lahdeSisalto: null, lahdeVersio: null });
       tulos.otettu++; tulos.muuttuneet.add(tullut.rekisteri); continue;
@@ -461,8 +503,14 @@ function main(argv) {
     console.log(`JUURI: ${t.juuri} (${Object.keys(t.rekisterit).length} rekisteriä)`);
     return 0;
   }
+  if (komento === 'siivoa') {
+    let n = 0, rek = 0;
+    for (const p of rekisterit(juuri)) { const k = siivoa(juuri, p); n += k; if (k) rek++; }
+    console.log(`SIIVOTTU: ${n} hautakiveä ${rek} rekisteristä → _siivotut.json`);
+    return 0;
+  }
   if (komento === 'tulosta') { process.stdout.write(tulosta(juuri, loput[0])); return 0; }
-  console.error('käyttö: lr.mjs tuo|testaa|tiiviste|tulosta <polku> [--juuri DIR] [--laite NIMI]');
+  console.error('käyttö: lr.mjs tuo|testaa|tiiviste|siivoa|tulosta <polku> [--juuri DIR] [--laite NIMI]');
   return 2;
 }
 

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { avaimet, hae, lueYksikot, luoLaite, pilko, poistaRekisteri, ristiriidat, tiivisteet, tuoRekisteri, tulosta, uudelleentuo, valiin, vastaanota, vertaa } from './lr.mjs';
+import { avaimet, hae, lista, lueSiivotut, lueYksikot, luoLaite, pilko, poistaRekisteri, ristiriidat, siivoa, tiivisteet, tuoRekisteri, tulosta, uudelleentuo, valiin, vastaanota, vertaa } from './lr.mjs';
 
 const REK = `# x/REKISTERI.md
 
@@ -250,4 +250,51 @@ test('paritus: samankaltainen muokkaus pitää tunnuksen myös välissä, ja pal
   assert.equal(ys.find((y) => y.id === rivi.id).sisalto, '| c | valmis |\n\n');
   assert.equal(ys.find((y) => y.id === kaksi.id).sisalto, '- kaksi, nyt pidempi\n');
   assert.equal(tulosta(juuri, P), git);
+});
+
+test('hautakivien siivous: kivi tiivistyy merkinnäksi, vanha versio ei herätä sitä, uudempi herättää, rinnakkainen on riita', () => {
+  const juuri = mkdtempSync(join(tmpdir(), 'lr-'));
+  const laite = luoLaite(juuri, 'oneplus');
+  const P = 'x/REKISTERI.md';
+  tuoRekisteri(juuri, laite, P, REK, { commit: 'a' });
+  const ennen = Object.fromEntries(lueYksikot(juuri, P).map((y) => [y.sisalto, y]));
+  // Git poistaa kaksi riviä; äppi poistaa gitissä yhä olevan rivin (sen kiveä ei siivota, uudelleentuonti herättäisi sen).
+  const gitissa = ennen['| a | b |\n'];
+  vastaanota(juuri, { yksikot: [{ ...gitissa, poistettu: true, versio: { ...gitissa.versio, iphone: 1 } }] });
+  const git = REK.replace('| c | d |\n', '').replace('- kaksi\n', '');
+  uudelleentuo(juuri, laite, P, git, { commit: 'b' });
+  const tiivisteEnnen = tiivisteet(juuri).juuri;
+  const tekstiEnnen = tulosta(juuri, P);
+  const kivi = lueYksikot(juuri, P).find((y) => y.id === ennen['| c | d |\n\n'].id);
+  assert.equal(siivoa(juuri, P), 2);
+  assert.equal(siivoa(juuri, P), 0);
+  const siivotut = lueSiivotut(juuri, P);
+  assert.deepEqual(Object.keys(siivotut).sort(), [ennen['| c | d |\n\n'].id, ennen['- kaksi\n\n'].id].sort());
+  assert.equal(lueYksikot(juuri, P).find((y) => y.id === gitissa.id).poistettu, true);
+  assert.equal(tulosta(juuri, P), tekstiEnnen);
+  assert.equal(tulosta(juuri, P, { lahde: true }), git);
+  assert.notEqual(tiivisteet(juuri).juuri, tiivisteEnnen);
+  assert.deepEqual(lista(juuri, P).siivotut, siivotut);
+  assert.equal(uudelleentuo(juuri, laite, P, git + '\n', { commit: 'c' }).ristiriita, 0);
+  // Laite, joka ei ole nähnyt poistoa, lähettää vanhan elävän version tai saman kiven: ei herää.
+  const elava = { ...ennen['| c | d |\n\n'] };
+  delete elava.lahdeSisalto; delete elava.lahdeVersio;
+  assert.equal(vastaanota(juuri, { yksikot: [elava, { ...elava, poistettu: true, versio: kivi.versio }] }).ohitettu, 2);
+  assert.equal(lueYksikot(juuri, P).some((y) => y.id === elava.id), false);
+  // Rinnakkainen muokkaus (offline-laite muokkasi riviä, jonka toinen poisti): kivi palaa ja riita kysytään.
+  const rinn = { ...elava, sisalto: '| c | offline |\n', versio: { ...elava.versio, iphone: 5 } };
+  assert.deepEqual(vastaanota(juuri, { yksikot: [rinn] }).ristiriidat, [elava.id]);
+  const riita = lueYksikot(juuri, P).find((y) => y.id === elava.id);
+  assert.equal(riita.poistettu, true);
+  assert.deepEqual(riita.versio, kivi.versio);
+  assert.equal(riita.rinnakkaiset[0].sisalto, '| c | offline |\n');
+  assert.equal(lueSiivotut(juuri, P)[elava.id], undefined);
+  assert.equal(siivoa(juuri, P), 0);
+  // Uudempi versio (kiven nähnyt laite herätti rivin) herättää suoraan.
+  const toinen = ennen['- kaksi\n\n'];
+  const herata = { ...toinen, sisalto: '- kaksi takaisin\n', poistettu: false, versio: { ...siivotut[toinen.id], iphone: 9 } };
+  delete herata.lahdeSisalto; delete herata.lahdeVersio;
+  assert.deepEqual(vastaanota(juuri, { yksikot: [herata] }), { otettu: 1, ohitettu: 0, ristiriidat: [], muuttuneet: new Set([P]) });
+  assert.match(tulosta(juuri, P), /- kaksi takaisin/);
+  assert.deepEqual(lueSiivotut(juuri, P), {});
 });

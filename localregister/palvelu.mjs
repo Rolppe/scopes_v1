@@ -10,7 +10,7 @@
 // lapsiprosessi ja palvelu eivät kirjoita samaa yksikköä yhtä aikaa.
 //
 //   GET  /api/lr/tiiviste              { laite, juuri, rekisterit: { polku: tiiviste }, valiMin }
-//   POST /api/lr/listat {rekisterit}   { polku: { meta, yksikot: [{ id, versio, rinnakkaiset }] } }
+//   POST /api/lr/listat {rekisterit}   { polku: { meta, yksikot: [{ id, versio, rinnakkaiset }], siivotut: { id: versio } } }
 //   POST /api/lr/hae {rekisteri, idt}  { yksikot }
 //   POST /api/lr/laheta {metat, yksikot}   { otettu, ohitettu, ristiriidat }
 //   GET  /api/lr/ristiriidat           { ristiriidat: [yksikkö, jossa rinnakkaiset] }
