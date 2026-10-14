@@ -1,6 +1,6 @@
 # scopes/localregister/MUOTO.md — rekisterien synkronoinnin muoto (luonnos)
 
-Tila: luonnos 14.10.2026 (paketti LOCALREGISTER-MUOTO), odottaa käyttäjän hyväksyntää. Ei koodia.
+Tila: hyväksytty pohjaksi 14.10.2026 (käyttäjä; paketti LOCALREGISTER-MUOTO).
 Vaatimukset V1–V9 ja päätökset K1–K4: `REKISTERI.md`, Päätökset.
 
 ## 1. Mittaus: kuinka usein samaa kohtaa muutetaan rinnakkain (K5)
@@ -110,8 +110,19 @@ auki oleva vertainen (K2), ei keskus. Myöhemmin Mac ja muut koneet liittyvät s
    oneplus-laitteen muutos.
 4. **Vaihto** nykyisestä uuteen on erillinen käyttäjän päätös testien jälkeen.
 
-## 8. Avoimet päätökset käyttäjälle
+## 8. Käyttäjän päätökset 14.10.2026
 
-- Vähimmäisväli uudelleentarkistukselle (§5).
-- Kuuluvatko HISTORIA.md ja ARKISTO.md synkkaan (V1 "kaikki rekisterit": 32 REKISTERI.md vs 78 tiedostoa).
-- Kaksoiskappaleen sijainti palvelimella (§7).
+- Vähimmäisväli uudelleentarkistukselle: 10 min (§5).
+- Laajuus: kaikki 78 tiedostoa, myös HISTORIA.md ja ARKISTO.md (V1).
+- Kaksoiskappale gitin ulkopuolella palvelimella: `~/.local/share/localregister` (§7).
+
+## 9. Tila: kaksoiskappale (LOCALREGISTER-KAKSOIS 14.10.2026)
+
+`scopes/localregister/lr.mjs` (testit `lr.test.mjs`, 4/4) toi commitin 3d6d569e kaikki 78 tiedostoa:
+5481 yksikköä, edestakaistesti 78/78 merkki merkiltä, juuritiiviste `ba99b922…`. Levyllä 23 Mt
+(lähde 2,7 Mt): 4 kt:n lohko per yksikkötiedosto. Yksikön koko: mediaani 161 merkkiä, p95 2,6 k,
+suurin 33 k (`claude/siirto/HISTORIA.md`, yksi pitkä luettelon alkio).
+
+Puuttuu ennen äpin muokkauksia: uudelleentuonti git-muutoksista (§7 kohta 3), jossa muuttumaton
+yksikkö säilyttää tunnuksensa, muuttunut saa uuden version, poistunut hautakiven ja uusi järjestysavaimen
+naapuriensa väliin.
