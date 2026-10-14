@@ -76,6 +76,47 @@ final class KysymysUITests: XCTestCase {
         XCTAssertEqual(vastaus.label, "Alustat: Watch")
     }
 
+    // Vaakatila (käyttäjä 14.10.2026): Muu-kenttä alkaa yhdeltä riviltä, kirjoittaessa ei Lähetä/Seuraava-nappia, ja
+    // rivinvaihto siirtää seuraavaan tai viimeisessä lähettää.
+    func testVaakaRivinvaihtoLahettaa() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["SCOPES_KOE_KORTTI"] = "1"
+        app.launch()
+        XCUIDevice.shared.orientation = .landscapeLeft
+        addTeardownBlock { XCUIDevice.shared.orientation = .portrait }
+        let vaihe = app.staticTexts["kysymys-vaihe"]
+        XCTAssertTrue(vaihe.waitForExistence(timeout: 15))
+
+        let muu0 = kentta(app, 0)
+        XCTAssertTrue(muu0.waitForExistence(timeout: 3), "Muu-kenttä puuttuu")
+        let korkeus = muu0.frame.height
+        muu0.tap()
+        sleep(1)
+        XCTAssertFalse(app.buttons["kysymys-seuraava"].exists, "Seuraava näkyy vaakassa kirjoittaessa")
+        XCTAssertLessThan(korkeus, 50, "Muu-kenttä ei ala yhdeltä riviltä")
+        kuva("vaaka-kentta")
+        muu0.typeText("Kokeilu\n")
+        XCTAssertTrue(app.buttons["kysymys-vaihtoehto-1-0"].waitForExistence(timeout: 3), "rivinvaihto ei siirtänyt seuraavaan")
+        XCTAssertEqual(vaihe.label, "2/3")
+
+        // Ilman näppäimistöä nappi näkyy, jotta pelkät valinnat voi lähettää.
+        XCTAssertTrue(app.buttons["kysymys-seuraava"].waitForExistence(timeout: 3), "Seuraava puuttuu ilman näppäimistöä")
+        app.buttons["kysymys-seuraava"].tap()
+        let muu2 = kentta(app, 2)
+        XCTAssertTrue(muu2.waitForExistence(timeout: 3))
+        muu2.tap()
+        sleep(1)
+        XCTAssertFalse(app.buttons["kysymys-laheta"].exists, "Lähetä näkyy vaakassa kirjoittaessa")
+        muu2.typeText("Huomenna\n")
+        let vastaus = app.staticTexts["koe-vastaus"]
+        XCTAssertTrue(vastaus.waitForExistence(timeout: 3), "rivinvaihto ei lähettänyt")
+        XCTAssertEqual(vastaus.label, "Tarkoitus: Kokeilu — Aloitus: Huomenna")
+    }
+
+    private func kentta(_ app: XCUIApplication, _ q: Int) -> XCUIElement {
+        app.textFields["kysymys-muu-\(q)"].exists ? app.textFields["kysymys-muu-\(q)"] : app.textViews["kysymys-muu-\(q)"]
+    }
+
     private func kuva(_ nimi: String) {
         let liite = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         liite.name = nimi
