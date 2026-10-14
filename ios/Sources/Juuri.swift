@@ -43,6 +43,15 @@ final class Navigaatio: ObservableObject {
         chatPyynto = ChatPyynto(id: id, n: chatPyynto.n + 1)
         avaa(.chat)
     }
+
+    // Toiminnon tuloksen "Avaa chat" (käyttäjä 14.10.2026): skoopin viestit alusta, vaikka sama skooppi olisi jo auki
+    // ja sen tiedot pinossa; laskuri vaihtaa pinon identiteetin, jolloin viestit latautuvat uudesta istunnosta.
+    @Published var skooppiAvaus = 0
+
+    func avaaSkooppi(_ nimi: String) {
+        skooppiAvaus += 1
+        avaa(.skooppi(nimi))
+    }
 }
 
 struct JuuriView: View {
@@ -67,7 +76,7 @@ struct JuuriView: View {
                                 .toolbar { Sivupalkkipainike() }
                                 .navigationDestination(for: SkooppiReitti.self) { $0.nakyma }
                         }
-                        .id(nimi)
+                        .id("\(nimi)#\(navigaatio.skooppiAvaus)")
                     }
                 }
                 // Sivuttaisveto missä kohtaa tahansa avaa palkin (käyttäjä 13.10.2026).
