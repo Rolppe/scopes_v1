@@ -52,8 +52,14 @@ export function paikallisetMallit(stdout) {
   let data;
   try { data = JSON.parse(stdout).data; } catch { return []; }
   if (!Array.isArray(data)) return [];
-  return data.map((m) => m?.id).filter((id) => typeof id === 'string' && PAIKALLINEN_ID.test(id) && !/embed/i.test(id))
+  const mallit = data.map((m) => m?.id).filter((id) => typeof id === 'string' && PAIKALLINEN_ID.test(id) && !/embed/i.test(id))
     .map((id) => ({ nimi: PAIKALLINEN + id, kuvaus: mallinNayttonimi(id), tyyppi: 'paikallinen' }));
+  // Sama malli voi olla listalla sekä kansiona että kvantisoituna tiedostona (qwen/qwen3.5-9b ja
+  // …/qwen3.5-9b-q4_k_m.gguf, 14.10.2026): törmäävä nimi saa kvantisointimerkinnän perään.
+  return mallit.map((m) => {
+    const q = m.nimi.split('/').pop().replace(/\.gguf$/i, '').match(/[-_@](i?q\d[a-z0-9_]*|bf16|fp16|f16)$/i);
+    return q && mallit.filter((x) => x.kuvaus === m.kuvaus).length > 1 ? { ...m, kuvaus: `${m.kuvaus} ${q[1].toUpperCase()}` } : m;
+  });
 }
 
 // Työkalukutsu yhdeksi lyhyeksi riviksi (DEMO-SCOPES-PARANNUKSET 13.10.2026): komento tai muokattu tiedosto.
