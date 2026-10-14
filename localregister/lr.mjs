@@ -318,6 +318,12 @@ export function lista(juuri, polku) {
 // rinnakkaiset, on ratkaisu: ristiriita poistuu. Gitin puolen kentät (`lahde*`) pysyvät paikallisina.
 export function vastaanota(juuri, { metat = [], yksikot = [] }) {
   const tulos = { otettu: 0, ohitettu: 0, ristiriidat: [], muuttuneet: new Set() };
+  // Rivinvaihto taulukkorivin sisällä katkaisisi taulukon tulosteessa (LOCALREGISTER-RIVINVAIHTO); hylätään
+  // ennen kirjoitusta, jottei lähetys jää puoliksi tallennetuksi.
+  for (const y of yksikot) {
+    const t = String(y.sisalto ?? '').replace(/^\n+|\n+$/g, '');
+    if (y.laji !== 'taulukko-otsake' && t.startsWith('|') && t.includes('\n')) throw new Error(`rivinvaihto taulukkorivissä: ${y.id}`);
+  }
   for (const m of metat) {
     const hak = rekisterihakemisto(juuri, tarkistaPolku(m.rekisteri));
     const p = join(hak, '_meta.json');

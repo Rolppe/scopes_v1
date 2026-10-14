@@ -146,3 +146,24 @@ test('vastaanota hylkää vieraat polut ja tunnukset', () => {
   assert.throws(() => vastaanota(juuri, { yksikot: [{ id: '../x', rekisteri: 'y/REKISTERI.md', versio: {} }] }), /virheellinen tunnus/);
   assert.throws(() => hae(juuri, '/etc/REKISTERI.md', ['a-1']), /virheellinen rekisteripolku/);
 });
+
+test('vastaanota hylkää rivinvaihdon taulukkorivissä kirjoittamatta mitään', () => {
+  const juuri = mkdtempSync(join(tmpdir(), 'lr-'));
+  const laite = luoLaite(juuri, 'oneplus');
+  const P = 'x/REKISTERI.md';
+  tuoRekisteri(juuri, laite, P, REK, { commit: 'a' });
+  const rivi = lueYksikot(juuri, P).find((y) => y.sisalto === '| a | b |\n');
+  const ok = { ...rivi, sisalto: '| a | ok |\n', versio: { ...rivi.versio, iphone: 1 } };
+  const rikki = { ...rivi, sisalto: '| a | b |\nKoe1\n', versio: { ...rivi.versio, iphone: 2 } };
+  for (const y of [ok, rikki]) { delete y.lahdeSisalto; delete y.lahdeVersio; }
+  assert.throws(() => vastaanota(juuri, { yksikot: [ok, rikki] }), /rivinvaihto taulukkorivissä/);
+  assert.equal(tulosta(juuri, P), REK);
+  assert.throws(() => vastaanota(juuri, { yksikot: [{ ...ok, sisalto: '\n| a | b |\nKoe1\n' }] }), /rivinvaihto taulukkorivissä/);
+  // Sisennetty jatkorivi listassa ei ole taulukkorivi.
+  const alkio = lueYksikot(juuri, P).find((y) => y.laji === 'paatos');
+  assert.equal(vastaanota(juuri, { yksikot: [{ ...alkio, sisalto: '- yksi\n  | sisennetty |\n', versio: { ...alkio.versio, iphone: 4 } }] }).otettu, 1);
+  // Perässä olevat tyhjät rivit ja otsakkeen kaksi riviä kuuluvat yksikköön.
+  assert.equal(vastaanota(juuri, { yksikot: [{ ...ok, sisalto: '| a | ok |\n\n' }] }).otettu, 1);
+  const otsake = lueYksikot(juuri, P).find((y) => y.laji === 'taulukko-otsake');
+  assert.equal(vastaanota(juuri, { yksikot: [{ ...otsake, sisalto: otsake.sisalto.replace('|', '| X'), versio: { ...otsake.versio, iphone: 3 } }] }).otettu, 1);
+});
