@@ -1,5 +1,5 @@
 // Rekisterisynkan koenäkymät (LOCALREGISTER-APPI 14.10.2026): tila ja käsisynkka, rekisterit riveittäin, rivin
-// muokkaus ja ristiriidan ratkaisu (K4: "kysytään käyttäjältä tilanteessa"). Avautuu Infra-näkymästä. Muokkaus
+// muokkaus ja lisäys (LOCALREGISTER-RIVIN-LISAYS) sekä ristiriidan ratkaisu (K4: "kysytään käyttäjältä tilanteessa"). Avautuu Infra-näkymästä. Muokkaus
 // koskee vain kaksoiskappaletta; alkuperäiset rekisterit ja git pysyvät totuutena (MUOTO §7).
 import SwiftUI
 
@@ -101,9 +101,18 @@ enum LrTeksti {
 
     // Kirjoittaessa Return on välilyönti myös rivin lopussa: siisti pudottaisi tyhjän loppuosan, ja seuraava
     // sana liimautuisi edelliseen ("|Koe", UI-koe 14.10.2026). Talteen siistii loppuvälilyönnin.
-    static func valilyonneksi(_ muokattu: String, yksikko: LrYksikko) -> String {
-        guard yksirivinen(yksikko) else { return muokattu }
-        return muokattu.replacingOccurrences(of: "[ \\t]*\\R+[ \\t]*", with: " ", options: .regularExpression)
+    static func valilyonneksi(_ muokattu: String) -> String {
+        muokattu.replacingOccurrences(of: "[ \\t]*\\R+[ \\t]*", with: " ", options: .regularExpression)
+    }
+
+    // Uuden rivin laji sisällöstä ja osiosta kuten lr.mjs pilko: taulukkorivi, listan alkio tai kappale.
+    static func laji(_ ydin: String, osio: String?) -> String {
+        let osiolaji = ["Päätökset": "paatos", "Avoimet asiat": "avoin", "Viat": "vika", "Tarkoitus ja raja": "tarkoitus"]
+        if ydin.hasPrefix("|") { return osiolaji[osio ?? ""] ?? "taulukkorivi" }
+        if ydin.range(of: "^ {0,3}([-*+]|[0-9]+[.)])\\s", options: .regularExpression) != nil {
+            return osiolaji[osio ?? ""] ?? "alkio"
+        }
+        return osio == "Tarkoitus ja raja" ? "tarkoitus" : "kappale"
     }
 
     // Muokattu teksti saa alkuperäisen rivinvaihtohännän takaisin, jottei rekisterin tulostus liimaa rivejä yhteen.
@@ -116,11 +125,19 @@ enum LrTeksti {
 struct LrRekisteriView: View {
     let polku: String
     @ObservedObject private var lr = Lr.jaettu
-    @State private var muokattava: LrYksikko?
+    @State private var muokattava: LrKohde?
+
+    // Rivi ja tila: muokkaus tai uusi rivi sen alle. Lisäys pyyhkäisyllä, koska muokkausnäkymän alapalkki jää
+    // näppäimistön alle (UI-koe 14.10.2026).
+    struct LrKohde: Identifiable {
+        let yksikko: LrYksikko
+        let lisays: Bool
+        var id: String { yksikko.id + (lisays ? "+" : "") }
+    }
 
     var body: some View {
         List(lr.rivit(polku)) { y in
-            Button { muokattava = y } label: {
+            Button { muokattava = LrKohde(yksikko: y, lisays: false) } label: {
                 HStack(alignment: .top) {
                     Text(LrTeksti.nakyva(y.sisalto))
                         .font(.callout)
@@ -132,15 +149,23 @@ struct LrRekisteriView: View {
                 }
             }
             .accessibilityIdentifier("lr-yksikko-\(y.id)")
+            .swipeActions(edge: .leading) {
+                if !y.riidassa && !y.poistettu {
+                    Button("Lisää alle") { muokattava = LrKohde(yksikko: y, lisays: true) }
+                        .tint(.green)
+                        .accessibilityIdentifier("lr-lisaa-\(y.id)")
+                }
+            }
         }
         .listStyle(.plain)
         .navigationTitle((polku as NSString).lastPathComponent)
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(item: $muokattava) { y in
-            if y.riidassa {
+        .sheet(item: $muokattava) { k in
+            let y = k.yksikko
+            if y.riidassa && !k.lisays {
                 NavigationStack { LrRistiriitaView(polku: y.rekisteri, id: y.id) }
             } else {
-                LrMuokkausView(yksikko: y, alku: y.sisalto)
+                LrMuokkausView(yksikko: y, alku: y.sisalto, lisays: k.lisays)
             }
         }
     }
@@ -149,6 +174,8 @@ struct LrRekisteriView: View {
 struct LrMuokkausView: View {
     let yksikko: LrYksikko
     let alku: String
+    // Uusi rivi `yksikko`n alle (LOCALREGISTER-RIVIN-LISAYS); avataan rivin Lisää alle -pyyhkäisytoiminnolla.
+    var lisays = false
     @Environment(\.dismiss) private var sulje
     @State private var teksti = ""
     @FocusState private var fokus: Bool
@@ -160,36 +187,42 @@ struct LrMuokkausView: View {
                 .padding(.horizontal, Teema.Vali.m)
                 .focused($fokus)
                 .accessibilityIdentifier("lr-teksti")
-                .navigationTitle(yksikko.riidassa ? "Yhdistä versiot" : "Muokkaa riviä")
+                .navigationTitle(lisays ? "Uusi rivi" : yksikko.riidassa ? "Yhdistä versiot" : "Muokkaa riviä")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Peruuta") { sulje() } }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Tallenna") {
-                            Lr.jaettu.muokkaa(yksikko.rekisteri, yksikko.id, sisalto: LrTeksti.talteen(teksti, yksikko: yksikko))
+                            if lisays {
+                                Lr.jaettu.lisaa(yksikko.rekisteri, jalkeen: yksikko.id, sisalto: teksti)
+                            } else {
+                                Lr.jaettu.muokkaa(yksikko.rekisteri, yksikko.id, sisalto: LrTeksti.talteen(teksti, yksikko: yksikko))
+                            }
                             sulje()
                         }
+                        .disabled(lisays && teksti.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .accessibilityIdentifier("lr-tallenna")
                     }
-                    ToolbarItem(placement: .bottomBar) {
-                        Button("Poista rivi", role: .destructive) {
-                            Lr.jaettu.muokkaa(yksikko.rekisteri, yksikko.id, sisalto: yksikko.sisalto, poistettu: true)
-                            sulje()
+                    ToolbarItemGroup(placement: .bottomBar) {
+                        if !lisays {
+                            Button("Poista rivi", role: .destructive) {
+                                Lr.jaettu.muokkaa(yksikko.rekisteri, yksikko.id, sisalto: yksikko.sisalto, poistettu: true)
+                                sulje()
+                            }
+                            .accessibilityIdentifier("lr-poista")
                         }
-                        .accessibilityIdentifier("lr-poista")
                     }
                 }
         }
         .onAppear {
-            teksti = LrTeksti.nakyva(alku)
+            teksti = lisays ? "" : LrTeksti.nakyva(alku)
             fokus = true
         }
-        // Return taulukkorivissä on välilyönti. Yhdistettävät versiot ovat alussa omilla riveillään, joten niille
-        // vain talteen siistii.
+        // Return taulukkorivissä on välilyönti, myös uudessa rivissä, joka alkaa `|`. Yhdistettävät versiot ovat
+        // alussa omilla riveillään, joten niille vain talteen siistii.
         .onChange(of: teksti) { _, uusi in
-            if !yksikko.riidassa && uusi.contains(where: \.isNewline) {
-                teksti = LrTeksti.valilyonneksi(uusi, yksikko: yksikko)
-            }
+            let taulukkoon = lisays ? uusi.hasPrefix("|") : !yksikko.riidassa && LrTeksti.yksirivinen(yksikko)
+            if taulukkoon && uusi.contains(where: \.isNewline) { teksti = LrTeksti.valilyonneksi(uusi) }
         }
     }
 }

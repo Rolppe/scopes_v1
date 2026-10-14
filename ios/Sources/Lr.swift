@@ -114,6 +114,28 @@ enum LrLaskenta {
     static func jarjestyksessa(_ ys: some Sequence<LrYksikko>) -> [LrYksikko] {
         ys.sorted { $0.jarjestys != $1.jarjestys ? ennen($0.jarjestys, $1.jarjestys) : ennen($0.id, $1.id) }
     }
+
+    // lr.mjs `valiin` (MUOTO §2): avain a < k < b; a = "" alku, b = nil loppu. Sama algoritmi merkki merkiltä, joten
+    // kaksi laitetta, jotka lisäävät samaan väliin, saavat saman avaimen ja järjestys ratkeaa tunnuksella.
+    static let numerot = Array("0123456789abcdefghijklmnopqrstuvwxyz")
+
+    static func valiin(_ a: String, _ b: String?) -> String? {
+        if let b, !ennen(a, b) { return nil }
+        return String(valiin(Array(a), b.map(Array.init)))
+    }
+
+    private static func valiin(_ a: [Character], _ b: [Character]?) -> [Character] {
+        if let b {
+            var n = 0
+            while n < b.count && (n < a.count ? a[n] : "0") == b[n] { n += 1 }
+            if n > 0 { return Array(b[..<n]) + valiin(Array(a.dropFirst(n)), Array(b.dropFirst(n))) }
+        }
+        let da = a.first.flatMap { numerot.firstIndex(of: $0) } ?? 0
+        let db = b.map { $0.first.flatMap { numerot.firstIndex(of: $0) } ?? -1 } ?? numerot.count
+        if db - da > 1 { return [numerot[(da + db + 1) / 2]] } // Math.round: puolikas ylöspäin
+        if let b, b.count > 1 { return [b[0]] }
+        return [numerot[da]] + valiin(Array(a.dropFirst()), nil)
+    }
 }
 
 @MainActor final class Lr: ObservableObject {
@@ -362,9 +384,7 @@ enum LrLaskenta {
         guard var r = rekisterit[polku], var y = r.yksikot[id] else { return }
         var v = y.versio
         for s in y.rinnakkaiset ?? [] { v.merge(s.versio, uniquingKeysWith: max) }
-        laskuri += 1
-        tallennaLaite()
-        v[laite] = laskuri
+        v[laite] = seuraava()
         y.sisalto = sisalto
         y.poistettu = poistettu
         y.versio = v
@@ -373,6 +393,58 @@ enum LrLaskenta {
         y.rinnakkaiset = nil
         r.yksikot[id] = y
         rekisterit[polku] = r
+        muutettu(polku)
+    }
+
+    // Uusi rivi rivin `id` alle (LOCALREGISTER-RIVIN-LISAYS): avain `valiin` sen ja seuraavan avaimen väliin, tunnus
+    // `<laite>-<laskuri>` (MUOTO §2). Uusi rivi saa ankkurin rivinvaihtohännän, jotta lohkoa seuraava tyhjä rivi jää
+    // lohkon loppuun. Taulukossa ankkurin häntä lyhenee yhdeksi rivinvaihdoksi (ankkurille uusi versio), muuten
+    // tyhjä rivi jäisi taulukon keskelle ja katkaisisi sen. Palauttaa uuden tunnuksen, tai nil, jos lisäys ei käy.
+    @discardableResult
+    func lisaa(_ polku: String, jalkeen id: String, sisalto: String) -> String? {
+        guard var r = rekisterit[polku], var ankkuri = r.yksikot[id] else { return nil }
+        let seuraavaAvain = LrLaskenta.jarjestyksessa(r.yksikot.values)
+            .first { LrLaskenta.ennen(ankkuri.jarjestys, $0.jarjestys) }?.jarjestys
+        guard let avain = LrLaskenta.valiin(ankkuri.jarjestys, seuraavaAvain) else { return nil }
+        let taulukko = LrTeksti.yksirivinen(ankkuri) || ankkuri.laji == "taulukko-otsake"
+        var ydin = sisalto.trimmingCharacters(in: .newlines)
+        if ydin.hasPrefix("|") {
+            ydin = ydin.components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.joined(separator: " ")
+        }
+        guard !ydin.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        let ankkurinYdin = LrTeksti.nakyva(ankkuri.sisalto)
+        let hanta = String(ankkuri.sisalto.dropFirst(ankkurinYdin.count))
+        // Ankkuria muutetaan, jos se on taulukossa ja sen perässä on tyhjä rivi, tai jos se on tiedoston viimeinen
+        // rivi ilman rivinvaihtoa. Riidassa olevaa ankkuria ei muuteta: muutos ratkaisisi riidan kysymättä.
+        let ankkuriMuuttuu = hanta.isEmpty || taulukko && hanta != "\n"
+        if ankkuriMuuttuu && ankkuri.riidassa { return nil }
+        let nyt = ISO8601DateFormatter().string(from: Date())
+        if ankkuriMuuttuu {
+            ankkuri.sisalto = ankkurinYdin + "\n"
+            ankkuri.versio[laite] = seuraava()
+            ankkuri.muutettu = nyt
+            ankkuri.muuttaja = laite
+            r.yksikot[id] = ankkuri
+        }
+        let n = seuraava()
+        let uusiId = "\(laite)-\(String(format: "%06d", n))"
+        r.yksikot[uusiId] = LrYksikko(
+            id: uusiId, rekisteri: polku, laji: LrTeksti.laji(ydin, osio: ankkuri.osio), osio: ankkuri.osio,
+            jarjestys: avain, sisalto: ydin + (hanta.isEmpty ? "" : hanta), versio: [laite: n], muutettu: nyt,
+            muuttaja: laite, poistettu: false, rinnakkaiset: nil)
+        rekisterit[polku] = r
+        muutettu(polku)
+        return uusiId
+    }
+
+    private func seuraava() -> Int {
+        laskuri += 1
+        tallennaLaite()
+        return laskuri
+    }
+
+    private func muutettu(_ polku: String) {
         valimuisti[polku] = nil
         tallenna([polku])
         muutosLaskuri += 1

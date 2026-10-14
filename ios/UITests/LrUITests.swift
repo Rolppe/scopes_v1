@@ -207,6 +207,82 @@ final class LrUITests: XCTestCase {
         kuva("lr-riita-ratkaistu")
     }
 
+    // LOCALREGISTER-RIVIN-LISAYS: uusi rivi taulukon viimeisen rivin alle muokkausnäkymän Lisää rivi alle -painikkeella.
+    // Return on välilyönti, rivi tulee heti ankkurin alle, taulukon perässä oleva tyhjä rivi jää uuden rivin perään, ja
+    // synkan jälkeen juuritiiviste on sama molemmilla.
+    func testLrRivinLisays() throws {
+        guard ProcessInfo.processInfo.environment["SCOPES_KOE_LR"] == "1" else {
+            throw XCTSkip("kirjoittava koe vain koeinstanssia vastaan (SCOPES_KOE_LR=1)")
+        }
+        let app = avaaLr()
+        let polku = "scopes/localregister/REKISTERI.md"
+        let lista = try XCTUnwrap(try pyynto("/api/lr/listat", ["rekisterit": [polku]])[polku] as? [String: Any])
+        let idt = (lista["yksikot"] as? [[String: Any]] ?? []).compactMap { $0["id"] as? String }
+        let yksikot = try XCTUnwrap(try pyynto("/api/lr/hae", ["rekisteri": polku, "idt": idt])["yksikot"] as? [[String: Any]])
+        // Ankkuri on taulukon viimeinen rivi (perässä tyhjä rivi): Avoimet asiat -rivi tai, jos se on riidassa, tyhjän
+        // Viat-taulukon otsake. Kummassakin ankkurin tyhjä rivi siirtyy uuden rivin perään.
+        let ehdokkaat = yksikot.filter {
+            ($0["sisalto"] as? String ?? "").hasSuffix("|\n\n") && $0["poistettu"] as? Bool == false
+                && ($0["rinnakkaiset"] as? [Any] ?? []).isEmpty
+        }
+        let ankkuri = try XCTUnwrap(ehdokkaat.first { $0["laji"] as? String == "avoin" }
+            ?? ehdokkaat.first { $0["laji"] as? String == "taulukko-otsake" && $0["osio"] as? String == "Viat" },
+            "taulukon viimeistä riviä ei löydy")
+        let odotettuLaji = ankkuri["laji"] as? String == "avoin" ? "avoin" : "vika"
+        let id = try XCTUnwrap(ankkuri["id"] as? String)
+        let ankkuririvi = (ankkuri["sisalto"] as? String ?? "").replacingOccurrences(of: "\\n+$", with: "", options: .regularExpression)
+            .components(separatedBy: "\n").last ?? ""
+        let leima = Int(Date().timeIntervalSince1970)
+        let uusiRivi = "| Koe lisays \(leima) | testi |"
+
+        let haku = app.searchFields["Hae rekistereistä"]
+        XCTAssertTrue(haku.waitForExistence(timeout: 5))
+        haku.tap()
+        haku.typeText("localregister/REKISTERI")
+        let rekisteri = app.buttons["lr-rekisteri-\(polku)"]
+        XCTAssertTrue(rekisteri.waitForExistence(timeout: 5), "rekisteriä ei löydy listasta")
+        rekisteri.tap()
+        let rivi = app.buttons["lr-yksikko-\(id)"]
+        for _ in 0..<15 where !(rivi.exists && rivi.isHittable) { app.swipeUp() }
+        XCTAssertTrue(rivi.isHittable, "riviä \(id) ei löydy")
+        // Pitkä veto vasemmasta reunasta: lyhyt swipeRight ei avannut rivin toimintoa (UI-koe 14.10.2026).
+        rivi.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.5))
+            .press(forDuration: 0.05, thenDragTo: rivi.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.5)))
+        let lisaa = app.buttons["lr-lisaa-\(id)"].exists ? app.buttons["lr-lisaa-\(id)"] : app.buttons["Lisää alle"]
+        if !lisaa.waitForExistence(timeout: 5) { kuva("lr-pyyhkaisy") }
+        XCTAssertTrue(lisaa.exists, "Lisää alle -pyyhkäisytoiminto puuttuu")
+        lisaa.tap()
+        XCTAssertTrue(app.navigationBars["Uusi rivi"].waitForExistence(timeout: 5))
+        let teksti = app.textViews["lr-teksti"]
+        XCTAssertEqual(teksti.value as? String ?? "", "", "uusi rivi ei alkanut tyhjänä")
+        teksti.typeText("| Koe lisays \(leima) |\ntesti |")
+        XCTAssertFalse((teksti.value as? String ?? "").contains("\n"), "editoriin jäi rivinvaihto")
+        kuva("lr-lisays")
+        app.buttons["lr-tallenna"].tap()
+
+        // Palvelun tuloste: ankkuri, heti perään uusi rivi, sitten taulukon loppu (tyhjä rivi).
+        var rivit: [String] = []
+        for _ in 0..<30 {
+            Thread.sleep(forTimeInterval: 2)
+            let tuloste = try XCTUnwrap(try pyynto("/api/lr/teksti/" + polku, nil)["teksti"] as? String)
+            rivit = tuloste.components(separatedBy: "\n")
+            if rivit.contains(uusiRivi) { break }
+        }
+        let k = try XCTUnwrap(rivit.firstIndex(of: ankkuririvi), "ankkuririvi puuttuu tulosteesta")
+        XCTAssertEqual((k + 1 < rivit.count ? rivit[k + 1] : nil), uusiRivi, "uusi rivi ei ole ankkurin alla")
+        XCTAssertEqual((k + 2 < rivit.count ? rivit[k + 2] : nil), "", "taulukon loppu muuttui")
+        let lopuksi = try XCTUnwrap(try pyynto("/api/lr/listat", ["rekisterit": [polku]])[polku] as? [String: Any])
+        let uudet = (lopuksi["yksikot"] as? [[String: Any]] ?? []).compactMap { $0["id"] as? String }.filter { !idt.contains($0) }
+        XCTAssertEqual(uudet.count, 1, "uusia yksiköitä \(uudet)")
+        let uusi = try XCTUnwrap((try pyynto("/api/lr/hae", ["rekisteri": polku, "idt": uudet])["yksikot"] as? [[String: Any]])?.first)
+        XCTAssertEqual(uusi["laji"] as? String, odotettuLaji)
+        XCTAssertFalse((uusi["id"] as? String ?? "").hasPrefix("oneplus-"), "tunnus ei ole äpin laitteen")
+
+        app.navigationBars["REKISTERI.md"].buttons.element(boundBy: 0).tap()
+        app.buttons["lr-synkkaa"].tap()
+        odota(app, tulos: "ei muutoksia", 60)
+    }
+
     private func avaaLr() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SCOPES_OSOITE"] = osoite

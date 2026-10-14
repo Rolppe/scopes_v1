@@ -167,3 +167,26 @@ test('vastaanota hylkää rivinvaihdon taulukkorivissä kirjoittamatta mitään'
   const otsake = lueYksikot(juuri, P).find((y) => y.laji === 'taulukko-otsake');
   assert.equal(vastaanota(juuri, { yksikot: [{ ...otsake, sisalto: otsake.sisalto.replace('|', '| X'), versio: { ...otsake.versio, iphone: 3 } }] }).otettu, 1);
 });
+
+// LOCALREGISTER-RIVIN-LISAYS: äppi lisää rivin taulukon viimeisen rivin alle kuten Lr.swift `lisaa`: avain
+// `valiin`-portilla, ankkurin tyhjä rivi siirtyy uudelle riville. Taulukko pysyy ehjänä, ja gitin myöhempi
+// muutos muualla ei siirrä eikä poista äpin riviä.
+test('äpin lisäämä rivi taulukon loppuun säilyttää taulukon ja kestää uudelleentuonnin', () => {
+  const juuri = mkdtempSync(join(tmpdir(), 'lr-'));
+  const laite = luoLaite(juuri, 'oneplus');
+  const P = 'x/REKISTERI.md';
+  tuoRekisteri(juuri, laite, P, REK, { commit: 'a' });
+  const ys = lueYksikot(juuri, P).sort((a, b) => (a.jarjestys < b.jarjestys ? -1 : 1));
+  const k = ys.findIndex((y) => y.sisalto === '| c | d |\n\n');
+  const ankkuri = { ...ys[k], sisalto: '| c | d |\n', versio: { ...ys[k].versio, iphone: 1 }, muuttaja: 'iphone' };
+  delete ankkuri.lahdeSisalto; delete ankkuri.lahdeVersio;
+  const uusi = { id: 'iphone-000002', rekisteri: P, laji: 'avoin', osio: 'Avoimet asiat', jarjestys: valiin(ys[k].jarjestys, ys[k + 1].jarjestys), sisalto: '| e | f |\n\n', versio: { iphone: 2 }, poistettu: false };
+  assert.equal(vastaanota(juuri, { yksikot: [ankkuri, uusi] }).otettu, 2);
+  const odotettu = REK.replace('| c | d |\n', '| c | d |\n| e | f |\n');
+  assert.equal(tulosta(juuri, P), odotettu);
+  const git = REK.replace('- kaksi', '- KAKSI');
+  const t = uudelleentuo(juuri, laite, P, git, { commit: 'b' });
+  assert.deepEqual([t.muuttunut, t.uusi, t.poistettu, t.ristiriita], [1, 0, 0, 0]);
+  assert.equal(tulosta(juuri, P), odotettu.replace('- kaksi', '- KAKSI'));
+  assert.equal(tulosta(juuri, P, { lahde: true }), git);
+});
