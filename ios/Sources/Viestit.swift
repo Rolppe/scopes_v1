@@ -12,6 +12,8 @@ struct Viestikupla: View {
     var sulje: (() -> Void)? = nil
     // Kortin kirjoituskenttä pyytää listaa vierittämään kortin näkyviin näppäimistön yläpuolelle.
     var nayta: (() -> Void)? = nil
+    // Kortin kysymyksen vaihto pyytää listaa näyttämään kortin yläreunasta (vaihe ja X näkyviin).
+    var ylos: (() -> Void)? = nil
     var body: some View {
         if viesti.tyokalu {
             // Työkalukutsu: yksi himmeä rivi kuplien välissä (komento tai muokattu tiedosto).
@@ -23,7 +25,7 @@ struct Viestikupla: View {
                 .accessibilityIdentifier("tyokalu-rivi")
         } else if let kysymykset = viesti.kysymykset, !kysymykset.isEmpty {
             // Vastattu tai ohitettu kysymys katoaa (käyttäjä 13.10.2026); vastaus jää omaksi kuplakseen.
-            if viesti.vastattu != true { KysymysKortti(kysymykset: kysymykset, vastaa: vastaa, sulje: sulje, nayta: nayta) }
+            if viesti.vastattu != true { KysymysKortti(kysymykset: kysymykset, vastaa: vastaa, sulje: sulje, nayta: nayta, ylos: ylos) }
         } else {
             kupla
         }
@@ -44,74 +46,84 @@ struct Viestikupla: View {
 
 // Monivalinta korttina kuten Claude-äpissä: otsikko, kysymys ja vaihtoehdot kuvauksineen sekä Muu-kenttä.
 // Yksi kysymys ilman monivalintaa lähtee napautuksesta; muuten valinnat kootaan ja lähetetään Lähetä-napista.
+// Moniosainen kortti (CHAT-QUESTION-YKSI-KERRALLAAN, käyttäjä 14.10.2026): yksi kysymys kerrallaan, yläreunassa vaihe
+// nuolineen; yksivalinta siirtää seuraavaan, Seuraava ohittaa, viimeisessä Lähetä kokoaa kaikki vastaukset.
 struct KysymysKortti: View {
     let kysymykset: [Kysymys]
     let vastaa: ((String) -> Void)?
     var sulje: (() -> Void)? = nil
     var nayta: (() -> Void)? = nil
+    var ylos: (() -> Void)? = nil
     @State private var valinnat: [Int: Set<Int>] = [:]
     // Oma vastaus kysymyskohtaisesti (käyttäjä 13.10.2026): kahden kysymyksen kortissa kentän valinta ei saa tyhjentää toista.
     @State private var muut: [Int: String] = [:]
     @FocusState private var fokus: Int?
     @State private var lahetetty = false
+    @State private var nyt = 0
 
     private var heti: Bool { kysymykset.count == 1 && !kysymykset[0].monivalinta }
+    private var monta: Bool { kysymykset.count > 1 }
+    private var q: Int { min(nyt, kysymykset.count - 1) }
+    private var viimeinen: Bool { q == kysymykset.count - 1 }
     private func muuTeksti(_ q: Int) -> String { (muut[q] ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
     private var tyhja: Bool { kysymykset.indices.allSatisfy { (valinnat[$0] ?? []).isEmpty && muuTeksti($0).isEmpty } }
 
     // Ulkoasu Claude iOS -äpin kortin mukaan (käyttäjä 13.10.2026, kuvakaappaus): iso kysymys, vaihtoehdot ilman numeroita
     // ohuin erottimin, Muu-rivi pelkkänä kenttänä, vaalea Lähetä-kapseli oikealla; ei otsikkosirua eikä tilariviä.
     var body: some View {
+        let k = kysymykset[q]
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(kysymykset.enumerated()), id: \.offset) { q, k in
-                if q > 0 { Divider().padding(.vertical, Teema.Vali.xl) }
-                HStack(alignment: .top, spacing: Teema.Vali.m) {
-                    Text(verbatim: k.kysymys).font(.title2.weight(.medium))
-                        .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+            if monta {
+                HStack(spacing: Teema.Vali.s) {
+                    siirto("chevron.left", "Edellinen kysymys", "kysymys-edellinen", q > 0) { siirry(q - 1) }
+                    Text(verbatim: "\(q + 1)/\(kysymykset.count)").font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("kysymys-vaihe")
+                    siirto("chevron.right", "Seuraava kysymys", "kysymys-eteen", !viimeinen) { siirry(q + 1) }
                     Spacer(minLength: 0)
-                    // Sulku kuten Claude-äpissä (käyttäjä 13.10.2026): X kortin yläkulmassa hylkää kysymyksen.
-                    if q == 0, let sulje {
-                        Button { lahetetty = true; fokus = nil; sulje() } label: {
-                            Image(systemName: "xmark").font(.body.weight(.medium)).foregroundStyle(.primary)
-                                .frame(width: 44, height: 44)
-                                .background(Color(.systemGray4), in: Circle())
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(lahetetty)
-                        .accessibilityLabel("Sulje kysymys")
-                        .accessibilityIdentifier("kysymys-sulje")
-                    }
+                    suljeNappi
                 }
-                .padding(.bottom, Teema.Vali.l)
-                ForEach(Array(k.vaihtoehdot.enumerated()), id: \.offset) { i, v in
-                    Button { valitse(q, i) } label: { vaihtoehto(k, q, i, v) }
-                        .buttonStyle(.plain)
-                        .disabled(vastaa == nil || lahetetty)
-                        .accessibilityIdentifier("kysymys-vaihtoehto-\(q)-\(i)")
-                    if i < k.vaihtoehdot.count - 1 || vastaa != nil { Divider() }
-                }
-                if vastaa != nil {
-                    // Ei rivirajaa (käyttäjä 13.10.2026): kenttä ja kortti kasvavat kirjoittaessa, vanha teksti ei piiloudu.
-                    TextField("Muu", text: Binding(get: { muut[q] ?? "" }, set: { muut[q] = $0 }), axis: .vertical)
-                        .font(.body)
-                        .padding(.vertical, Teema.Vali.l)
-                        .focused($fokus, equals: q)
-                        .disabled(lahetetty)
-                        .accessibilityIdentifier("kysymys-muu-\(q)")
-                }
+                .padding(.bottom, Teema.Vali.m)
+            }
+            HStack(alignment: .top, spacing: Teema.Vali.m) {
+                Text(verbatim: k.kysymys).font(.title2.weight(.medium))
+                    .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                    .accessibilityIdentifier("kysymys-teksti")
+                Spacer(minLength: 0)
+                if !monta { suljeNappi }
+            }
+            .padding(.bottom, Teema.Vali.l)
+            ForEach(Array(k.vaihtoehdot.enumerated()), id: \.offset) { i, v in
+                Button { valitse(q, i) } label: { vaihtoehto(k, q, i, v) }
+                    .buttonStyle(.plain)
+                    .disabled(vastaa == nil || lahetetty)
+                    .accessibilityIdentifier("kysymys-vaihtoehto-\(q)-\(i)")
+                if i < k.vaihtoehdot.count - 1 || vastaa != nil { Divider() }
+            }
+            if vastaa != nil {
+                // Ei rivirajaa (käyttäjä 13.10.2026): kenttä ja kortti kasvavat kirjoittaessa, vanha teksti ei piiloudu.
+                TextField("Muu", text: Binding(get: { muut[q] ?? "" }, set: { muut[q] = $0 }), axis: .vertical)
+                    .font(.body)
+                    .padding(.vertical, Teema.Vali.l)
+                    .focused($fokus, equals: q)
+                    .disabled(lahetetty)
+                    .accessibilityIdentifier("kysymys-muu-\(q)")
+                    .id(q)
             }
             if let vastaa {
                 HStack {
                     Spacer()
-                    Button { laheta(vastaa) } label: {
-                        // Väri Claude-äpin Submit-napista (kuvakaappaus 13.10.2026): vaaleanharmaa kapseli, tummanharmaa teksti.
-                        Text("Lähetä").font(.body.weight(.semibold)).foregroundStyle(Color(white: 0.24))
-                            .padding(.horizontal, Teema.Vali.xl).padding(.vertical, Teema.Vali.m)
-                            .background(Color(white: lahetetty || tyhja ? 0.80 : 0.92), in: Capsule())
+                    if viimeinen {
+                        Button { laheta(vastaa) } label: { kapseli("Lähetä", lahetetty || tyhja) }
+                            .buttonStyle(.plain)
+                            .disabled(lahetetty || tyhja)
+                            .accessibilityIdentifier("kysymys-laheta")
+                    } else {
+                        // Seuraava ohittaa kysymyksen vastaamatta; ohitettu jää pois vastauksesta.
+                        Button { siirry(q + 1) } label: { kapseli("Seuraava", lahetetty) }
+                            .buttonStyle(.plain)
+                            .disabled(lahetetty)
+                            .accessibilityIdentifier("kysymys-seuraava")
                     }
-                    .buttonStyle(.plain)
-                    .disabled(lahetetty || tyhja)
-                    .accessibilityIdentifier("kysymys-laheta")
                 }
                 .padding(.top, Teema.Vali.s)
             }
@@ -131,6 +143,47 @@ struct KysymysKortti: View {
         .overlay(RoundedRectangle(cornerRadius: Teema.Kulma.arkki).stroke(Color.white.opacity(0.08), lineWidth: 1))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("kysymys-kortti")
+    }
+
+    // Sulku kuten Claude-äpissä (käyttäjä 13.10.2026): X kortin yläkulmassa hylkää kysymyksen.
+    @ViewBuilder private var suljeNappi: some View {
+        if let sulje {
+            Button { lahetetty = true; fokus = nil; sulje() } label: {
+                Image(systemName: "xmark").font(.body.weight(.medium)).foregroundStyle(.primary)
+                    .frame(width: 44, height: 44)
+                    .background(Color(.systemGray4), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .disabled(lahetetty)
+            .accessibilityLabel("Sulje kysymys")
+            .accessibilityIdentifier("kysymys-sulje")
+        }
+    }
+
+    private func siirto(_ kuva: String, _ nimi: String, _ tunnus: String, _ paalla: Bool, _ toiminto: @escaping () -> Void) -> some View {
+        Button(action: toiminto) {
+            Image(systemName: kuva).font(.body.weight(.semibold)).frame(width: 36, height: 36).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(paalla ? Color.primary : Color.secondary.opacity(0.4))
+        .disabled(!paalla || lahetetty)
+        .accessibilityLabel(nimi)
+        .accessibilityIdentifier(tunnus)
+    }
+
+    // Väri Claude-äpin Submit-napista (kuvakaappaus 13.10.2026): vaaleanharmaa kapseli, tummanharmaa teksti.
+    private func kapseli(_ teksti: String, _ himmea: Bool) -> some View {
+        Text(teksti).font(.body.weight(.semibold)).foregroundStyle(Color(white: 0.24))
+            .padding(.horizontal, Teema.Vali.xl).padding(.vertical, Teema.Vali.m)
+            .background(Color(white: himmea ? 0.80 : 0.92), in: Capsule())
+    }
+
+    private func siirry(_ uusi: Int) {
+        guard kysymykset.indices.contains(uusi) else { return }
+        fokus = nil
+        withAnimation(.easeInOut(duration: 0.2)) { nyt = uusi }
+        // Eri korkuinen kysymys: lista vierittää kortin yläreunan taas näkyviin.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { ylos?() }
     }
 
     private func vaihtoehto(_ k: Kysymys, _ q: Int, _ i: Int, _ v: Vaihtoehto) -> some View {
@@ -169,6 +222,10 @@ struct KysymysKortti: View {
         if !joukko.isEmpty {
             muut[q] = ""
             if fokus == q { fokus = nil }
+            // Yksivalinta vie seuraavaan kysymykseen kuten Claude-äpissä; viimeisessä odotetaan Lähetä-nappia.
+            if !kysymykset[q].monivalinta && q < kysymykset.count - 1 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { if nyt == q { siirry(q + 1) } }
+            }
         }
     }
 
@@ -200,7 +257,7 @@ struct Viestilista: View {
                 VStack(alignment: .leading, spacing: Teema.Vali.s) {
                     ForEach(Array(viestit.enumerated()), id: \.offset) { i, v in
                         Viestikupla(viesti: v, vastaa: vastaa, sulje: sulje,
-                                    nayta: { nosta(vierita) }).id(i)
+                                    nayta: { nosta(vierita) }, ylos: { alkuun(vierita) }).id(i)
                     }
                     if odottaa { ProgressView().padding(.leading, Teema.Vali.m).id("odottaa") }
                     Color.clear.frame(height: 1).id("loppu")
@@ -770,5 +827,33 @@ struct SkooppiViestitView: View {
             virhe = error.localizedDescription
         }
         puretaan = false
+    }
+}
+
+// Kortin simulaattorikoe (CHAT-QUESTION-YKSI-KERRALLAAN): SCOPES_KOE_KORTTI=1 avaa kiinteän kolmen kysymyksen kortin
+// ilman palvelua, ja lähetetty vastaus näkyy tekstinä. Oikean istunnon kysymykseen vastaaminen kokeessa lähettäisi
+// vastauksen agentille, joten moniosaisen kortin logiikka todennetaan tällä.
+struct KysymysKoe: View {
+    static let paalla = ProcessInfo.processInfo.environment["SCOPES_KOE_KORTTI"] == "1"
+    @State private var vastaus: String?
+    private let kysymykset = [
+        Kysymys(kysymys: "Mikä on skoopin tarkoitus?", otsikko: "Tarkoitus", monivalinta: false,
+                vaihtoehdot: [Vaihtoehto(nimi: "Kysymyskortti", kuvaus: "Monivalinta chatissa"), Vaihtoehto(nimi: "Muu", kuvaus: nil)]),
+        Kysymys(kysymys: "Mitkä alustat?", otsikko: "Alustat", monivalinta: true,
+                vaihtoehdot: [Vaihtoehto(nimi: "iPhone", kuvaus: nil), Vaihtoehto(nimi: "iPad", kuvaus: nil), Vaihtoehto(nimi: "Mac", kuvaus: nil)]),
+        Kysymys(kysymys: "Aloitetaanko heti?", otsikko: "Aloitus", monivalinta: false,
+                vaihtoehdot: [Vaihtoehto(nimi: "Kyllä", kuvaus: "Työ alkaa tässä keskustelussa"), Vaihtoehto(nimi: "Myöhemmin", kuvaus: nil)]),
+    ]
+    var body: some View {
+        ScrollView {
+            VStack(spacing: Teema.Vali.l) {
+                if let vastaus {
+                    Text(verbatim: vastaus).accessibilityIdentifier("koe-vastaus")
+                } else {
+                    KysymysKortti(kysymykset: kysymykset, vastaa: { vastaus = $0 }, sulje: { vastaus = "suljettu" })
+                }
+            }
+            .padding()
+        }
     }
 }
