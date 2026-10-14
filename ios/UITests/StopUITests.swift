@@ -35,7 +35,7 @@ final class StopUITests: XCTestCase {
 
         stop.tap()
         let alku = Date()
-        XCTAssertTrue(app.buttons["chat-laheta"].waitForExistence(timeout: 10), "kenttä ei vapautunut")
+        XCTAssertTrue(app.buttons["chat-jatka"].waitForExistence(timeout: 10), "play-nappi ei tullut stopin tilalle")
         let kesto = Date().timeIntervalSince(alku)
         XCTAssertFalse(app.buttons["chat-stop"].exists, "stop-nappi jäi näkyviin")
         XCTAssertFalse(app.staticTexts["chat-virhe"].exists, app.staticTexts["chat-virhe"].exists ? app.staticTexts["chat-virhe"].label : "")
@@ -46,6 +46,19 @@ final class StopUITests: XCTestCase {
         Thread.sleep(forTimeInterval: 3)
         XCTAssertEqual(kupla.label, teksti, "vastaus jatkui pysäytyksen jälkeen")
         kuva("chat-stop-pysaytetty")
+        // Kirjoitus vaihtaa playn lähetysnapiksi, tyhjennys takaisin playksi (käyttäjä 14.10.2026).
+        let syote = app.textViews["chat-kentta"].exists ? app.textViews["chat-kentta"] : app.textFields["chat-kentta"]
+        syote.tap()
+        syote.typeText("x")
+        XCTAssertTrue(app.buttons["chat-laheta"].waitForExistence(timeout: 5), "kirjoitus ei vaihtanut lähetysnapiksi")
+        XCTAssertFalse(app.buttons["chat-jatka"].exists, "play näkyy kirjoitetun tekstin kanssa")
+        syote.typeText(XCUIKeyboardKey.delete.rawValue)
+        XCTAssertTrue(app.buttons["chat-jatka"].waitForExistence(timeout: 5), "tyhjennys ei palauttanut playta")
+        // Play lähettää "jatka" ja vaihtuu stopiksi; pysäytys palauttaa playn.
+        app.buttons["chat-jatka"].tap()
+        XCTAssertTrue(app.buttons["chat-stop"].waitForExistence(timeout: 10), "play ei vaihtunut stopiksi")
+        app.buttons["chat-stop"].tap()
+        XCTAssertTrue(app.buttons["chat-jatka"].waitForExistence(timeout: 15), "toinen pysäytys ei palauttanut playta")
         print("CHAT-STOP: kenttä vapautui \(String(format: "%.1f", kesto)) s, osittainen vastaus \(teksti.count) merkkiä")
     }
 
