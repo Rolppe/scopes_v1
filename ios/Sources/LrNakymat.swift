@@ -99,6 +99,13 @@ enum LrTeksti {
             .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.joined(separator: " ")
     }
 
+    // Kirjoittaessa Return on välilyönti myös rivin lopussa: siisti pudottaisi tyhjän loppuosan, ja seuraava
+    // sana liimautuisi edelliseen ("|Koe", UI-koe 14.10.2026). Talteen siistii loppuvälilyönnin.
+    static func valilyonneksi(_ muokattu: String, yksikko: LrYksikko) -> String {
+        guard yksirivinen(yksikko) else { return muokattu }
+        return muokattu.replacingOccurrences(of: "[ \\t]*\\R+[ \\t]*", with: " ", options: .regularExpression)
+    }
+
     // Muokattu teksti saa alkuperäisen rivinvaihtohännän takaisin, jottei rekisterin tulostus liimaa rivejä yhteen.
     static func talteen(_ muokattu: String, yksikko: LrYksikko) -> String {
         let alkuperainen = yksikko.sisalto
@@ -181,7 +188,7 @@ struct LrMuokkausView: View {
         // vain talteen siistii.
         .onChange(of: teksti) { _, uusi in
             if !yksikko.riidassa && uusi.contains(where: \.isNewline) {
-                teksti = LrTeksti.siisti(uusi, yksikko: yksikko)
+                teksti = LrTeksti.valilyonneksi(uusi, yksikko: yksikko)
             }
         }
     }
