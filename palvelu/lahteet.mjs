@@ -166,7 +166,7 @@ function elossa(pid, procStart, proc) {
   } catch { return null; }
 }
 
-// Elävät istunnot: [{ id, nimi, tila, skooppi, konteksti, pysahdys, pakattu, hereilla, alkoi, pid, vanhempi, ruutu, polku }]. polku = transkripti (viestit.mjs); alkoi = startedAt (ms). ruutu = tmux-ruutu (%26) tai null;
+// Elävät istunnot: [{ id, nimi, tila, kysely, skooppi, konteksti, pysahdys, pakattu, hereilla, alkoi, pid, vanhempi, ruutu, polku }]. polku = transkripti (viestit.mjs); alkoi = startedAt (ms). ruutu = tmux-ruutu (%26) tai null;
 // pid, vanhempi ja ruutu ovat hallintatoimintoja varten (toiminnot.mjs: /pakkaa oikeaan ruutuun).
 export function istunnot({ istunnotDir, projektitDir, skooppiNimet, proc = '/proc' }) {
   if (!existsSync(istunnotDir)) return [];
@@ -183,6 +183,8 @@ export function istunnot({ istunnotDir, projektitDir, skooppiNimet, proc = '/pro
       id: s.sessionId,
       nimi: s.name ?? null,
       tila: s.status ?? null,
+      // Kyselykortti (AskUserQuestion) auki: waiting + waitingFor "input needed"; lupakysely on "permission prompt".
+      kysely: s.status === 'waiting' && s.waitingFor === 'input needed',
       skooppi: istunnonSkooppi(s.name ?? '', transkripti, skooppiNimet),
       konteksti: konteksti(transkripti),
       pysahdys: pysahdys(transkripti),
@@ -229,9 +231,12 @@ function viimeisinMuutos(juuri, rekisteri, istunnot) {
 // kummankin tilana working, käyttäjä 14.10.2026); odottaa, jos pakkaamaton istunto odottaa käyttäjää (waiting = kysymys
 // tai lupa, idle = vuoro valmis); muuten pakattu, myös ilman istuntoja. Pakatun istunnon /sa-herätys ei tee siitä
 // käsittelyä; automaattisiirron uusi istunto on pakkaamaton, joten skooppi pysyy aktiivisena siirron yli.
+// kysely (SCOPES-LISTA-KYSELYVARI, käyttäjä 14.10.2026): pakkaamattomassa istunnossa on kyselykortti auki; voittaa
+// käsittelyn, koska kortti pysyy auki vain käyttäjän vastaukseen asti. Muu odotus (vuoro valmis, lupakysely) on odottaa.
 const TYOSKENTELEE = new Set(['busy', 'shell']);
 export function skooppiTila(istunnot) {
   const auki = istunnot.filter((i) => !i.pakattu);
+  if (auki.some((i) => i.kysely)) return 'kysely';
   if (auki.some((i) => TYOSKENTELEE.has(i.tila))) return 'kasittely';
   return auki.length ? 'odottaa' : 'pakattu';
 }

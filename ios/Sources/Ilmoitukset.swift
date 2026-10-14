@@ -63,8 +63,10 @@ func ilmoitukset(edellinen: [SkooppiYhteenveto], uusi: [SkooppiYhteenveto], raja
         let pakattiin = s.tilaNyt == "pakattu" && v.tilaNyt != "pakattu"
         if pakattiin || (v.seuraava != nil && s.seuraava != v.seuraava) {
             r.append(Ilmoitus(skooppi: s.nimi, laji: .valmis, teksti: pakattiin ? "Skooppi pakattiin" : "Paketti valmis: seuraava \(s.seuraava ?? "ei mitään")"))
+        } else if s.tilaNyt == "kysely", v.tilaNyt != "kysely" {
+            r.append(Ilmoitus(skooppi: s.nimi, laji: .odottaa, teksti: "Kysely odottaa vastaustasi"))
         } else if odottaa(s), !odottaa(v) {
-            r.append(Ilmoitus(skooppi: s.nimi, laji: .odottaa, teksti: s.tilaNyt == "odottaa" ? "Istunto odottaa sinua" : "Vuoro valmis"))
+            r.append(Ilmoitus(skooppi: s.nimi, laji: .odottaa, teksti: "Istunto odottaa sinua"))
         }
         if let k = s.suurinKonteksti, k >= raja, (v.suurinKonteksti ?? 0) < raja {
             r.append(Ilmoitus(skooppi: s.nimi, laji: .konteksti, teksti: "Konteksti \(tokenit(k)) — lähellä rajaa"))

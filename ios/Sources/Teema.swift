@@ -26,8 +26,10 @@ enum Teema {
     static let passiivinen = Color(.systemGray5)
     /// Käsittelyssä olevan skoopin kansio (hehkuu); pakattu on harmaa ääriviiva.
     static let kansio = korostus
-    /// Skoopin istunto odottaa käyttäjän vastausta.
-    static let odottaa = Color.yellow
+    /// Skoopin istunnossa on kyselykortti auki (SCOPES-LISTA-KYSELYVARI).
+    static let kysely = Color.yellow
+    /// Skoopin istunto odottaa käyttäjää muuten: vuoro valmis tai lupakysely.
+    static let odottaa = Color.green
 
     // MARK: Välistys — 4 pt:n askel.
 
