@@ -221,6 +221,8 @@ struct JuuriView: View {
 
     func palauta(_ n: Navigaatio) {
         defer { kentta = nil; valinta = nil }
+        // Palkin oma kenttä (haku) ei jää näppäimistöineen näkymään, johon palkki sulkeutuu (DESIGN-UX-A U1).
+        UIResponder.nykyinen?.resignFirstResponder()
         guard let r = kentta, n.nakyma == nakyma, !n.asetuksetAuki, !n.uusiSkooppiAuki,
               n.chatPyynto.n == pyynto || n.chatPyynto.id == chat,
               (r as? UIView)?.window != nil else { return }

@@ -101,15 +101,22 @@ struct Sivupalkki: View, Equatable {
                     Button { navigaatio.uusiSkooppiAuki = true } label: { Image(systemName: "plus") }
                         .accessibilityIdentifier("uusi")
                 }
-                ToolbarItemGroup(placement: .bottomBar) {
+            }
+            // Alapalkki listan alla eikä päällä (DESIGN-UX-A U2): työkalurivin kelluvat napit peittivät alimman rivin
+            // merkit ilman taustaa. Turva-alueen lisäys lyhentää listaa, joten viimeinen rivi vierii palkin yläpuolelle.
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                HStack {
                     Button { navigaatio.avaa(.infra) } label: { Label("Infra", systemImage: "point.3.connected.trianglepath.dotted") }
-                        .labelStyle(.titleAndIcon)
                         .accessibilityIdentifier("sivupalkki-infra")
                     Spacer()
                     Button { navigaatio.asetuksetAuki = true } label: { Label("Asetukset", systemImage: "gearshape") }
-                        .labelStyle(.titleAndIcon)
                         .accessibilityIdentifier("asetukset")
                 }
+                .labelStyle(.titleAndIcon)
+                .padding(.horizontal, Teema.Vali.l)
+                .padding(.vertical, Teema.Vali.m)
+                .background(.bar)
+                .overlay(alignment: .top) { Divider() }
             }
             .refreshable { await lataa() }
         }
