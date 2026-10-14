@@ -42,6 +42,24 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertTrue(osuttava(app.buttons["suodatin-all"], false), "palkki ei sulkeutunut")
     }
 
+    // Asetusten alavalikosta juureen (paluupainikkeen otsikko on juuren otsikko).
+    private func takaisin(_ app: XCUIApplication, _ alavalikko: String) {
+        app.navigationBars[alavalikko].buttons["Asetukset"].tap()
+        XCTAssertTrue(app.navigationBars["Asetukset"].waitForExistence(timeout: 5), "paluu juureen ei onnistunut")
+    }
+
+    // Form luo alemmat rivit vasta vieritettäessä: vieritä, kunnes elementti on olemassa.
+    @discardableResult
+    private func nakyviin(_ app: XCUIApplication, _ e: XCUIElement) -> Bool {
+        for _ in 0..<4 where !e.waitForExistence(timeout: 2) { app.swipeUp() }
+        return e.exists
+    }
+
+    // Form-rivin Toggle: rivin keskikohdan napautus osuu otsikkoon, joten napautetaan oikeaa reunaa.
+    private func kytke(_ e: XCUIElement) {
+        e.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+    }
+
     private func nayta(_ app: XCUIApplication, _ kohde: String) {
         palkki(app)
         XCTAssertTrue(app.buttons[kohde].firstMatch.waitForExistence(timeout: 5), "palkissa ei ole: \(kohde)")
@@ -84,6 +102,7 @@ final class SkoopitUITests: XCTestCase {
         palkki(app)
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'skooppi-'")).firstMatch.waitForExistence(timeout: 20), "skoopit eivät latautuneet tunnelin läpi")
         app.buttons["asetukset"].tap()
+        app.buttons["asetukset-yhteys"].tap()
         let reitti = app.staticTexts["reitti"]
         XCTAssertTrue(reitti.waitForExistence(timeout: 5), "reittirivi puuttuu")
         XCTAssertEqual(reitti.label, "Etätunneli (WireGuard)")
@@ -545,21 +564,71 @@ final class SkoopitUITests: XCTestCase {
         kuva("ilmoitus-napautus")
     }
 
-    // Kontekstirajan säätö Asetuksissa (NOTIFICATIONS-SIMULAATTORI): askel 25 k, Peru ei tallenna.
+    // Kontekstirajan säätö Asetusten Ilmoitukset-alavalikossa (NOTIFICATIONS-SIMULAATTORI, NOTIFICATIONS-ASETUKSET):
+    // askel 25 k, Peru ei tallenna.
     func testIlmoitusRajaAsetuksissa() throws {
         let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
         let app = kaynnista(avain: avain)
         nayta(app, "asetukset")
+        app.buttons["asetukset-ilmoitukset"].tap()
         let raja = app.steppers["ilmoitusraja"]
-        XCTAssertTrue(raja.waitForExistence(timeout: 5), "kontekstirajan säädin puuttuu")
+        XCTAssertTrue(nakyviin(app, raja), "kontekstirajan säädin puuttuu")
         XCTAssertTrue(raja.label.contains("100 k"), raja.label)
         raja.buttons.element(boundBy: 1).tap()
         XCTAssertTrue(raja.label.contains("125 k"), raja.label)
         kuva("ilmoitusraja")
+        takaisin(app, "Ilmoitukset")
         app.buttons["Peru"].tap()
         nayta(app, "asetukset")
-        XCTAssertTrue(app.steppers["ilmoitusraja"].waitForExistence(timeout: 5))
+        app.buttons["asetukset-ilmoitukset"].tap()
+        XCTAssertTrue(nakyviin(app, app.steppers["ilmoitusraja"]))
         XCTAssertTrue(app.steppers["ilmoitusraja"].label.contains("100 k"), "Peru tallensi: \(app.steppers["ilmoitusraja"].label)")
+    }
+
+    // Asetusten alavalikot (NOTIFICATIONS-ASETUKSET 14.10.2026): Yhteys, Ilmoitukset ja Tietoja aukeavat; lajikytkin
+    // tallentuu Tallenna-painikkeella ja Peru hylkää muutoksen; pois kytketty kontekstilaji lukitsee rajan säätimen.
+    func testAsetustenAlavalikot() throws {
+        let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        let app = kaynnista(avain: avain)
+        nayta(app, "asetukset")
+        XCTAssertTrue(app.navigationBars["Asetukset"].waitForExistence(timeout: 5))
+        kuva("asetukset-juuri")
+        app.buttons["asetukset-yhteys"].tap()
+        XCTAssertTrue(app.staticTexts["reitti"].waitForExistence(timeout: 5), "Yhteys-alavalikko ei auennut")
+        XCTAssertTrue(app.secureTextFields["Bearer-avain"].exists, "avainkenttä puuttuu")
+        kuva("asetukset-yhteys")
+        takaisin(app, "Yhteys")
+        app.buttons["asetukset-tietoja"].tap()
+        XCTAssertTrue(app.staticTexts["Allekirjoitus voimassa"].waitForExistence(timeout: 5), "Tietoja-alavalikko ei auennut")
+        kuva("asetukset-tietoja")
+        takaisin(app, "Tietoja")
+        app.buttons["asetukset-ilmoitukset"].tap()
+        let vika = app.switches["ilmoitus-vika"]
+        XCTAssertTrue(app.staticTexts["ilmoituslupa"].waitForExistence(timeout: 5), "luparivi puuttuu")
+        XCTAssertTrue(nakyviin(app, vika), "lajikytkimet puuttuvat")
+        XCTAssertEqual(vika.value as? String, "1")
+        kytke(vika)
+        XCTAssertEqual(vika.value as? String, "0")
+        let konteksti = app.switches["ilmoitus-konteksti"]
+        kytke(konteksti)
+        XCTAssertTrue(nakyviin(app, app.steppers["ilmoitusraja"]), "kontekstirajan säädin puuttuu")
+        XCTAssertFalse(app.steppers["ilmoitusraja"].isEnabled, "raja säädettävissä, vaikka kontekstilaji on pois")
+        kuva("asetukset-ilmoitukset")
+        takaisin(app, "Ilmoitukset")
+        app.buttons["Peru"].tap()
+        nayta(app, "asetukset")
+        app.buttons["asetukset-ilmoitukset"].tap()
+        XCTAssertTrue(nakyviin(app, app.switches["ilmoitus-vika"]))
+        XCTAssertEqual(app.switches["ilmoitus-vika"].value as? String, "1", "Peru tallensi kytkimen")
+        kytke(app.switches["ilmoitus-vika"])
+        app.buttons["Tallenna"].tap()
+        nayta(app, "asetukset")
+        app.buttons["asetukset-ilmoitukset"].tap()
+        XCTAssertTrue(nakyviin(app, app.switches["ilmoitus-vika"]))
+        XCTAssertEqual(app.switches["ilmoitus-vika"].value as? String, "0", "Tallenna ei tallentanut kytkintä")
+        // Palauta oletus, jotta seuraava ajo alkaa samasta tilasta.
+        kytke(app.switches["ilmoitus-vika"])
+        app.buttons["Tallenna"].tap()
     }
 
     func testVaaraAvainNayttaaVirheen() {

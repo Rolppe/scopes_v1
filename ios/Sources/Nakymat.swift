@@ -291,51 +291,82 @@ struct UusiSkooppiView: View {
     }
 }
 
+// Asetukset alavalikkoina (NOTIFICATIONS-ASETUKSET 14.10.2026): Yhteys, Ilmoitukset ja Tietoja. Arvot pidetään tässä,
+// ja Tallenna kirjoittaa ne kerralla; Peru hylkää myös alavalikoissa tehdyt muutokset.
 struct AsetuksetView: View {
     @EnvironmentObject private var asetukset: Asetukset
     @Environment(\.dismiss) private var sulje
     @State private var osoite = ""
     @State private var avain = ""
-    @State private var reitti = Reitti.Tila.tuntematon
     @State private var raja = ilmoitusRaja()
+    @State private var paalla = Dictionary(uniqueKeysWithValues: IlmoitusLaji.allCases.map { ($0, ilmoitusPaalla($0)) })
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    Text(reittiTeksti).accessibilityIdentifier("reitti")
-                } header: { Text("Yhteys") } footer: {
-                    Text("Kodin ulkopuolella äppi käyttää omaa WireGuard-tunneliaan. Asetus haetaan palvelimelta kotiverkossa.")
+            List {
+                NavigationLink { YhteysAsetukset(osoite: $osoite, avain: $avain).toolbar { tallennaPainike } } label: {
+                    Label("Yhteys", systemImage: "network")
                 }
-                Section("Palvelin") {
-                    TextField("http://osoite:8787", text: $osoite)
-                        .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                .accessibilityIdentifier("asetukset-yhteys")
+                NavigationLink { IlmoitusAsetukset(raja: $raja, paalla: $paalla).toolbar { tallennaPainike } } label: {
+                    Label("Ilmoitukset", systemImage: "bell.badge")
                 }
-                Section {
-                    SecureField("Bearer-avain", text: $avain)
-                } header: { Text("Avain") } footer: {
-                    Text("Palvelimen tiedostosta ~/.config/scopes/avain. Tallennetaan laitteen avainnippuun.")
+                .accessibilityIdentifier("asetukset-ilmoitukset")
+                NavigationLink { TietojaAsetukset() } label: {
+                    Label("Tietoja", systemImage: "info.circle")
                 }
-                IlmoitusRajaOsio(raja: $raja)
+                .accessibilityIdentifier("asetukset-tietoja")
             }
             .navigationTitle("Asetukset")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Peru") { sulje() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Tallenna") {
-                        asetukset.osoite = osoite
-                        asetukset.avain = avain
-                        tallennaIlmoitusRaja(raja)
-                        sulje()
-                    }
-                }
+                tallennaPainike
             }
             .onAppear {
                 osoite = asetukset.osoite
                 avain = asetukset.avain
             }
-            .task { reitti = await Reitti.jaettu.tila }
         }
+    }
+
+    // Alavalikoissa paluupainike on Perun paikalla, joten Peru on vain juuressa; Tallenna on joka tasolla.
+    private var tallennaPainike: some ToolbarContent {
+        ToolbarItem(placement: .confirmationAction) {
+            Button("Tallenna") {
+                asetukset.osoite = osoite
+                asetukset.avain = avain
+                tallennaIlmoitusRaja(raja)
+                for (l, p) in paalla { tallennaIlmoitusPaalla(l, p) }
+                sulje()
+            }
+        }
+    }
+}
+
+struct YhteysAsetukset: View {
+    @Binding var osoite: String
+    @Binding var avain: String
+    @State private var reitti = Reitti.Tila.tuntematon
+
+    var body: some View {
+        Form {
+            Section {
+                Text(reittiTeksti).accessibilityIdentifier("reitti")
+            } header: { Text("Reitti") } footer: {
+                Text("Kodin ulkopuolella äppi käyttää omaa WireGuard-tunneliaan. Asetus haetaan palvelimelta kotiverkossa.")
+            }
+            Section("Palvelin") {
+                TextField("http://osoite:8787", text: $osoite)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+            }
+            Section {
+                SecureField("Bearer-avain", text: $avain)
+            } header: { Text("Avain") } footer: {
+                Text("Palvelimen tiedostosta ~/.config/scopes/avain. Tallennetaan laitteen avainnippuun.")
+            }
+        }
+        .navigationTitle("Yhteys")
+        .task { reitti = await Reitti.jaettu.tila }
     }
 
     private var reittiTeksti: String {
@@ -346,6 +377,38 @@ struct AsetuksetView: View {
         case .tuntematon: return "Ei vielä yhdistetty"
         }
     }
+}
+
+// Versio ja allekirjoituksen voimassaolo: ilmainen Apple ID -profiili vanhenee 7 päivässä, ja Macin agentti uusii sen
+// (DEMO-SCOPES-UUSINTA). Profiili luetaan äpin embedded.mobileprovisionista; simulaattorissa sitä ei ole.
+struct TietojaAsetukset: View {
+    var body: some View {
+        Form {
+            LabeledContent("Versio", value: versio).accessibilityIdentifier("tietoja-versio")
+            LabeledContent("Allekirjoitus voimassa", value: voimassa).accessibilityIdentifier("tietoja-allekirjoitus")
+        }
+        .navigationTitle("Tietoja")
+    }
+
+    private var versio: String {
+        let i = Bundle.main.infoDictionary
+        return "\(i?["CFBundleShortVersionString"] as? String ?? "?") (\(i?["CFBundleVersion"] as? String ?? "?"))"
+    }
+
+    private var voimassa: String {
+        guard let pvm = profiilinVanheneminen() else { return "ei profiilia (simulaattori)" }
+        return pvm.formatted(date: .abbreviated, time: .shortened)
+    }
+}
+
+func profiilinVanheneminen(_ bundle: Bundle = .main) -> Date? {
+    guard let url = bundle.url(forResource: "embedded", withExtension: "mobileprovision"),
+          let data = try? Data(contentsOf: url),
+          let alku = data.range(of: Data("<?xml".utf8)),
+          let loppu = data.range(of: Data("</plist>".utf8), in: alku.lowerBound..<data.endIndex),
+          let plist = try? PropertyListSerialization.propertyList(from: data[alku.lowerBound..<loppu.upperBound], format: nil) as? [String: Any]
+    else { return nil }
+    return plist["ExpirationDate"] as? Date
 }
 
 // Skoopin konteksti (SCOPES-INFRA-KONTEKSTI 13.10.2026): tiedostot, jotka skoopin purku ja työ lataavat, otsikoittain
