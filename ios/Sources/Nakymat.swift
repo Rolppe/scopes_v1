@@ -14,9 +14,7 @@ struct SkooppiRivi: View {
             HStack(spacing: 12) {
                 Label("\(skooppi.avoimia)", systemImage: "list.bullet")
                 Label("\(skooppi.vikoja)", systemImage: "ladybug").foregroundStyle(skooppi.vikoja > 0 ? .orange : .secondary)
-                if let k = skooppi.suurinKonteksti {
-                    Label(tokenit(k), systemImage: "brain").foregroundStyle(.blue)
-                }
+                if let k = skooppi.suurinKonteksti { KontekstiMerkki(maara: k).foregroundStyle(.blue) }
             }
             .font(.caption).foregroundStyle(.secondary)
         }
@@ -35,8 +33,51 @@ struct SkooppiNakymaView: View {
     @State private var hereillaToive: Bool?
 
     var body: some View {
+        // Tiedot ennen toimintoja (DESIGN-SKOOPPINAKYMA U5): ensin seuraava paketti, konteksti ja istunnot, joiden
+        // perusteella toiminto valitaan; pitkät rivilistat (avoimet, viat, rekisteri) toimintojen jälkeen.
         List {
             if let virhe { Text(virhe).foregroundStyle(.red) }
+            if let n = nakyma {
+                Section("Seuraava paketti") {
+                    if let s = n.seuraava, let id = s.id {
+                        Text(id).font(.headline).accessibilityIdentifier("seuraava-id")
+                        if !s.kuvaus.isEmpty { Text(s.kuvaus).font(.callout) }
+                        if let a = s.aloitus { Text(a).font(.caption.monospaced()).foregroundStyle(.secondary) }
+                    } else {
+                        Text("ei mitään").foregroundStyle(.secondary).accessibilityIdentifier("seuraava-ei")
+                    }
+                }
+                if let k = n.konteksti {
+                    Section("Konteksti") {
+                        NavigationLink {
+                            KontekstiView(nimi: nimi, konteksti: k)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack {
+                                    Text("Tiedostot ≈ \(tokenit(k.tokenit))").monospacedDigit()
+                                    Spacer()
+                                    if let m = k.istunnot.compactMap(\.mitattu).max() { KontekstiMerkki(maara: m).foregroundStyle(.secondary) }
+                                }
+                                OsuusPalkki(osat: k.ryhmat.map(\.tokenit))
+                            }
+                        }
+                        .accessibilityIdentifier("konteksti-avaa")
+                    }
+                }
+                Section("Istunnot (\(n.istunnot.count))") {
+                    if n.istunnot.isEmpty { Text("ei käynnissä olevia istuntoja").foregroundStyle(.secondary) }
+                    ForEach(n.istunnot) { i in
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(i.nimi ?? i.id.prefix(8).description)
+                                Text(istunnonTila(i.tila) ?? "").font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if let k = i.konteksti { KontekstiMerkki(maara: k.tokenit).foregroundStyle(.secondary) }
+                        }
+                    }
+                }
+            }
             Section {
                 Button("Pura uuteen istuntoon") { vahvista = .pura }.accessibilityIdentifier("toiminto-pura")
                 // Pakkaus ja siirto lähetetään auki olevaan istuntoon: ilman sitä napit ovat lukossa eivätkä odota
@@ -66,45 +107,6 @@ struct SkooppiNakymaView: View {
             }
             .disabled(kaynnissa != nil)
             if let n = nakyma {
-                Section("Seuraava paketti") {
-                    if let s = n.seuraava, let id = s.id {
-                        Text(id).font(.headline).accessibilityIdentifier("seuraava-id")
-                        if !s.kuvaus.isEmpty { Text(s.kuvaus).font(.callout) }
-                        if let a = s.aloitus { Text(a).font(.caption.monospaced()).foregroundStyle(.secondary) }
-                    } else {
-                        Text("ei mitään").foregroundStyle(.secondary).accessibilityIdentifier("seuraava-ei")
-                    }
-                }
-                if let k = n.konteksti {
-                    Section("Konteksti") {
-                        NavigationLink {
-                            KontekstiView(nimi: nimi, konteksti: k)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack {
-                                    Text("Tiedostot \(k.ryhmat.count), istunnot \(k.istunnot.count)")
-                                    Spacer()
-                                    Text("≈ \(tokenit(k.tokenit))").monospacedDigit().foregroundStyle(.secondary)
-                                }
-                                OsuusPalkki(osat: k.ryhmat.map(\.tokenit))
-                            }
-                        }
-                        .accessibilityIdentifier("konteksti-avaa")
-                    }
-                }
-                Section("Istunnot (\(n.istunnot.count))") {
-                    if n.istunnot.isEmpty { Text("ei käynnissä olevia istuntoja").foregroundStyle(.secondary) }
-                    ForEach(n.istunnot) { i in
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text(i.nimi ?? i.id.prefix(8).description)
-                                Text(i.tila ?? "").font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Text(i.konteksti.map { tokenit($0.tokenit) } ?? "–").monospacedDigit()
-                        }
-                    }
-                }
                 rivit("Avoimet asiat", n.avoimet.filter(\.avoin))
                 rivit("Viat", n.viat.filter(\.avoin))
                 Section("Rekisteri") {
@@ -116,10 +118,26 @@ struct SkooppiNakymaView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await lataa() }
         .task { await lataa() }
-        .confirmationDialog(vahvista == .pura ? "Avataanko skoopille uusi istunto (/pura)?" : "Lähetetäänkö skoopin istuntoon \(vahvista.map(komento) ?? "")?",
+        .confirmationDialog(vahvista.map { vahvistus($0).kysymys } ?? "",
                             isPresented: Binding(get: { vahvista != nil }, set: { if !$0 { vahvista = nil } }),
                             titleVisibility: .visible, presenting: vahvista) { t in
-            Button(t == .pura ? "Pura" : t == .pakkaa ? "Pakkaa" : "Siirrä") { Task { await aja(t) } }.accessibilityIdentifier("vahvista")
+            Button(vahvistus(t).nappi) { Task { await aja(t) } }.accessibilityIdentifier("vahvista")
+        } message: { t in
+            Text(vahvistus(t).seuraus).accessibilityIdentifier("vahvista-seuraus")
+        }
+    }
+
+    // Vahvistus kertoo, mitä istunnolle tapahtuu, ei mikä komento lähtee (DESIGN-SKOOPPINAKYMA U6). /pakkaa kirjaa
+    // tilanteen ja jättää istunnon auki; /automaattisiirto pakkaa ja vaihtaa istunnon (automaattisiirto-taito).
+    private func vahvistus(_ t: Toiminto) -> (kysymys: String, seuraus: String, nappi: String) {
+        switch t {
+        case .pura: ("Avataanko skoopille uusi istunto?",
+                     "Uusi Claude-istunto käynnistyy ja lukee skoopin tilanteen rekisteristä.", "Pura")
+        case .pakkaa: ("Pakataanko istunto?",
+                       "Istunto kirjaa tehdyn työn ja seuraavan paketin skoopin rekisteriin ja jää auki.", "Pakkaa")
+        case .automaattisiirto: ("Siirretäänkö työ uuteen istuntoon?",
+                                 "Istunto pakataan ja suljetaan, ja uusi istunto jatkaa samasta kohdasta.", "Siirrä")
+        case .herata, .herataPois: ("", "", "")
         }
     }
 
@@ -345,9 +363,9 @@ struct KontekstiView: View {
                     OsuusRivi(nimi: r.nimi, alaotsikko: r.polku, maara: r.tokenit, kaikki: konteksti.tokenit, vari: osuusVari(n))
                 }
             } header: {
-                Text("Tiedostot ≈ \(tokenit(konteksti.tokenit)) tokenia")
+                Text("Tiedostot ≈ \(tokenit(konteksti.tokenit))")
             } footer: {
-                Text("Tokenit arvioitu merkkimäärästä (≈ 1,8 merkkiä/token).")
+                Text("Luvut ovat tokeneita. ≈ = arvioitu merkkimäärästä (≈ 1,8 merkkiä/token); \(Image(systemName: "brain")) = istunnon mitattu konteksti.")
             }
             ForEach(konteksti.istunnot) { i in
                 let kaikki = i.mitattu ?? i.osat.reduce(0) { $0 + $1.tokenit }
@@ -357,7 +375,7 @@ struct KontekstiView: View {
                         OsuusRivi(nimi: o.nimi, maara: o.tokenit, kaikki: kaikki, vari: osuusVari(n))
                     }
                 } header: {
-                    Text("Istunto \(i.nimi ?? String(i.id.prefix(8)))" + (i.mitattu.map { " — \(tokenit($0)) tokenia" } ?? ""))
+                    Text("Istunto \(i.nimi ?? String(i.id.prefix(8)))\(i.mitattu.map { Text(" · \(Image(systemName: "brain")) \(tokenit($0))") } ?? Text(""))")
                 } footer: {
                     Text("Yhteismäärä on mitattu istunnon viimeisestä vastauksesta, osat arvioitu transkriptista. Jäännös on työkalumääritykset ja agentin ajattelu, joita transkriptissa ei ole tekstinä.")
                 }
@@ -454,3 +472,23 @@ struct OsuusPalkki: View {
 
 private let osuusVarit: [Color] = [.blue, .orange, .green, .purple, .pink, .teal, .indigo, .brown, .gray]
 func osuusVari(_ n: Int) -> Color { osuusVarit[n % osuusVarit.count] }
+
+// Kontekstin yksi sanasto (DESIGN-SKOOPPINAKYMA U9): istunnon mitattu konteksti on aina aivokuvake ja "N k" ilman
+// ≈-merkkiä; tiedostojen arvio on aina "Tiedostot ≈ N k". Sana "tokenia" vain selitteessä.
+struct KontekstiMerkki: View {
+    let maara: Int
+    var body: some View {
+        Label(tokenit(maara), systemImage: "brain").monospacedDigit()
+            .accessibilityLabel("konteksti \(tokenit(maara))")
+    }
+}
+
+// Istunnon tila suomeksi (U8); tuntematon tila näytetään sellaisenaan.
+func istunnonTila(_ tila: String?) -> String? {
+    switch tila {
+    case "busy": "Työskentelee"
+    case "waiting": "Odottaa vastaustasi"
+    case "idle": "Vapaa"
+    default: tila
+    }
+}

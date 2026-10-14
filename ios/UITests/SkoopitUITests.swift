@@ -607,7 +607,14 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertTrue(app.buttons["viestit-pura"].exists)
         kuva("ei-auki")
         app.buttons["tiedot"].tap()
-        XCTAssertTrue(app.buttons["toiminto-pakkaa"].waitForExistence(timeout: 15))
+        // Tiedot ennen toimintoja (DESIGN-SKOOPPINAKYMA U5): seuraava paketti ylimpänä, toiminnot sen alla.
+        let seuraava = app.staticTexts.matching(NSPredicate(format: "identifier IN {'seuraava-id', 'seuraava-ei'}")).firstMatch
+        XCTAssertTrue(seuraava.waitForExistence(timeout: 15), "seuraava paketti puuttuu")
+        kuva("tiedot-ylla")
+        let pakkaa = app.buttons["toiminto-pakkaa"]
+        if pakkaa.exists && pakkaa.isHittable { XCTAssertLessThan(seuraava.frame.minY, pakkaa.frame.minY, "toiminnot ennen tietoja") }
+        for _ in 0..<4 where !(pakkaa.exists && pakkaa.isHittable) { app.swipeUp() }
+        XCTAssertTrue(pakkaa.waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["toiminto-pura"].exists)
         // Automaattisiirto pakkausnapin alla ja herätyskytkin sen alla; ilman istuntoa kytkin on pois ja lukittu.
         let siirto = app.buttons["toiminto-automaattisiirto"], herata = app.switches["toiminto-hereilla"]
@@ -620,6 +627,13 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertFalse(siirto.isEnabled, "siirto ilman istuntoa ei saa olla painettavissa")
         XCTAssertTrue(app.staticTexts["toiminto-ei-istuntoa"].exists, "selite puuttuu")
         kuva("toiminnot")
+        // Vahvistus kertoo seurauksen, ei komentoa (U6). Vahvistusta ei paineta: se avaisi istunnon.
+        let pura = app.buttons["toiminto-pura"]
+        if !pura.isHittable { app.swipeDown() }
+        pura.tap()
+        XCTAssertTrue(app.staticTexts["Avataanko skoopille uusi istunto?"].waitForExistence(timeout: 5), "vahvistuksen kysymys puuttuu")
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Uusi Claude-istunto käynnistyy'")).firstMatch.exists, "seurauslause puuttuu")
+        kuva("pura-vahvistus")
     }
 
     // Kirjoittava koe (DEMO-SCOPES-PUHELIN): avaa oikean istunnon. Ajetaan vain, kun SCOPES_KOE_PURA nimeää koeskoopin.
