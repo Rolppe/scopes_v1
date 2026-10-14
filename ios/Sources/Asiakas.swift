@@ -53,6 +53,25 @@ struct Asiakas {
         try await hae("/api/skoopit/\(koodattu(nimi))/\(toiminto.rawValue)", metodi: "POST", aikaraja: 150)
     }
 
+    // Rekisterisynkka (LOCALREGISTER-APPI, Lr.swift; palvelinpää scopes/localregister/palvelu.mjs). Ensimmäinen haku
+    // tuo koko kaksoiskappaleen (~5 500 yksikköä), ja tiivistekysely voi odottaa palvelun uudelleentuontia: pidempi raja.
+    func lrTiivisteet() async throws -> LrTiivisteet { try await hae("/api/lr/tiiviste", aikaraja: 30) }
+
+    func lrListat(_ rekisterit: [String]) async throws -> [String: LrLista] {
+        try await hae("/api/lr/listat", metodi: "POST", runko: try JSONEncoder().encode(["rekisterit": rekisterit]), aikaraja: 60)
+    }
+
+    func lrHae(_ rekisteri: String, _ idt: [String]) async throws -> [LrYksikko] {
+        struct Runko: Encodable { let rekisteri: String; let idt: [String] }
+        let v: LrHaku = try await hae("/api/lr/hae", metodi: "POST", runko: try JSONEncoder().encode(Runko(rekisteri: rekisteri, idt: idt)), aikaraja: 60)
+        return v.yksikot
+    }
+
+    func lrLaheta(_ yksikot: [LrYksikko]) async throws -> LrLahetys {
+        struct Runko: Encodable { let metat: [LrMeta]; let yksikot: [LrYksikko] }
+        return try await hae("/api/lr/laheta", metodi: "POST", runko: try JSONEncoder().encode(Runko(metat: [], yksikot: yksikot)), aikaraja: 60)
+    }
+
     // Pakkauskytkimet (käyttäjä 14.10.2026): vanha palvelu ilman reittiä vastaa 404, jolloin näkymä piilottaa kytkimet.
     func pakkausKytkimet() async throws -> PakkausKytkimet { try await hae("/api/asetukset") }
 

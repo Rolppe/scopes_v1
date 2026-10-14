@@ -885,6 +885,7 @@ struct SkooppiViestitView: View {
         virhe = nil
         do {
             _ = try await asiakas.toiminto(.pura, nimi)
+            Lr.jaettu.laukaise(.toiminto)
             for _ in 0..<24 {
                 await lataa()
                 if tila?.auki == true { break }

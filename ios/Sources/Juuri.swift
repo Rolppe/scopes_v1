@@ -23,12 +23,14 @@ struct SkoopitApp: App {
                         Ilmoittaja.jaettu.avaa = { navigaatio.avaaSkooppi($0) }
                         Ilmoittaja.jaettu.kaynnista(asetukset)
                         Diagnostiikka.jaettu.kaynnista(asetukset)
+                        Lr.jaettu.kaynnista(asetukset)
                     }
             }
         }
         .onChange(of: vaihe) {
             if vaihe == .active { Task { await Reitti.jaettu.heraa() } }
             Ilmoittaja.jaettu.vaihe(vaihe, asetukset)
+            Lr.jaettu.vaihe(vaihe)
         }
     }
 }
