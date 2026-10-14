@@ -1,5 +1,5 @@
 // Pyynnöt palveluun Bearer-avaimella: luku GET:llä, hallintatoiminnot POST:lla (DEMO-SCOPES-HALLINTA).
-// Virheviesti tulee palvelun `virhe`-kentästä, kun se on.
+// Virheviesti tulee palvelun `virhe`-kentästä, kun se on, käyttäjän kielelle käännettynä.
 import Foundation
 
 struct Asiakas {
@@ -12,9 +12,32 @@ struct Asiakas {
         var errorDescription: String? {
             switch self {
             case .osoite: return "Palvelimen osoite ei kelpaa."
-            case let .palvelu(koodi, viesti): return "Palvelu vastasi \(koodi): \(viesti)"
+            case let .palvelu(koodi, viesti): return Asiakas.selkokielinen(koodi, viesti)
             }
         }
+    }
+
+    // Palvelun hylkäys käyttäjän kielellä (DESIGN-UX-A U3): ei HTTP-koodeja, tmuxia eikä slash-komentoja. Tunnetut
+    // viestit (palvelu/toiminnot.mjs, viestit.mjs) käännetään seuraukseksi ja neuvoksi; tuntematon näytetään sellaisenaan.
+    private static let tunnetut: [(String, String)] = [
+        ("ei ole tmux-istuntoa", "Skooppi ei ole auki. Avaa se ensin: Pura uuteen istuntoon."),
+        ("ei ole auki tmuxissa", "Skooppi ei ole auki. Avaa se ensin: Pura uuteen istuntoon."),
+        ("useita tmux-istuntoja", "Skoopilla on auki useampi istunto. Sulje ylimääräiset ja yritä uudelleen."),
+        ("tmux-ruutu ei täsmää", "Istuntoa ei tavoitettu. Päivitä näkymä ja yritä uudelleen."),
+        ("send-keys epäonnistui", "Viesti ei mennyt istuntoon. Yritä uudelleen."),
+        ("pakattu istunto on vielä varattu", "Edellinen istunto tekee vielä töitä. Yritä, kun se on valmis."),
+        ("istunto on varattu", "Istunto tekee juuri töitä. Yritä, kun vuoro on valmis."),
+        ("jo käynnissä oleva istunto", "Skoopilla on jo istunto auki."),
+        ("skooppi on jo olemassa", "Tämän niminen skooppi on jo olemassa."),
+        ("toinen toiminto on käynnissä", "Toinen toiminto on vielä kesken. Yritä hetken kuluttua."),
+        ("tuntematon skooppi", "Skooppia ei löydy palvelimelta."),
+        ("chat-vastaus on vielä kesken", "Edellinen vastaus on vielä tulossa."),
+    ]
+
+    static func selkokielinen(_ koodi: Int, _ viesti: String) -> String {
+        if let (_, selko) = tunnetut.first(where: { viesti.contains($0.0) }) { return selko }
+        if koodi == 401 || koodi == 403 { return "Avain ei kelpaa. Tarkista avain asetuksissa." }
+        return viesti.prefix(1).uppercased() + viesti.dropFirst()
     }
 
     func skoopit() async throws -> [SkooppiYhteenveto] { try await hae("/api/skoopit") }

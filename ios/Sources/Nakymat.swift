@@ -37,11 +37,17 @@ struct SkooppiNakymaView: View {
     var body: some View {
         List {
             if let virhe { Text(virhe).foregroundStyle(.red) }
-            Section("Toiminnot") {
+            Section {
                 Button("Pura uuteen istuntoon") { vahvista = .pura }.accessibilityIdentifier("toiminto-pura")
-                Button("Pakkaa istunto") { vahvista = .pakkaa }.accessibilityIdentifier("toiminto-pakkaa")
+                // Pakkaus ja siirto lähetetään auki olevaan istuntoon: ilman sitä napit ovat lukossa eivätkä odota
+                // palvelun hylkäystä (DESIGN-UX-A U4).
+                Button("Pakkaa istunto") { vahvista = .pakkaa }
+                    .disabled(avoinIstunto == nil)
+                    .accessibilityIdentifier("toiminto-pakkaa")
                 // Automaattisiirto ja herätyskytkin pakkausnapin alla (käyttäjä 13.10.2026).
-                Button("Automaattisiirto") { vahvista = .automaattisiirto }.accessibilityIdentifier("toiminto-automaattisiirto")
+                Button("Automaattisiirto") { vahvista = .automaattisiirto }
+                    .disabled(avoinIstunto == nil)
+                    .accessibilityIdentifier("toiminto-automaattisiirto")
                 Toggle("Pidä muisti hereillä", isOn: Binding(get: { hereilla }, set: { p in Task { await kytke(p) } }))
                     .disabled(avoinIstunto == nil)
                     .accessibilityIdentifier("toiminto-hereilla")
@@ -52,6 +58,11 @@ struct SkooppiNakymaView: View {
                 if let k = kaynnissa { ProgressView(k == .pura ? "Avataan istuntoa…" : "Lähetetään \(komento(k))…") }
                 if let toimintoVirhe { Text(toimintoVirhe).foregroundStyle(.red).accessibilityIdentifier("toiminto-virhe") }
                 if let tulos { ToimintoTulos(tulos: tulos, skooppi: nimi) }
+            } header: { Text("Toiminnot") } footer: {
+                if nakyma != nil && avoinIstunto == nil {
+                    Text("Skooppi ei ole auki. Pakkaus, siirto ja herätys tarvitsevat istunnon: avaa se ensin purulla.")
+                        .accessibilityIdentifier("toiminto-ei-istuntoa")
+                }
             }
             .disabled(kaynnissa != nil)
             if let n = nakyma {
@@ -211,6 +222,10 @@ struct UusiSkooppiView: View {
     @State private var kaynnissa = false
     @State private var tulos: ToimintoVastaus?
     @State private var virhe: String?
+    // Olemassa olevat nimet tarkistetaan äpissä ennen lähetystä (DESIGN-UX-A U4); palvelu tarkistaa ne silti.
+    @State private var varatut: Set<String> = []
+
+    private var varattu: Bool { varatut.contains(nimi) }
 
     var body: some View {
         NavigationStack {
@@ -220,11 +235,16 @@ struct UusiSkooppiView: View {
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                         .accessibilityIdentifier("uusi-nimi")
                 } header: { Text("Skoopin nimi") } footer: {
-                    Text("1–4 sanaa: pienet kirjaimet a–z, numerot ja viivat. Palvelin avaa istunnon, joka ajaa /pura uusi <nimi>.")
+                    if varattu {
+                        Text("Tämän niminen skooppi on jo olemassa.").foregroundStyle(Teema.virhe)
+                            .accessibilityIdentifier("uusi-varattu")
+                    } else {
+                        Text("1–4 sanaa: pienet kirjaimet a–z, numerot ja viivat. Palvelin avaa skoopille uuden istunnon.")
+                    }
                 }
                 Section {
                     Button("Luo skooppi") { vahvista = true }
-                        .disabled(!kelpaaUudeksi(nimi) || kaynnissa)
+                        .disabled(!kelpaaUudeksi(nimi) || varattu || kaynnissa)
                         .accessibilityIdentifier("uusi-luo")
                     if kaynnissa { ProgressView("Avataan istuntoa…") }
                     if let virhe { Text(virhe).foregroundStyle(.red).accessibilityIdentifier("uusi-virhe") }
@@ -233,6 +253,7 @@ struct UusiSkooppiView: View {
             }
             .navigationTitle("Uusi skooppi")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Sulje") { sulje() } } }
+            .task { varatut = Set(((try? await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).skoopit()) ?? []).map(\.nimi)) }
             .confirmationDialog("Luodaanko skooppi \(nimi)?", isPresented: $vahvista, titleVisibility: .visible) {
                 Button("Luo") { Task { await luo() } }.accessibilityIdentifier("vahvista")
             }

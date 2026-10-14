@@ -118,6 +118,30 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertFalse(app.keyboards.firstMatch.waitForExistence(timeout: 2), "näppäimistö palasi toiseen näkymään")
     }
 
+    // Alapalkki on listan alla eikä päällä (DESIGN-UX-A U2): loppuun vieritettynä alin rivi on kokonaan napin yllä.
+    func testAlapalkkiEiPeitaListaa() throws {
+        let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        let app = kaynnista(avain: avain)
+        palkki(app)
+        let infra = app.buttons["sivupalkki-infra"]
+        XCTAssertTrue(infra.waitForExistence(timeout: 15))
+        let rivit = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'skooppi-' OR identifier BEGINSWITH 'chat-'"))
+        XCTAssertTrue(rivit.firstMatch.waitForExistence(timeout: 15), "listassa ei rivejä")
+        // Vieritetään, kunnes viimeinen ladattu rivi ei enää liiku: vasta lopussa alin rivi ei saa olla palkin takana.
+        var edellinen = CGRect.null
+        for _ in 0..<40 {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.7))
+                .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.15)))
+            sleep(1)
+            let nyt = rivit.allElementsBoundByIndex.last?.frame ?? .null
+            if nyt == edellinen { break }
+            edellinen = nyt
+        }
+        let alin = try XCTUnwrap(rivit.allElementsBoundByIndex.filter(\.isHittable).max { $0.frame.maxY < $1.frame.maxY })
+        XCTAssertLessThanOrEqual(alin.frame.maxY, infra.frame.minY, "alin rivi jää alapalkin alle: \(alin.identifier)")
+        kuva("lista-alareuna")
+    }
+
     func testListaJaSkooppi() throws {
         let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
         let app = kaynnista(avain: avain)
@@ -542,12 +566,16 @@ final class SkoopitUITests: XCTestCase {
         let app = kaynnista(avain: "vaara-avain")
         let virhe = app.staticTexts["chat-virhe"]
         XCTAssertTrue(virhe.waitForExistence(timeout: 15))
-        XCTAssertTrue(virhe.label.contains("401"), virhe.label)
+        // Selkokieli (DESIGN-UX-A U3): ei HTTP-koodia, vaan mitä tehdä.
+        XCTAssertTrue(virhe.label.contains("Avain ei kelpaa"), virhe.label)
+        XCTAssertFalse(virhe.label.contains("401"), virhe.label)
+        kuva("vaara-avain")
     }
 
-    // Hallintatoiminnot (DEMO-SCOPES-HALLINTA): testit käyttävät vain palvelun hylkäämiä pyyntöjä, joten
-    // simulaattoriajo ei avaa istuntoja, pakkaa eikä luo skooppeja. Onnistunut polku todennetaan palvelimella.
-    func testUusiSkooppiTarkistaaNimenJaPalvelunHylkays() throws {
+    // Hallintatoiminnot (DEMO-SCOPES-HALLINTA): testit eivät lähetä hyväksyttäviä pyyntöjä, joten simulaattoriajo
+    // ei avaa istuntoja, pakkaa eikä luo skooppeja. Onnistunut polku todennetaan palvelimella. Varattu nimi ja
+    // puuttuva istunto estetään äpissä ennen lähetystä (DESIGN-UX-A U4).
+    func testUusiSkooppiTarkistaaNimen() throws {
         let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
         let app = kaynnista(avain: avain)
         palkki(app)
@@ -560,23 +588,20 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertFalse(app.buttons["uusi-luo"].isEnabled, "kelvoton nimi ei saa olla lähetettävissä")
         kentta.clearText()
         kentta.typeText("scopes")
-        XCTAssertTrue(app.buttons["uusi-luo"].isEnabled)
-        app.buttons["uusi-luo"].tap()
-        XCTAssertTrue(app.buttons["Luo"].firstMatch.waitForExistence(timeout: 5), "vahvistus puuttuu")
-        app.buttons["Luo"].firstMatch.tap()
-        let virhe = app.staticTexts["uusi-virhe"]
-        XCTAssertTrue(virhe.waitForExistence(timeout: 20))
-        XCTAssertTrue(virhe.label.contains("409"), virhe.label)
-        kuva("uusi-hylatty")
+        XCTAssertTrue(app.staticTexts["uusi-varattu"].waitForExistence(timeout: 15), "varattua nimeä ei tunnistettu")
+        XCTAssertFalse(app.buttons["uusi-luo"].isEnabled, "varattu nimi ei saa olla lähetettävissä")
+        kuva("uusi-varattu")
     }
 
-    func testPakkaaIlmanIstuntoaHylataan() throws {
+    func testPakkaaIlmanIstuntoaLukittu() throws {
         let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
         let app = kaynnista(avain: avain)
         etsi(app, "demo tyokalut")
         let rivi = app.buttons["skooppi-claude demo tyokalut"]
         XCTAssertTrue(rivi.waitForExistence(timeout: 15))
         rivi.tap()
+        // Haun näppäimistö ei jää skoopin näkymän päälle (DESIGN-UX-A U1).
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5), "haun näppäimistö jäi auki")
         // Skooppi ilman istuntoa: viesti ja Pura-painike (painiketta ei paineta: se avaisi istunnon).
         XCTAssertTrue(app.staticTexts["ei-auki"].waitForExistence(timeout: 15), "ei auki -viesti puuttuu")
         XCTAssertTrue(app.buttons["viestit-pura"].exists)
@@ -591,15 +616,10 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertLessThan(siirto.frame.minY, herata.frame.minY)
         XCTAssertFalse(herata.isEnabled)
         XCTAssertEqual(herata.value as? String, "0")
+        XCTAssertFalse(app.buttons["toiminto-pakkaa"].isEnabled, "pakkaus ilman istuntoa ei saa olla painettavissa")
+        XCTAssertFalse(siirto.isEnabled, "siirto ilman istuntoa ei saa olla painettavissa")
+        XCTAssertTrue(app.staticTexts["toiminto-ei-istuntoa"].exists, "selite puuttuu")
         kuva("toiminnot")
-        app.buttons["toiminto-pakkaa"].tap()
-        XCTAssertTrue(app.buttons["Pakkaa"].firstMatch.waitForExistence(timeout: 5), "vahvistus puuttuu")
-        kuva("pakkaa-vahvistus")
-        app.buttons["Pakkaa"].firstMatch.tap()
-        let virhe = app.staticTexts["toiminto-virhe"]
-        XCTAssertTrue(virhe.waitForExistence(timeout: 20))
-        XCTAssertTrue(virhe.label.contains("409"), virhe.label)
-        kuva("pakkaa-hylatty")
     }
 
     // Kirjoittava koe (DEMO-SCOPES-PUHELIN): avaa oikean istunnon. Ajetaan vain, kun SCOPES_KOE_PURA nimeää koeskoopin.
