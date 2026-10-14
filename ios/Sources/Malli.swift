@@ -81,18 +81,47 @@ struct KontekstiRyhma: Decodable, Hashable, Identifiable {
     let laji: String
     let polku: String
     let tokenit: Int
+    // Katon tavut ja raja (SCOPES-INFRA-REKISTERIT); vanha palvelu ei lähetä → nil, raja nil myös tiedostolle ilman kattoa.
+    let tavut: Int?
+    let raja: Int?
     let osat: [KontekstiOsa]
     var id: String { polku }
-    var nimi: String {
-        switch laji {
-        case "rekisteri": "Rekisteri"
-        case "historia": "Historia"
-        case "arkisto": "Arkisto"
-        case "viite": "Siirron viitetiedosto"
-        case "yhteinen": "Yhteiset ohjeet"
-        default: laji
-        }
+    var nimi: String { kontekstiLaji(laji) }
+}
+
+func kontekstiLaji(_ laji: String) -> String {
+    switch laji {
+    case "rekisteri": "Rekisteri"
+    case "historia": "Historia"
+    case "arkisto": "Arkisto"
+    case "viite": "Siirron viitetiedosto"
+    case "yhteinen": "Yhteiset ohjeet"
+    default: laji
     }
+}
+
+// Katon täyttöaste prosentteina (tavut / raja), nil ilman kattoa.
+func tayttoaste(_ tavut: Int?, _ raja: Int?) -> Int? {
+    guard let tavut, let raja, raja > 0 else { return nil }
+    return Int((Double(tavut) * 100 / Double(raja)).rounded())
+}
+
+// Kaikkien skooppien kontekstitiedostot (SCOPES-INFRA-REKISTERIT 14.10.2026, GET /api/rekisterit): tavut ja raja samalla
+// mitalla kuin pakkauksen check-rekisteri.mjs, tokenit arvio merkkimäärästä.
+struct RekisteriTiedosto: Decodable, Hashable, Identifiable {
+    let polku: String
+    let laji: String
+    let skoopit: [String]
+    let tavut: Int
+    let raja: Int?
+    let tokenit: Int
+    var id: String { polku }
+    var aste: Int? { tayttoaste(tavut, raja) }
+}
+
+struct RekisterinOsat: Decodable {
+    let polku: String
+    let osat: [KontekstiOsa]
 }
 
 struct IstunnonOsa: Decodable, Hashable {

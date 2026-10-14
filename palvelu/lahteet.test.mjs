@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request } from 'node:http';
 import { createServer } from 'node:http';
-import { istunnonSkooppi, istunnot, jasennaSeuraava, konteksti, kontekstinOsat, kontekstiTiedostot, hereilla, lista, osiin, pakattu, projektiNimi, pysahdys, seuraavaRivi, skooppiTila, taulukko, tokeneiksi, yksi } from './lahteet.mjs';
+import { istunnonSkooppi, istunnot, jasennaSeuraava, katonTavut, konteksti, kontekstinOsat, kontekstiTiedostot, hereilla, lista, osiin, pakattu, projektiNimi, pysahdys, rekisterinOsat, rekisterit, seuraavaRivi, skooppiTila, taulukko, tokeneiksi, yksi } from './lahteet.mjs';
 import { avainKelpaa, kasittelija } from './palvelin.mjs';
 
 const REK = `# R
@@ -166,6 +166,9 @@ test('palvelin: polut ja virhekoodit', async () => {
     assert.equal((await hae('/api/skoopit'))[1].length, 2);
     assert.equal((await hae('/api/skoopit/a'))[1].nimi, 'a');
     assert.equal((await hae('/api/skoopit/puuttuu'))[0], 404);
+    assert.deepEqual((await hae('/api/rekisterit'))[1].map((r) => r.polku), ['a/R.md']);
+    assert.equal((await hae('/api/rekisterit/a%2FR.md'))[1].osat.length, 4);
+    assert.equal((await hae('/api/rekisterit/%2Fetc%2Fpasswd'))[0], 404);
     assert.equal((await hae('/api/skoopit', 'POST'))[0], 404);
     assert.equal((await hae('/api/skoopit', 'DELETE'))[0], 405);
     assert.equal((await hae('/api/skoopit', 'GET', null))[0], 401);
@@ -291,4 +294,26 @@ test('yksi: konteksti ryhmittäin ja istunnoittain', () => {
     [['rekisteri', 'a/R.md', ['Alku', 'Avoimet asiat', 'Viat', 'Historia']]]);
   assert.equal(k.tokenit, k.ryhmat[0].tokenit);
   assert.deepEqual(k.istunnot.map((i) => [i.id, i.mitattu, i.osat.at(-1).nimi]), [['s1', 50005, 'Työkalumääritykset ja ajattelu (jäännös)']]);
+});
+
+test('katonTavut: pakolliset luvut (myös tarkenteella) eivät laske kattoon', () => {
+  const t = '# R\n## Vaiheet (x)\nää\n## Muu\nb\n';
+  assert.equal(katonTavut(t), Buffer.byteLength(t));
+  assert.equal(katonTavut(t, ['## Vaiheet']), Buffer.byteLength(t) - Buffer.byteLength('## Vaiheet (x)\nää\n'));
+});
+
+test('rekisterit: tiedosto kerran skooppeineen, raja 40 000 tai lähtötaso; osat vain kontekstitiedostolle', () => {
+  const a = ymparisto();
+  writeFileSync(join(a.juuri, 'a/HISTORIA.md'), '# H\n## Luku\nx');
+  writeFileSync(join(a.juuri, 'claude/siirto/state/rekisteri-katto.json'), JSON.stringify({ 'a/HISTORIA.md': 99 }));
+  const r = rekisterit(a);
+  assert.deepEqual(r.map(({ tokenit, ...x }) => x), [
+    { polku: 'a/R.md', laji: 'rekisteri', skoopit: ['a', 'b'], tavut: Buffer.byteLength(REK), raja: 40000 },
+    { polku: 'a/HISTORIA.md', laji: 'historia', skoopit: ['a', 'b'], tavut: 13, raja: 99 },
+  ]);
+  writeFileSync(join(a.juuri, 'claude/siirto/state/rekisteri-katto.json'), JSON.stringify({ 'a/R.md': 50000 }));
+  assert.deepEqual(rekisterit(a).map((x) => x.raja), [50000, null]);
+  assert.deepEqual(yksi('a', a).konteksti.ryhmat.map((x) => x.raja), [50000, null]);
+  assert.deepEqual(rekisterinOsat('a/HISTORIA.md', a).osat.map((o) => o.otsikko), ['Alku', 'Luku']);
+  assert.equal(rekisterinOsat('../etc/passwd', a), null);
 });

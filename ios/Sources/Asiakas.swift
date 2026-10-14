@@ -44,6 +44,10 @@ struct Asiakas {
 
     func skooppi(_ nimi: String) async throws -> SkooppiNakyma { try await hae("/api/skoopit/\(koodattu(nimi))") }
 
+    func rekisterit() async throws -> [RekisteriTiedosto] { try await hae("/api/rekisterit") }
+
+    func rekisterinOsat(_ polku: String) async throws -> RekisterinOsat { try await hae("/api/rekisterit/\(koodattu(polku))") }
+
     // Istunnon avaus odottaa Remote Controlia jopa 90 s, joten toiminnoilla on pidempi aikaraja.
     func toiminto(_ toiminto: Toiminto, _ nimi: String) async throws -> ToimintoVastaus {
         try await hae("/api/skoopit/\(koodattu(nimi))/\(toiminto.rawValue)", metodi: "POST", aikaraja: 150)
