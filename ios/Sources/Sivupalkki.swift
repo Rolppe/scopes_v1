@@ -104,15 +104,20 @@ struct Sivupalkki: View, Equatable {
             }
             // Alapalkki listan alla eikä päällä (DESIGN-UX-A U2): työkalurivin kelluvat napit peittivät alimman rivin
             // merkit ilman taustaa. Turva-alueen lisäys lyhentää listaa, joten viimeinen rivi vierii palkin yläpuolelle.
+            // Palkki kasvaa tekstikoon mukana vain xxxLargeen asti ja yhdellä rivillä (DESIGN-ISOTEKSTI K4: isolla koolla
+            // "Ase-tuk-set" kolmella rivillä peitti listan); suuremmat koot näkyvät pitkällä painalluksella kuten
+            // järjestelmän välilehtipalkissa.
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 HStack {
                     Button { navigaatio.avaa(.infra) } label: { Label("Infra", systemImage: "point.3.connected.trianglepath.dotted") }
-                        .accessibilityIdentifier("sivupalkki-infra")
+                        .accessibilityIdentifier("sivupalkki-infra").accessibilityShowsLargeContentViewer()
                     Spacer()
                     Button { navigaatio.asetuksetAuki = true } label: { Label("Asetukset", systemImage: "gearshape") }
-                        .accessibilityIdentifier("asetukset")
+                        .accessibilityIdentifier("asetukset").accessibilityShowsLargeContentViewer()
                 }
                 .labelStyle(.titleAndIcon)
+                .lineLimit(1)
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                 .padding(.horizontal, Teema.Vali.l)
                 .padding(.vertical, Teema.Vali.m)
                 .background(.bar)
@@ -133,7 +138,8 @@ struct Sivupalkki: View, Equatable {
         }
     }
 
-    // Kolme rinnakkaista nappia otsikon paikalla; valittu korostettu.
+    // Kolme rinnakkaista nappia otsikon paikalla; valittu korostettu. Navigointipalkin tapaan koko pysyy oletuksessa
+    // (DESIGN-ISOTEKSTI K5: isolla koolla "Sco…", "C…"); suurempi koko näkyy pitkällä painalluksella.
     private var suodatinNapit: some View {
         HStack(spacing: 8) {
             ForEach(Suodatin.allCases, id: \.self) { s in
@@ -146,8 +152,11 @@ struct Sivupalkki: View, Equatable {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("suodatin-\(s.rawValue.lowercased())")
                 .accessibilityAddTraits(suodatin == s ? .isSelected : [])
+                .accessibilityShowsLargeContentViewer()
             }
         }
+        .lineLimit(1)
+        .dynamicTypeSize(...DynamicTypeSize.large)
     }
 
     private func valittu(_ k: Kohde) -> Bool {

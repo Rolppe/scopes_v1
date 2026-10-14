@@ -79,3 +79,90 @@ private extension UIColor {
                   blue: CGFloat(heksa & 0xFF) / 255, alpha: 1)
     }
 }
+
+// MARK: Iso tekstikoko (DESIGN-ISOTEKSTI, KATSELMUS K4–K7)
+
+/// Pakettitunnus, joka rivittyy vain väliviivan tai välilyönnin kohdalta (K7: `UUDELLEENKA`/`YNNISTYS`).
+/// Jokainen osa on yksi rivi; rivin leveyttä pidempi osa pienenee eikä katkea kesken sanan.
+struct Tunnus: View {
+    let teksti: String
+
+    var body: some View {
+        OsaVirta {
+            ForEach(Array(osat.enumerated()), id: \.offset) { _, osa in
+                Text(verbatim: osa).lineLimit(1).minimumScaleFactor(0.5)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(teksti)
+        .accessibilityAddTraits(.isStaticText)
+    }
+
+    /// "EXPRESSO-IOS-KYTKIN" → ["EXPRESSO-", "IOS-", "KYTKIN"]; välilyönti jää edellisen osan perään.
+    private var osat: [String] {
+        var tulos: [String] = []
+        var nyt = ""
+        for m in teksti {
+            nyt.append(m)
+            if m == "-" || m == " " { tulos.append(nyt); nyt = "" }
+        }
+        if !nyt.isEmpty { tulos.append(nyt) }
+        return tulos
+    }
+}
+
+/// Asettelee osat riveille vasemmalta oikealle ja aloittaa uuden rivin, kun seuraava osa ei mahdu.
+private struct OsaVirta: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rivit = asettele(leveys: proposal.width ?? .infinity, subviews)
+        return CGSize(width: rivit.map(\.leveys).max() ?? 0, height: rivit.reduce(0) { $0 + $1.korkeus })
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for rivi in asettele(leveys: bounds.width, subviews) {
+            var x = bounds.minX
+            for (i, koko) in rivi.osat {
+                subviews[i].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(koko))
+                x += koko.width
+            }
+            y += rivi.korkeus
+        }
+    }
+
+    private struct Rivi {
+        var osat: [(Int, CGSize)] = []
+        var leveys: CGFloat = 0
+        var korkeus: CGFloat = 0
+    }
+
+    private func asettele(leveys: CGFloat, _ subviews: Subviews) -> [Rivi] {
+        var rivit: [Rivi] = []
+        var nyt = Rivi()
+        for (i, osa) in subviews.enumerated() {
+            var koko = osa.sizeThatFits(.unspecified)
+            if koko.width > leveys { koko = osa.sizeThatFits(ProposedViewSize(width: leveys, height: nil)) }
+            if !nyt.osat.isEmpty && nyt.leveys + koko.width > leveys { rivit.append(nyt); nyt = Rivi() }
+            nyt.osat.append((i, koko))
+            nyt.leveys += koko.width
+            nyt.korkeus = max(nyt.korkeus, koko.height)
+        }
+        if !nyt.osat.isEmpty { rivit.append(nyt) }
+        return rivit
+    }
+}
+
+/// Merkkirivi (asiat, viat, konteksti) vaakarivinä, kun se mahtuu, muuten pinona (K6: "1 / 76 k" katkesi
+/// kahdelle riville). Luku ei koskaan rivity: jokainen merkki on yksi rivi.
+struct MerkkiRivi<Sisalto: View>: View {
+    var vali: CGFloat = 12
+    @ViewBuilder let sisalto: () -> Sisalto
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: vali) { sisalto() }
+            VStack(alignment: .leading, spacing: Teema.Vali.xs) { sisalto() }
+        }
+        .lineLimit(1)
+    }
+}

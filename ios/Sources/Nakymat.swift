@@ -9,9 +9,9 @@ struct SkooppiRivi: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(skooppi.nimi).font(.headline)
-            Text(skooppi.seuraava ?? "ei seuraavaa pakettia")
+            Tunnus(teksti: skooppi.seuraava ?? "ei seuraavaa pakettia")
                 .font(.subheadline).foregroundStyle(skooppi.seuraava == nil ? .secondary : .primary)
-            HStack(spacing: 12) {
+            MerkkiRivi {
                 Label("\(skooppi.avoimia)", systemImage: "list.bullet")
                 Label("\(skooppi.vikoja)", systemImage: "ladybug").foregroundStyle(skooppi.vikoja > 0 ? .orange : .secondary)
                 if let k = skooppi.suurinKonteksti { KontekstiMerkki(maara: k).foregroundStyle(.blue) }
@@ -40,7 +40,7 @@ struct SkooppiNakymaView: View {
             if let n = nakyma {
                 Section("Seuraava paketti") {
                     if let s = n.seuraava, let id = s.id {
-                        Text(id).font(.headline).accessibilityIdentifier("seuraava-id")
+                        Tunnus(teksti: id).font(.headline).accessibilityIdentifier("seuraava-id")
                         if !s.kuvaus.isEmpty { Text(s.kuvaus).font(.callout) }
                         if let a = s.aloitus { Text(a).font(.caption.monospaced()).foregroundStyle(.secondary) }
                     } else {
@@ -53,9 +53,9 @@ struct SkooppiNakymaView: View {
                             KontekstiView(nimi: nimi, konteksti: k)
                         } label: {
                             VStack(alignment: .leading, spacing: 6) {
-                                HStack {
+                                MerkkiRivi {
                                     Text("Tiedostot ≈ \(tokenit(k.tokenit))").monospacedDigit()
-                                    Spacer()
+                                        .frame(maxWidth: .infinity, alignment: .leading)
                                     if let m = k.istunnot.compactMap(\.mitattu).max() { KontekstiMerkki(maara: m).foregroundStyle(.secondary) }
                                 }
                                 OsuusPalkki(osat: k.ryhmat.map(\.tokenit))
@@ -541,17 +541,25 @@ func osuusVari(_ n: Int) -> Color { osuusVarit[n % osuusVarit.count] }
 struct KontekstiMerkki: View {
     let maara: Int
     var body: some View {
-        Label(tokenit(maara), systemImage: "brain").monospacedDigit()
-            .accessibilityLabel("konteksti \(tokenit(maara))")
+        // Luku ei rivity kahdelle riville (K6: "13 / 1 k" = 131 k). Label + fixedSize pudotti luvun pois ja jätti
+        // pelkän kuvakkeen (DESIGN-ISOTEKSTI-ajo 14.10.2026), joten kuvake ja luku ovat erikseen.
+        HStack(spacing: Teema.Vali.xs) {
+            Image(systemName: "brain")
+            Text(tokenit(maara)).monospacedDigit().lineLimit(1)
+        }
+        .fixedSize()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("konteksti \(tokenit(maara))")
     }
 }
 
-// Istunnon tila suomeksi (U8); tuntematon tila näytetään sellaisenaan.
+// Istunnon tila suomeksi (U8, K10); tuntematon tila näytetään sellaisenaan.
 func istunnonTila(_ tila: String?) -> String? {
     switch tila {
     case "busy": "Työskentelee"
     case "waiting": "Odottaa vastaustasi"
     case "idle": "Vapaa"
+    case "shell": "Ajaa komentoa"
     default: tila
     }
 }
