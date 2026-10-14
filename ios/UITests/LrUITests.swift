@@ -158,7 +158,7 @@ final class LrUITests: XCTestCase {
 
     // LOCALREGISTER-RIVINVAIHTO-TODENNUS: laitetestin jättämä rikkinäinen versio (rivinvaihto taulukkorivissä) on
     // riidassa lähteen version kanssa; äppi ratkaisee riidan lähteen uusimmalla versiolla, ja palvelun tuloste pysyy
-    // ehjänä. Rivi nimetään: SCOPES_KOE_LR_ID="oneplus-005655" (harjoitus koeinstanssin kopiolla ennen tuotantoa).
+    // ehjänä. Jos lähde on poistanut rivin (lahdeSisalto puuttuu), voittaa lähteen uusin poisto. Rivi nimetään: SCOPES_KOE_LR_ID="oneplus-005655" (harjoitus koeinstanssin kopiolla ennen tuotantoa).
     func testLrRistiriitaLahdeVoittaa() throws {
         guard let id = ProcessInfo.processInfo.environment["SCOPES_KOE_LR_ID"] else {
             throw XCTSkip("nimetyn rivin ratkaisu vain pyydettäessä (SCOPES_KOE_LR_ID)")
@@ -166,10 +166,13 @@ final class LrUITests: XCTestCase {
         let polku = "scopes/localregister/REKISTERI.md"
         let ennen = try XCTUnwrap((try pyynto("/api/lr/hae", ["rekisteri": polku, "idt": [id]])["yksikot"] as? [[String: Any]])?.first)
         let sisaret = try XCTUnwrap(ennen["rinnakkaiset"] as? [[String: Any]], "rivillä \(id) ei ole ristiriitaa")
-        let lahde = try XCTUnwrap(ennen["lahdeSisalto"] as? String, "rivillä \(id) ei ole lähteen sisältöä")
-        // Valittava versio: uusin lähteen (oneplus) versio, jonka sisältö on lähteen sisältö.
+        let lahde = ennen["lahdeSisalto"] as? String
+        // Valittava versio: uusin lähteen (oneplus) versio, jonka sisältö on lähteen sisältö, tai lähteen poisto.
         let oneplus = ([ennen] + sisaret).filter { $0["muuttaja"] as? String == "oneplus" }
-        let kohde = try XCTUnwrap(oneplus.lastIndex { $0["sisalto"] as? String == lahde }, "lähteen versiota ei ole riidassa")
+        let kohde = try XCTUnwrap(oneplus.lastIndex {
+            if let lahde { return $0["sisalto"] as? String == lahde && $0["poistettu"] as? Bool != true }
+            return $0["poistettu"] as? Bool == true
+        }, "lähteen versiota ei ole riidassa")
 
         // Riidat ovat päänäkymän Ristiriidat-osiossa, Synkka-osion alla.
         let app = avaaLr()
@@ -180,12 +183,14 @@ final class LrUITests: XCTestCase {
         // Lista on laiska: vain ruudulla olevat versiot ovat hierarkiassa. Kohde on viimeinen versio, joten
         // vieritetään loppuun ("Yhdistä käsin…" näkyy) ja valitaan alin lähteen versio.
         XCTAssertEqual(kohde, oneplus.count - 1, "lähteen versio ei ole viimeinen; valinta indeksillä ei onnistu laiskassa listassa")
-        let valinnat = app.buttons.matching(identifier: "lr-valitse-oneplus")
-        XCTAssertTrue(valinnat.firstMatch.waitForExistence(timeout: 5), "lähteen versiota ei näy")
+        // Pitkä pääversio voi täyttää ruudun, jolloin yksikään lähteen nappi ei ole vielä hierarkiassa: vieritä ensin.
+        XCTAssertTrue(app.buttons["lr-valitse-\(ennen["muuttaja"] as? String ?? "?")"].firstMatch.waitForExistence(timeout: 5), "ristiriitanäkymä ei auennut")
         kuva("lr-riita-ennen")
         let yhdista = app.buttons["lr-yhdista"]
         for _ in 0..<15 where !(yhdista.exists && yhdista.isHittable) { app.swipeUp() }
         XCTAssertTrue(yhdista.isHittable, "versiolistan loppu ei tullut näkyviin")
+        let valinnat = app.buttons.matching(identifier: "lr-valitse-oneplus")
+        XCTAssertTrue(valinnat.firstMatch.waitForExistence(timeout: 5), "lähteen versiota ei näy")
         let nappi = valinnat.element(boundBy: valinnat.count - 1)
         XCTAssertTrue(nappi.isHittable)
         nappi.tap()
@@ -199,10 +204,16 @@ final class LrUITests: XCTestCase {
         }
         XCTAssertTrue(ratkaistu, "palvelulla on yhä ristiriita \(id)")
         let lopuksi = try XCTUnwrap((try pyynto("/api/lr/hae", ["rekisteri": polku, "idt": [id]])["yksikot"] as? [[String: Any]])?.first)
-        XCTAssertEqual(lopuksi["sisalto"] as? String, lahde)
         let ydin = (lopuksi["sisalto"] as? String ?? "").replacingOccurrences(of: "\\n+$", with: "", options: .regularExpression)
-        XCTAssertFalse(ydin.contains("\n"), "taulukkoriviin jäi rivinvaihto")
         let tuloste = try XCTUnwrap(try pyynto("/api/lr/teksti/" + polku, nil)["teksti"] as? String)
+        if let lahde {
+            XCTAssertEqual(lopuksi["sisalto"] as? String, lahde)
+            XCTAssertFalse(ydin.contains("\n"), "taulukkoriviin jäi rivinvaihto")
+        } else {
+            XCTAssertEqual(lopuksi["poistettu"] as? Bool, true, "lähteen poisto ei voittanut")
+            let alku = String(ydin.split(separator: "\n").first ?? "")
+            XCTAssertFalse(!alku.isEmpty && tuloste.contains(alku), "poistettu rivi on yhä tulosteessa")
+        }
         XCTAssertFalse(tuloste.split(separator: "\n").contains { $0.hasPrefix("Koe") }, "Koe-jälki omalla rivillään tulosteessa")
         kuva("lr-riita-ratkaistu")
     }
