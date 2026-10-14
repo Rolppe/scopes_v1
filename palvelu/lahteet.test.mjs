@@ -94,7 +94,7 @@ function ymparisto() {
   writeFileSync(join(projektitDir, projektiNimi(cwd), 's1.jsonl'),
     '<command-name>/pura</command-name>\n<command-args>a</command-args>\n' +
     JSON.stringify({ message: { usage: { input_tokens: 5, cache_read_input_tokens: 50000 } }, timestamp: 't' }));
-  return { juuri, istunnotDir, projektitDir };
+  return { juuri, istunnotDir, projektitDir, wgTiedosto: join(d, 'wg.conf') };
 }
 
 test('istunnot: vain elävät, skooppi ja konteksti transkriptista', () => {
@@ -150,6 +150,10 @@ test('palvelin: polut ja virhekoodit', async () => {
     assert.equal((await hae('/api/skoopit', 'GET', null))[0], 401);
     assert.equal((await hae('/api/skoopit/a', 'GET', 'v'.repeat(32)))[0], 401);
     assert.deepEqual(await hae('/api/terveys', 'GET', null), [200, { ok: true }]);
+    assert.equal((await hae('/api/wg-asetus'))[0], 404);
+    writeFileSync(a.wgTiedosto, '[Interface]\n');
+    assert.deepEqual(await hae('/api/wg-asetus'), [200, { asetus: '[Interface]\n' }]);
+    assert.equal((await hae('/api/wg-asetus', 'GET', null))[0], 401);
   } finally { srv.close(); }
 });
 
@@ -196,6 +200,11 @@ test('pakattu: PAKKAUS: vahvistettu viimeisen käyttäjän viestin jälkeen', ()
   // Taidon teksti käyttäjän viestissä tai rivin maininta lauseen keskellä ei ole pakkaus.
   assert.equal(pakattu([k('rivi `PAKKAUS: vahvistettu` tulee loppuun'), a('Ei vielä: PAKKAUS: vahvistettu tulee myöhemmin')].join('\n')), false);
   assert.equal(pakattu(''), false);
+  // V-284: PAKATTU-rivi tai epäselvä-koontirivi, jossa commit syntyi, on pakkaus; epäselvä ilman commitia ei.
+  assert.equal(pakattu([k('/pakkaa'), a('**PAKATTU:** scopes infra — commit 0249712, push ok. Sinun ei tarvitse ajaa /pakkaa.')].join('\n')), true);
+  assert.equal(pakattu([k('/pakkaa'), a('PAKKAUS: epäselvä — salaisuusgrep: vanha osuma. Muut osat ok: rekisterit ok, commit `20047a0`, push ok')].join('\n')), true);
+  assert.equal(pakattu([k('/pakkaa'), a('PAKKAUS: epäselvä — commit: KATTO esti commitin, katso rivi KATTO')].join('\n')), false);
+  assert.equal(pakattu([k('/pakkaa'), a('Ei vielä: PAKATTU: tulee myöhemmin')].join('\n')), false);
 });
 
 test('osiin: ##-otsikoittain, koodiaita ei pilko, iso luku ###-otsikoittain', () => {
