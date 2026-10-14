@@ -263,11 +263,16 @@ enum LrLaskenta {
         guard ladattu, let asetukset, asetukset.valmis else { return }
         if kaynnissa { uudelleen = true; return }
         kaynnissa = true
+        var lisakierroksia = 0
         repeat {
             uudelleen = false
             do {
-                try await kierros(Asiakas(osoite: asetukset.osoite, avain: asetukset.avain))
+                let yhteneva = try await kierros(Asiakas(osoite: asetukset.osoite, avain: asetukset.avain))
                 virhe = nil
+                // Palvelu voi muuttaa tilaa kesken kierroksen: lähetyksen laukaisema vienti gittiin tuo HEADin ja
+                // siivoaa hautakiven (LOCALREGISTER-VIENTI-TODENNUS 14.10.2026). Ero näkyy jo todennuksessa,
+                // joten heti uusi kierros hakee siivotut-listan; enintään kaksi, ettei jatkuva muutos jumita.
+                if !yhteneva && lisakierroksia < 2 { lisakierroksia += 1; uudelleen = true }
             } catch {
                 virhe = error.localizedDescription
             }
@@ -275,7 +280,8 @@ enum LrLaskenta {
         kaynnissa = false
     }
 
-    private func kierros(_ a: Asiakas) async throws {
+    // Palauttaa, olivatko tiivisteet lopuksi samat.
+    private func kierros(_ a: Asiakas) async throws -> Bool {
         let alussa = muutosLaskuri
         let t = try await a.lrTiivisteet()
         valiMin = max(1, t.valiMin)
@@ -283,7 +289,7 @@ enum LrLaskenta {
             if muutosLaskuri == alussa { muutoksia = false }
             viimeTyhja = Date()
             valmis("ei muutoksia")
-            return
+            return true
         }
         // Äppi ei vielä luo rekistereitä (REKISTERI.md Avoimet asiat, Reunatapaus): vain palvelun tuntemat rekisterit.
         let omat = tiivisteet()
@@ -369,6 +375,7 @@ enum LrLaskenta {
         let jalkeen = try await a.lrTiivisteet()
         let yhteneva = LrLaskenta.juuri(tiivisteet()) == jalkeen.juuri
         valmis("haettu \(haettu), lähetetty \(lahetetty), ristiriitoja \(ristiriidat.count)" + (yhteneva ? ", yhtenevä" : ", tiivisteet eroavat"))
+        return yhteneva
     }
 
     private func valmis(_ teksti: String) {
