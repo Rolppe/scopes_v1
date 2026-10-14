@@ -234,6 +234,12 @@ struct LahetysVastaus: Decodable {
     let istunto: String
 }
 
+// Palvelimelle tallennetun liitteen polku, jonka äppi lisää viestiin (CHAT-MEDIA-SKOOPPI).
+struct LiiteVastaus: Decodable {
+    let polku: String
+    let koko: Int
+}
+
 // Infra-välilehden puu: "scopes ios mac" on skoopin "scopes ios" lapsi, jos se on olemassa, muuten lähimmän
 // olemassa olevan sanaetuliitteen lapsi; ilman sellaista juuri.
 struct SkooppiSolmu: Identifiable, Hashable {
