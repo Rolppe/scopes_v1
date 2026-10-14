@@ -207,7 +207,7 @@ final class LrUITests: XCTestCase {
         kuva("lr-riita-ratkaistu")
     }
 
-    // LOCALREGISTER-RIVIN-LISAYS: uusi rivi taulukon viimeisen rivin alle muokkausnäkymän Lisää rivi alle -painikkeella.
+    // LOCALREGISTER-RIVIN-LISAYS: uusi rivi taulukon viimeisen rivin alle rivin pitkän painalluksen Lisää alle -valinnalla.
     // Return on välilyönti, rivi tulee heti ankkurin alle, taulukon perässä oleva tyhjä rivi jää uuden rivin perään, ja
     // synkan jälkeen juuritiiviste on sama molemmilla.
     func testLrRivinLisays() throws {
@@ -245,12 +245,12 @@ final class LrUITests: XCTestCase {
         let rivi = app.buttons["lr-yksikko-\(id)"]
         for _ in 0..<15 where !(rivi.exists && rivi.isHittable) { app.swipeUp() }
         XCTAssertTrue(rivi.isHittable, "riviä \(id) ei löydy")
-        // Pitkä veto vasemmasta reunasta: lyhyt swipeRight ei avannut rivin toimintoa (UI-koe 14.10.2026).
-        rivi.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.5))
-            .press(forDuration: 0.05, thenDragTo: rivi.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.5)))
-        let lisaa = app.buttons["lr-lisaa-\(id)"].exists ? app.buttons["lr-lisaa-\(id)"] : app.buttons["Lisää alle"]
-        if !lisaa.waitForExistence(timeout: 5) { kuva("lr-pyyhkaisy") }
-        XCTAssertTrue(lisaa.exists, "Lisää alle -pyyhkäisytoiminto puuttuu")
+        // Pitkä painallus avaa rivin valikon. Pyyhkäisy ei käy: sivuttaisveto avaa sivupalkin (kuva lr-pyyhkaisy 14.10.2026).
+        rivi.press(forDuration: 1.2)
+        let tunnus = app.buttons["lr-lisaa-\(id)"]
+        let lisaa = tunnus.waitForExistence(timeout: 5) ? tunnus : app.buttons["Lisää alle"]
+        if !lisaa.waitForExistence(timeout: 2) { kuva("lr-valikko") }
+        XCTAssertTrue(lisaa.exists, "Lisää alle -valinta puuttuu rivin valikosta")
         lisaa.tap()
         XCTAssertTrue(app.navigationBars["Uusi rivi"].waitForExistence(timeout: 5))
         let teksti = app.textViews["lr-teksti"]
