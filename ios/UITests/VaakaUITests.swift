@@ -38,6 +38,9 @@ final class VaakaUITests: XCTestCase {
             sleep(1)
             kuva("vaaka-chat-nappaimisto")
             XCTAssertTrue(app.buttons["chat-uusi"].isHittable, "yläpalkki peittyi näppäimistön kanssa")
+            // Vaakassa kenttä on yksirivinen eikä nappiriviä ole (käyttäjä 14.10.2026).
+            XCTAssertFalse(app.buttons["chat-laheta"].exists, "vaakassa lähetysnappi näkyy")
+            XCTAssertLessThan(kentta.frame.height, 44, "vaakassa kenttä ei ole yksirivinen")
         }
 
         app.buttons["sivupalkki"].firstMatch.tap()
@@ -47,6 +50,7 @@ final class VaakaUITests: XCTestCase {
         XCTAssertTrue(app.buttons["tiedot"].waitForExistence(timeout: 15), "skoopin viestit eivät auenneet")
         sleep(2)
         kuva("vaaka-skooppi")
+        XCTAssertFalse(app.buttons["viestit-liite"].exists, "vaakassa liitenappi näkyy")
     }
 
     private func kuva(_ nimi: String) {

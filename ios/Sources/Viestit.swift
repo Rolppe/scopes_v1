@@ -333,56 +333,80 @@ struct Syottorivi<Vasen: View>: View {
     var jatka: (() -> Void)? = nil
     @ViewBuilder var vasen: Vasen
 
+    // Vaakassa näppäimistö vie suurimman osan korkeudesta (käyttäjä 14.10.2026): kenttä alkaa yhdeltä riviltä, eikä
+    // sen alla ole nappiriviä (lisäosa, liite, stop, play, lähetys). Rivinvaihto lähettää; liitetty monirivinen teksti jää.
+    @Environment(\.verticalSizeClass) private var pystyKoko
+    private var vaaka: Bool { pystyKoko == .compact }
+
     private var tyhja: Bool { teksti.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !liitteita }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Teema.Vali.s) {
             TextField("Kirjoita viesti", text: $teksti, axis: .vertical)
-                .lineLimit(1...6)
-                .accessibilityIdentifier("\(tunnus)-kentta")
-            HStack(spacing: Teema.Vali.s) {
-                vasen
-                Spacer()
-                if let stop, tyhja {
-                    Button(action: stop) {
-                        Image(systemName: "stop.fill")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(Teema.korostusPaalla)
-                            .frame(width: 32, height: 32)
-                            .lasiPinta(Teema.korostus, savy: Teema.korostus, in: Circle(), kosketus: true)
-                    }
-                    .accessibilityLabel("Pysäytä")
-                    .accessibilityIdentifier("\(tunnus)-stop")
-                } else if let jatka, tyhja, !estetty {
-                    Button(action: jatka) {
-                        Image(systemName: "play.fill")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(Teema.korostusPaalla)
-                            .frame(width: 32, height: 32)
-                            .lasiPinta(Teema.korostus, savy: Teema.korostus, in: Circle(), kosketus: true)
-                    }
-                    .accessibilityLabel("Jatka")
-                    .accessibilityIdentifier("\(tunnus)-jatka")
-                } else {
-                    Button(action: laheta) {
-                        Image(systemName: "arrow.up")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(estetty || tyhja ? Color.white : Teema.korostusPaalla)
-                            .frame(width: 32, height: 32)
-                            .lasiPinta(estetty || tyhja ? Color(.systemGray3) : Teema.korostus,
-                                       savy: estetty || tyhja ? Color(.systemGray3) : Teema.korostus, in: Circle(), kosketus: true)
-                    }
-                    .disabled(estetty || tyhja)
-                    .accessibilityIdentifier("\(tunnus)-laheta")
+                .lineLimit(vaaka ? 1...3 : 1...6)
+                .submitLabel(vaaka ? .send : .return)
+                .onChange(of: teksti) { vanha, uusi in
+                    guard vaaka, let i = lisattyRivinvaihto(vanha, uusi) else { return }
+                    var t = uusi
+                    t.remove(at: i)
+                    teksti = t
+                    if !estetty && !tyhja { laheta() }
                 }
-            }
+                .accessibilityIdentifier("\(tunnus)-kentta")
+            if !vaaka { nappirivi }
         }
         .padding(.horizontal, Teema.Vali.l)
-        .padding(.vertical, Teema.Vali.m)
+        .padding(.vertical, vaaka ? Teema.Vali.s : Teema.Vali.m)
         .lasiPinta(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: Teema.Kulma.arkki, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Teema.Kulma.arkki, style: .continuous).stroke(Color(.separator).opacity(0.4)))
         .padding(.horizontal, Teema.Vali.m)
         .padding(.bottom, Teema.Vali.s)
+    }
+
+    // Yhden merkin lisäys, joka on rivinvaihto, eli näppäimistön lähetysnäppäin: palauttaa sen kohdan.
+    private func lisattyRivinvaihto(_ vanha: String, _ uusi: String) -> String.Index? {
+        guard uusi.count == vanha.count + 1 else { return nil }
+        let i = zip(uusi.indices, vanha).first { uusi[$0.0] != $0.1 }?.0 ?? uusi.index(before: uusi.endIndex)
+        return uusi[i] == "\n" ? i : nil
+    }
+
+    private var nappirivi: some View {
+        HStack(spacing: Teema.Vali.s) {
+            vasen
+            Spacer()
+            if let stop, tyhja {
+                Button(action: stop) {
+                    Image(systemName: "stop.fill")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Teema.korostusPaalla)
+                        .frame(width: 32, height: 32)
+                        .lasiPinta(Teema.korostus, savy: Teema.korostus, in: Circle(), kosketus: true)
+                }
+                .accessibilityLabel("Pysäytä")
+                .accessibilityIdentifier("\(tunnus)-stop")
+            } else if let jatka, tyhja, !estetty {
+                Button(action: jatka) {
+                    Image(systemName: "play.fill")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Teema.korostusPaalla)
+                        .frame(width: 32, height: 32)
+                        .lasiPinta(Teema.korostus, savy: Teema.korostus, in: Circle(), kosketus: true)
+                }
+                .accessibilityLabel("Jatka")
+                .accessibilityIdentifier("\(tunnus)-jatka")
+            } else {
+                Button(action: laheta) {
+                    Image(systemName: "arrow.up")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(estetty || tyhja ? Color.white : Teema.korostusPaalla)
+                        .frame(width: 32, height: 32)
+                        .lasiPinta(estetty || tyhja ? Color(.systemGray3) : Teema.korostus,
+                                   savy: estetty || tyhja ? Color(.systemGray3) : Teema.korostus, in: Circle(), kosketus: true)
+                }
+                .disabled(estetty || tyhja)
+                .accessibilityIdentifier("\(tunnus)-laheta")
+            }
+        }
     }
 }
 
