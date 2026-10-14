@@ -68,6 +68,9 @@ struct InfraRivi: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
+                // Nappi on kiinteän kokoinen (36 × 44), joten sen sisältö ei kasva yli (DESIGN-ISOTEKSTI K7).
+                .dynamicTypeSize(...DynamicTypeSize.xLarge)
+                .accessibilityShowsLargeContentViewer()
                 .accessibilityLabel(auki ? "Sulje alaskoopit" : "Avaa alaskoopit")
                 .accessibilityIdentifier("infra-avaa-\(solmu.id)")
             } else {
