@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { avaimet, lueYksikot, luoLaite, pilko, poistaRekisteri, tiivisteet, tuoRekisteri, tulosta, uudelleentuo, valiin } from './lr.mjs';
+import { avaimet, hae, lueYksikot, luoLaite, pilko, poistaRekisteri, ristiriidat, tiivisteet, tuoRekisteri, tulosta, uudelleentuo, valiin, vastaanota, vertaa } from './lr.mjs';
 
 const REK = `# x/REKISTERI.md
 
@@ -81,7 +81,7 @@ test('uudelleentuonti: muokattu pitää tunnuksen, poistettu saa hautakiven, uus
   const ennen = Object.fromEntries(lueYksikot(juuri, P).map((y) => [y.sisalto, y]));
   const uusi = REK.replace('| a | b |', '| a | valmis |').replace('- kaksi\n', '- kolme\n- kaksi\n').replace('| c | d |\n', '');
   const t = uudelleentuo(juuri, laite, P, uusi, { commit: 'b' });
-  assert.deepEqual(t, { sama: 10, muuttunut: 1, uusi: 1, poistettu: 1 });
+  assert.deepEqual(t, { sama: 10, muuttunut: 1, uusi: 1, poistettu: 1, ristiriita: 0 });
   assert.equal(tulosta(juuri, P), uusi);
   const jalkeen = lueYksikot(juuri, P);
   const muokattu = jalkeen.find((y) => y.sisalto === '| a | valmis |\n\n');
@@ -94,4 +94,55 @@ test('uudelleentuonti: muokattu pitää tunnuksen, poistettu saa hautakiven, uus
   assert.equal(poistaRekisteri(juuri, laite, P), false);
   uudelleentuo(juuri, laite, P, REK, { commit: 'd' });
   assert.equal(tulosta(juuri, P), REK);
+});
+
+test('vertaa: versiovektorit', () => {
+  assert.equal(vertaa({ a: 1 }, { a: 1 }), 'sama');
+  assert.equal(vertaa({ a: 2, b: 1 }, { a: 1, b: 1 }), 'uudempi');
+  assert.equal(vertaa({ a: 1 }, { a: 1, b: 1 }), 'vanhempi');
+  assert.equal(vertaa({ a: 2 }, { a: 1, b: 1 }), 'rinnakkainen');
+});
+
+test('äpin muokkaus ja gitin muutos samaan riviin = ristiriita, ei ylikirjoitus', () => {
+  const juuri = mkdtempSync(join(tmpdir(), 'lr-'));
+  const laite = luoLaite(juuri, 'oneplus');
+  const P = 'x/REKISTERI.md';
+  tuoRekisteri(juuri, laite, P, REK, { commit: 'a' });
+  const rivi = lueYksikot(juuri, P).find((y) => y.sisalto === '| a | b |\n');
+  // Äppi muokkaa riviä ja lisää uuden rivin.
+  const appi = { ...rivi, sisalto: '| a | äppi |\n', versio: { ...rivi.versio, iphone: 1 }, muuttaja: 'iphone' };
+  delete appi.lahdeSisalto; delete appi.lahdeVersio;
+  const uusiRivi = { id: 'iphone-000002', rekisteri: P, laji: 'avoin', osio: 'Avoimet asiat', jarjestys: valiin(rivi.jarjestys, null).slice(0, 1) + 'zz', sisalto: '| e | f |\n', versio: { iphone: 2 }, poistettu: false };
+  const v = vastaanota(juuri, { yksikot: [appi, uusiRivi] });
+  assert.equal(v.otettu, 2);
+  // Git muuttaa samaa riviä ja toista riviä.
+  const git = REK.replace('| a | b |', '| a | git |').replace('- kaksi', '- KAKSI');
+  const t = uudelleentuo(juuri, laite, P, git, { commit: 'b' });
+  assert.equal(t.ristiriita, 1);
+  assert.equal(t.muuttunut, 2);
+  assert.equal(tulosta(juuri, P, { lahde: true }), git);
+  const nyt = lueYksikot(juuri, P).find((y) => y.id === rivi.id);
+  assert.equal(nyt.sisalto, '| a | äppi |\n');
+  assert.equal(nyt.rinnakkaiset[0].sisalto, '| a | git |\n');
+  assert.equal(ristiriidat(juuri).length, 1);
+  assert.match(tulosta(juuri, P), /- KAKSI/);
+  assert.match(tulosta(juuri, P), /\| e \| f \|/);
+  // Äppi ratkaisee: versio ≥ molempia → ristiriita poistuu.
+  const ratkaisu = { ...nyt, sisalto: '| a | yhdistetty |\n', versio: { oneplus: Math.max(nyt.versio.oneplus, nyt.rinnakkaiset[0].versio.oneplus), iphone: 3 } };
+  delete ratkaisu.rinnakkaiset;
+  assert.deepEqual(vastaanota(juuri, { yksikot: [ratkaisu] }).ristiriidat, []);
+  assert.equal(ristiriidat(juuri).length, 0);
+  // Vanha versio ei kumoa uutta, ja sama rinnakkainen ei tallennu kahdesti.
+  assert.equal(vastaanota(juuri, { yksikot: [appi] }).ohitettu, 1);
+  // Seuraava git-muutos samaan riviin on taas ristiriita, koska äppi on koskenut siihen.
+  assert.equal(uudelleentuo(juuri, laite, P, git.replace('| a | git |', '| a | git2 |'), { commit: 'c' }).ristiriita, 1);
+});
+
+test('vastaanota hylkää vieraat polut ja tunnukset', () => {
+  const juuri = mkdtempSync(join(tmpdir(), 'lr-'));
+  assert.throws(() => vastaanota(juuri, { metat: [{ rekisteri: '../../etc/REKISTERI.md', versio: { a: 1 } }] }), /virheellinen rekisteripolku/);
+  assert.throws(() => vastaanota(juuri, { metat: [{ rekisteri: 'x/muu.md', versio: { a: 1 } }] }), /virheellinen rekisteripolku/);
+  vastaanota(juuri, { metat: [{ rekisteri: 'y/REKISTERI.md', versio: { iphone: 1 }, poistettu: false }] });
+  assert.throws(() => vastaanota(juuri, { yksikot: [{ id: '../x', rekisteri: 'y/REKISTERI.md', versio: {} }] }), /virheellinen tunnus/);
+  assert.throws(() => hae(juuri, '/etc/REKISTERI.md', ['a-1']), /virheellinen rekisteripolku/);
 });
