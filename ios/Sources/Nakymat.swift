@@ -14,7 +14,7 @@ struct SkooppiRivi: View {
             MerkkiRivi {
                 Label("\(skooppi.avoimia)", systemImage: "list.bullet")
                 Label("\(skooppi.vikoja)", systemImage: "ladybug").foregroundStyle(skooppi.vikoja > 0 ? .orange : .secondary)
-                if let k = skooppi.suurinKonteksti { KontekstiMerkki(maara: k).foregroundStyle(.blue) }
+                if let k = skooppi.suurinKonteksti { KontekstiMerkki(maara: k).foregroundStyle(Teema.toissijainen) }
             }
             .font(.caption).foregroundStyle(.secondary)
         }
