@@ -322,7 +322,9 @@ final class LrUITests: XCTestCase {
 
         app.navigationBars["REKISTERI.md"].buttons.element(boundBy: 0).tap()
         app.buttons["lr-synkkaa"].tap()
-        odota(app, tulos: "ei muutoksia", 60)
+        // Tuotannossa vienti gittiin siivoaa koerivin hautakiven kesken kierroksen; äpin lisäkierros päättyy
+        // "yhtenevä" eikä "ei muutoksia" (LOCALREGISTER-VIENTI-TODENNUS 14.10.2026). Kumpikin = sama tila.
+        odota(app, tulos: "ei muutoksia|yhtenevä", 60)
     }
 
     private func avaaLr() -> XCUIApplication {
