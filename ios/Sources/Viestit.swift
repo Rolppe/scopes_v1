@@ -35,6 +35,7 @@ struct Viestikupla: View {
         HStack {
             if viesti.omaViesti { Spacer(minLength: 40) }
             Text(LocalizedStringKey(viesti.teksti))
+                .viestifontti()
                 .textSelection(.enabled)
                 .padding(Teema.Vali.m)
                 .background(viesti.omaViesti ? Teema.korostusTausta : Teema.pinta,
@@ -152,6 +153,7 @@ struct KysymysKortti: View {
             }
         }
         .onChange(of: muut) { if fokus != nil { nayta?() } }
+        .viestifontti()
         .padding(Teema.Vali.xl)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.systemGray5), in: RoundedRectangle(cornerRadius: Teema.Kulma.arkki))
@@ -164,7 +166,7 @@ struct KysymysKortti: View {
     @ViewBuilder private var suljeNappi: some View {
         if let sulje {
             Button { lahetetty = true; fokus = nil; sulje() } label: {
-                Image(systemName: "xmark").font(.body.weight(.medium)).foregroundStyle(.primary)
+                Image(systemName: "xmark").font(.body.weight(.medium)).dynamicTypeSize(...DynamicTypeSize.xxLarge).foregroundStyle(.primary)
                     .frame(width: 44, height: 44)
                     .background(Color(.systemGray4), in: Circle())
             }
@@ -177,7 +179,8 @@ struct KysymysKortti: View {
 
     private func siirto(_ kuva: String, _ nimi: String, _ tunnus: String, _ paalla: Bool, _ toiminto: @escaping () -> Void) -> some View {
         Button(action: toiminto) {
-            Image(systemName: kuva).font(.body.weight(.semibold)).frame(width: 36, height: 36).contentShape(Rectangle())
+            Image(systemName: kuva).font(.body.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge)
+                .frame(width: 36, height: 36).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .foregroundStyle(paalla ? Color.primary : Color.secondary.opacity(0.4))
@@ -396,7 +399,7 @@ struct Syottorivi<Vasen: View>: View {
             if let stop, tyhja {
                 Button(action: stop) {
                     Image(systemName: "stop.fill")
-                        .font(.caption.weight(.bold))
+                        .font(.caption.weight(.bold)).dynamicTypeSize(...DynamicTypeSize.xxLarge)
                         .foregroundStyle(Teema.korostusPaalla)
                         .frame(width: 32, height: 32)
                         .lasiPinta(Teema.korostus, savy: Teema.korostus, in: Circle(), kosketus: true)
@@ -406,7 +409,7 @@ struct Syottorivi<Vasen: View>: View {
             } else if let jatka, tyhja, !estetty {
                 Button(action: jatka) {
                     Image(systemName: "play.fill")
-                        .font(.caption.weight(.bold))
+                        .font(.caption.weight(.bold)).dynamicTypeSize(...DynamicTypeSize.xxLarge)
                         .foregroundStyle(Teema.korostusPaalla)
                         .frame(width: 32, height: 32)
                         .lasiPinta(Teema.korostus, savy: Teema.korostus, in: Circle(), kosketus: true)
@@ -416,7 +419,7 @@ struct Syottorivi<Vasen: View>: View {
             } else {
                 Button(action: laheta) {
                     Image(systemName: "arrow.up")
-                        .font(.body.weight(.semibold))
+                        .font(.body.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge)
                         .foregroundStyle(estetty || tyhja ? Color.white : Teema.korostusPaalla)
                         .frame(width: 32, height: 32)
                         .lasiPinta(estetty || tyhja ? Color(.systemGray3) : Teema.korostus,
