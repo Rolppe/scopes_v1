@@ -257,10 +257,16 @@ struct AsetuksetView: View {
     @Environment(\.dismiss) private var sulje
     @State private var osoite = ""
     @State private var avain = ""
+    @State private var reitti = Reitti.Tila.tuntematon
 
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Text(reittiTeksti).accessibilityIdentifier("reitti")
+                } header: { Text("Yhteys") } footer: {
+                    Text("Kodin ulkopuolella äppi käyttää omaa WireGuard-tunneliaan. Asetus haetaan palvelimelta kotiverkossa.")
+                }
                 Section("Palvelin") {
                     TextField("http://osoite:8787", text: $osoite)
                         .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
@@ -286,6 +292,16 @@ struct AsetuksetView: View {
                 osoite = asetukset.osoite
                 avain = asetukset.avain
             }
+            .task { reitti = await Reitti.jaettu.tila }
+        }
+    }
+
+    private var reittiTeksti: String {
+        switch reitti {
+        case .koti: return "HOME_SSID"
+        case .tunneli: return "Etätunneli (WireGuard)"
+        case .eiTunnelia: return Avainnippu.lue("wg") == nil ? "Ei yhteyttä — tunnelin asetus puuttuu (avaa äppi kerran kotiverkossa)" : "Ei yhteyttä — tunneli ei auennut"
+        case .tuntematon: return "Ei vielä yhdistetty"
         }
     }
 }

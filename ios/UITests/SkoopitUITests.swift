@@ -76,6 +76,20 @@ final class SkoopitUITests: XCTestCase {
         kuva("kaynnistys-lista")
     }
 
+    // Etäyhteys (SCOPES-ETAYHTEYS 14.10.2026): pakotettu tunneli hakee asetuksen kotiverkosta, avaa äpin oman
+    // WireGuard-tunnelin ja lataa skooppilistan sen läpi; asetukset näyttävät reitin.
+    func testEtatunneli() throws {
+        let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        let app = kaynnista(avain: avain, lisa: ["SCOPES_TUNNELI": "pakota"])
+        palkki(app)
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'skooppi-'")).firstMatch.waitForExistence(timeout: 20), "skoopit eivät latautuneet tunnelin läpi")
+        app.buttons["asetukset"].tap()
+        let reitti = app.staticTexts["reitti"]
+        XCTAssertTrue(reitti.waitForExistence(timeout: 5), "reittirivi puuttuu")
+        XCTAssertEqual(reitti.label, "Etätunneli (WireGuard)")
+        kuva("etatunneli-asetukset")
+    }
+
     // Listan avaus piilottaa näppäimistön; paluu samaan keskusteluun palauttaa kursorin kenttään ja näppäimistön,
     // toiseen näkymään vaihto ei (käyttäjä 13.10.2026).
     func testListaPiilottaaNappaimiston() throws {
