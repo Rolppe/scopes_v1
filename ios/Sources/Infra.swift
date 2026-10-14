@@ -13,15 +13,22 @@ struct InfraView: View {
     var body: some View {
         NavigationStack {
             List {
-                if let virhe { Text(virhe).foregroundStyle(.red).accessibilityIdentifier("infra-virhe") }
-                ForEach(nakyvat(skooppiPuu(skoopit), taso: 0), id: \.solmu.id) { rivi in
-                    InfraRivi(solmu: rivi.solmu, taso: rivi.taso, auki: auki.contains(rivi.solmu.id)) {
-                        withAnimation(.snappy) {
-                            if auki.contains(rivi.solmu.id) { auki.remove(rivi.solmu.id) } else { auki.insert(rivi.solmu.id) }
+                if let virhe { Section { Text(virhe).foregroundStyle(.red).accessibilityIdentifier("infra-virhe") } }
+                // Jokainen pääskooppi on oma korttinsa, ja sen alaskoopit avautuvat saman kortin sisään (käyttäjä 14.10.2026).
+                ForEach(skooppiPuu(skoopit)) { paa in
+                    Section {
+                        ForEach(nakyvat([paa], taso: 0), id: \.solmu.id) { rivi in
+                            InfraRivi(solmu: rivi.solmu, taso: rivi.taso, auki: auki.contains(rivi.solmu.id)) {
+                                withAnimation(.snappy) {
+                                    if auki.contains(rivi.solmu.id) { auki.remove(rivi.solmu.id) } else { auki.insert(rivi.solmu.id) }
+                                }
+                            }
                         }
                     }
                 }
             }
+            .listStyle(.insetGrouped)
+            .listSectionSpacing(.compact)
             .navigationTitle("Infra")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { Sivupalkkipainike() }
