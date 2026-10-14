@@ -291,8 +291,9 @@ struct UusiSkooppiView: View {
     }
 }
 
-// Asetukset alavalikkoina (NOTIFICATIONS-ASETUKSET 14.10.2026): Yhteys, Ilmoitukset ja Tietoja. Arvot pidetään tässä,
-// ja Tallenna kirjoittaa ne kerralla; Peru hylkää myös alavalikoissa tehdyt muutokset.
+// Asetukset alavalikkoina (NOTIFICATIONS-ASETUKSET 14.10.2026): Yhteys, Ulkoasu, Ilmoitukset ja Tietoja. Arvot pidetään
+// tässä, ja Tallenna kirjoittaa ne kerralla; Peru hylkää myös alavalikoissa tehdyt muutokset. Ulkoasu näkyy heti
+// valittaessa, joten Peru ja arkin alasveto palauttavat sen avaushetken tilaan (DESIGN-ULKOASU).
 struct AsetuksetView: View {
     @EnvironmentObject private var asetukset: Asetukset
     @Environment(\.dismiss) private var sulje
@@ -300,6 +301,8 @@ struct AsetuksetView: View {
     @State private var avain = ""
     @State private var raja = ilmoitusRaja()
     @State private var paalla = Dictionary(uniqueKeysWithValues: IlmoitusLaji.allCases.map { ($0, ilmoitusPaalla($0)) })
+    @State private var ulkoasuAlku = Ulkoasu.jaettu.tila
+    @State private var tallennettu = false
 
     var body: some View {
         NavigationStack {
@@ -308,6 +311,10 @@ struct AsetuksetView: View {
                     Label("Yhteys", systemImage: "network")
                 }
                 .accessibilityIdentifier("asetukset-yhteys")
+                NavigationLink { UlkoasuAsetukset().toolbar { tallennaPainike } } label: {
+                    Label("Ulkoasu", systemImage: "paintpalette")
+                }
+                .accessibilityIdentifier("asetukset-ulkoasu")
                 NavigationLink { IlmoitusAsetukset(raja: $raja, paalla: $paalla).toolbar { tallennaPainike } } label: {
                     Label("Ilmoitukset", systemImage: "bell.badge")
                 }
@@ -327,6 +334,7 @@ struct AsetuksetView: View {
                 avain = asetukset.avain
             }
         }
+        .onDisappear { if !tallennettu { Ulkoasu.jaettu.tila = ulkoasuAlku } }
     }
 
     // Alavalikoissa paluupainike on Perun paikalla, joten Peru on vain juuressa; Tallenna on joka tasolla.
@@ -337,6 +345,7 @@ struct AsetuksetView: View {
                 asetukset.avain = avain
                 tallennaIlmoitusRaja(raja)
                 for (l, p) in paalla { tallennaIlmoitusPaalla(l, p) }
+                tallennettu = true
                 sulje()
             }
         }

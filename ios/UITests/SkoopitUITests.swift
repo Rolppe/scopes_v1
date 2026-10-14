@@ -179,6 +179,9 @@ final class SkoopitUITests: XCTestCase {
         kuva("suodatin-scope")
         // Pakattu skooppi valuu aktiivisten alle (SCOPES-LISTA-TILAVARIT): ensimmäinen skooppi on auki, koska testiä ajava istunto on.
         XCTAssertFalse(skooppiRivit.firstMatch.label.contains("pakattu"), "pakattu skooppi ylimpänä: \(skooppiRivit.firstMatch.label)")
+        // Valmiit (vihreä "odottaa sinua") käsittelyssä olevien ja kyselykorttien alle, pakatut alimmaksi (SCOPES-LISTA-JARJESTYS).
+        let tasot = skooppiRivit.allElementsBoundByIndex.map(\.label).map { $0.contains("pakattu") ? 2 : $0.contains("odottaa sinua") ? 1 : 0 }
+        XCTAssertEqual(tasot, tasot.sorted(), "skooppien järjestys ei ole käsittely/kysely → valmis → pakattu: \(tasot)")
         app.buttons["suodatin-chat"].tap()
         XCTAssertTrue(skooppiRivit.firstMatch.waitForNonExistence(timeout: 5), "Chat-suodatin näyttää skoopit")
         XCTAssertTrue(chatRivit.firstMatch.exists, "Chat-suodatin piilotti chatit")
@@ -628,6 +631,61 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertEqual(app.switches["ilmoitus-vika"].value as? String, "0", "Tallenna ei tallentanut kytkintä")
         // Palauta oletus, jotta seuraava ajo alkaa samasta tilasta.
         kytke(app.switches["ilmoitus-vika"])
+        app.buttons["Tallenna"].tap()
+    }
+
+    // Ulkoasu (DESIGN-ULKOASU 14.10.2026): korostusväri, teema ja Liquid Glass näkyvät heti; Peru palauttaa, Tallenna
+    // säilyttää. Kuvat: valinnat alavalikossa, lista tallennetulla ulkoasulla lasin kanssa ja ilman.
+    func testUlkoasu() throws {
+        let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        let app = kaynnista(avain: avain)
+        func ulkoasuun() {
+            nayta(app, "asetukset")
+            XCTAssertTrue(app.navigationBars["Asetukset"].waitForExistence(timeout: 5))
+            app.buttons["asetukset-ulkoasu"].tap()
+            XCTAssertTrue(app.navigationBars["Ulkoasu"].waitForExistence(timeout: 5), "Ulkoasu-alavalikko ei auennut")
+        }
+        let teema = app.segmentedControls["ulkoasu-teema"]
+        let lasi = app.switches["ulkoasu-lasi"]
+        ulkoasuun()
+        XCTAssertTrue(app.buttons["korostus-turkoosi"].isSelected, "oletus ei ole turkoosi")
+        kuva("ulkoasu-oletus")
+        app.buttons["korostus-violetti"].tap()
+        XCTAssertTrue(app.buttons["korostus-violetti"].isSelected, "valinta ei vaihtunut")
+        teema.buttons["Tumma"].tap()
+        kuva("ulkoasu-violetti-tumma")
+        XCTAssertTrue(nakyviin(app, lasi), "lasikytkin puuttuu")
+        XCTAssertEqual(lasi.value as? String, "1", "Liquid Glass ei ole oletuksena päällä")
+        kytke(lasi)
+        XCTAssertEqual(lasi.value as? String, "0")
+        kuva("ulkoasu-lasi-pois")
+        takaisin(app, "Ulkoasu")
+        app.buttons["Peru"].tap()
+        ulkoasuun()
+        XCTAssertTrue(app.buttons["korostus-turkoosi"].isSelected, "Peru ei palauttanut korostusta")
+        XCTAssertTrue(teema.buttons["Järjestelmä"].isSelected, "Peru ei palauttanut teemaa")
+        XCTAssertTrue(nakyviin(app, lasi))
+        XCTAssertEqual(lasi.value as? String, "1", "Peru ei palauttanut lasia")
+        app.swipeDown()
+        app.buttons["korostus-violetti"].tap()
+        teema.buttons["Tumma"].tap()
+        app.buttons["Tallenna"].tap()
+        palkki(app)
+        kuva("lista-violetti-tumma-lasi")
+        ulkoasuun()
+        XCTAssertTrue(app.buttons["korostus-violetti"].isSelected, "Tallenna ei säilyttänyt korostusta")
+        XCTAssertTrue(nakyviin(app, lasi))
+        kytke(lasi)
+        app.buttons["Tallenna"].tap()
+        palkki(app)
+        kuva("lista-violetti-tumma-ilman-lasia")
+        // Palauta oletus, jotta seuraava ajo alkaa samasta tilasta.
+        ulkoasuun()
+        app.buttons["korostus-turkoosi"].tap()
+        teema.buttons["Järjestelmä"].tap()
+        XCTAssertTrue(nakyviin(app, lasi))
+        kytke(lasi)
+        XCTAssertEqual(lasi.value as? String, "1")
         app.buttons["Tallenna"].tap()
     }
 

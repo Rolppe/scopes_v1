@@ -22,10 +22,15 @@ private enum Kohde: Identifiable {
         case let .skooppi(s): return isoPaiva(s.aika) ?? .distantPast
         }
     }
-    // Pakattu skooppi valuu aktiivisten (chatit ja auki olevat skoopit) alapuolelle.
-    var aktiivinen: Bool {
-        if case let .skooppi(s) = self { return s.tilaNyt != "pakattu" }
-        return true
+    // Järjestystaso (SCOPES-LISTA-JARJESTYS, käyttäjä 14.10.2026): chatit, käsittelyssä olevat ja kyselykortti-skoopit
+    // ylimpänä, valmiit (vihreä odottaa) niiden alla ja pakatut alimpana; tason sisällä uusin ensin.
+    var taso: Int {
+        guard case let .skooppi(s) = self else { return 0 }
+        switch s.tilaNyt {
+        case "odottaa": return 1
+        case "pakattu": return 2
+        default: return 0
+        }
     }
     func kuuluu(_ s: Suodatin) -> Bool {
         switch (s, self) {
@@ -69,8 +74,8 @@ struct Sivupalkki: View, Equatable {
         // Aika jäsennetään kerran riviä kohden, ei joka vertailussa (SCOPES-LISTA-SUMEUS 13.10.2026: ISO-jäsennys
         // lajittelun sisällä vei pääsäikeeltä ~170 ms ruutua kohden).
         return (h.isEmpty ? kaikki : kaikki.filter { $0.osuu(h) })
-            .map { ($0, $0.aktiivinen, $0.aika) }
-            .sorted { $0.1 != $1.1 ? $0.1 : $0.2 > $1.2 }
+            .map { ($0, $0.taso, $0.aika) }
+            .sorted { $0.1 != $1.1 ? $0.1 < $1.1 : $0.2 > $1.2 }
             .map(\.0)
     }
 
@@ -146,7 +151,8 @@ struct Sivupalkki: View, Equatable {
                 Button { suodatin = s } label: {
                     Text(s.rawValue).font(.body.weight(.semibold)).padding(.horizontal, 20).padding(.vertical, 8)
                         .foregroundStyle(suodatin == s ? Teema.korostusPaalla : Color.primary)
-                        .background(suodatin == s ? Teema.korostus : Teema.passiivinen, in: Capsule())
+                        .lasiPinta(suodatin == s ? Teema.korostus : Teema.passiivinen,
+                                   savy: suodatin == s ? Teema.korostus : nil, in: Capsule(), kosketus: true)
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)

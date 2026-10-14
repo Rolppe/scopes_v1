@@ -8,12 +8,13 @@ import UIKit
 enum Teema {
     // MARK: Värit — jokaisella värillä yksi merkitys.
 
-    /// Toiminnot, linkit, valinnat ja laajennusnapit; myös `.tint` koko äpille.
-    static let korostus = Color(vaalea: 0x0F766E, tumma: 0x2DD4BF)
+    /// Toiminnot, linkit, valinnat ja laajennusnapit; myös `.tint` koko äpille. Käyttäjän valitsema (Asetukset → Ulkoasu,
+    /// oletus turkoosi); lukeva näkymä piirtyy uudelleen, kun valinta vaihtuu (Ulkoasu.swift).
+    static var korostus: Color { Ulkoasu.jaettu.korostus.vari }
     /// Teksti ja kuvake täytetyn korostuspinnan päällä (valittu suodatin, lähetysnappi).
-    static let korostusPaalla = Color(vaalea: 0xFFFFFF, tumma: 0x042F2E)
+    static var korostusPaalla: Color { Ulkoasu.jaettu.korostus.paalla }
     /// Valitun rivin ja oman viestin tausta.
-    static let korostusTausta = korostus.opacity(0.14)
+    static var korostusTausta: Color { korostus.opacity(0.14) }
     /// Avoimet viat (> 0). Ei virhe eikä toiminto.
     static let varoitus = Color.orange
     /// Epäonnistunut toiminto tai palvelun hylkäys.
@@ -25,7 +26,7 @@ enum Teema {
     /// Valitsematon pilleri, estetty nappi.
     static let passiivinen = Color(.systemGray5)
     /// Käsittelyssä olevan skoopin kansio (hehkuu); pakattu on harmaa ääriviiva.
-    static let kansio = korostus
+    static var kansio: Color { korostus }
     /// Skoopin istunnossa on kyselykortti auki (SCOPES-LISTA-KYSELYVARI).
     static let kysely = Color.yellow
     /// Skoopin istunto odottaa käyttäjää muuten: vuoro valmis tai lupakysely.

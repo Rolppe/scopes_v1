@@ -286,7 +286,8 @@ struct Syottorivi<Vasen: View>: View {
                         .font(.body.weight(.semibold))
                         .foregroundStyle(estetty || tyhja ? Color.white : Teema.korostusPaalla)
                         .frame(width: 32, height: 32)
-                        .background(Circle().fill(estetty || tyhja ? Color(.systemGray3) : Teema.korostus))
+                        .lasiPinta(estetty || tyhja ? Color(.systemGray3) : Teema.korostus,
+                                   savy: estetty || tyhja ? Color(.systemGray3) : Teema.korostus, in: Circle(), kosketus: true)
                 }
                 .disabled(estetty || tyhja)
                 .accessibilityIdentifier("\(tunnus)-laheta")
@@ -294,7 +295,7 @@ struct Syottorivi<Vasen: View>: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .lasiPinta(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Color(.separator).opacity(0.4)))
         .padding(.horizontal, 12)
         .padding(.bottom, 8)
