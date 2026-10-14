@@ -1,14 +1,14 @@
 // node --test scopes/palvelu/viestit.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { projektiNimi } from './lahteet.mjs';
 import { kasittelija } from './palvelin.mjs';
 import { Hylatty } from './toiminnot.mjs';
-import { keskustelu, luoViestit, MALLIT, paikallisetMallit, tyokaluRivi } from './viestit.mjs';
+import { keskustelu, luoViestit, MALLIT, paikallisetMallit, transkriptissa, tyokaluRivi } from './viestit.mjs';
 
 const ID = '38c487b9-3c36-4723-b2af-5f07b106c172';
 const rivi = (o) => JSON.stringify(o);
@@ -68,6 +68,17 @@ function vaarennos(claude = { koodi: 0, stdout: VIRTA, stderr: '' }, lms = { koo
   };
   return { aja, kutsut };
 }
+
+// Istunto, joka ottaa viestin vastaan: Enter kirjoittaa edellisen -l-tekstin transkriptiin käyttäjän viestinä (V-305).
+function vastaanottava(polku, { aja, kutsut } = vaarennos()) {
+  let teksti = '';
+  return { kutsut, aja: async (komento, argumentit, valinnat) => {
+    if (komento === 'tmux' && argumentit[0] === 'send-keys' && argumentit[3] === '-l') teksti = argumentit[4];
+    if (komento === 'tmux' && argumentit[0] === 'send-keys' && argumentit[3] === 'Enter' && teksti) appendFileSync(polku, `\n${rivi({ type: 'user', message: { content: teksti } })}`);
+    return aja(komento, argumentit, valinnat);
+  } };
+}
+const s1 = (a) => join(a.projektitDir, projektiNimi('/x'), 's1.jsonl');
 
 const hylkaa = async (lupaus, koodi) => assert.rejects(lupaus, (e) => e instanceof Hylatty && e.koodi === koodi);
 
@@ -262,8 +273,9 @@ test('skoopinViestit: pakattu istunto piiloon, uusin pakkaamaton näkyy', async 
 });
 
 test('lahetaSkooppiin: kirjaimellisesti ruutuun, rivinvaihdot välilyönneiksi', async () => {
-  const { aja, kutsut } = vaarennos();
-  const v = luoViestit(ymparisto(), { aja });
+  const a = ymparisto();
+  const { aja, kutsut } = vastaanottava(s1(a));
+  const v = luoViestit(a, { aja });
   assert.deepEqual(await v.lahetaSkooppiin('a', 'eka\n toka'), { ok: true, istunto: 's1' });
   assert.deepEqual(kutsut.slice(1).map((k) => k.argumentit), [['send-keys', '-t', '%5', '-l', 'eka toka'], ['send-keys', '-t', '%5', 'Enter']]);
   await hylkaa(v.lahetaSkooppiin('b', 'x'), 409);
@@ -280,10 +292,37 @@ test('lahetaSkooppiin: auki oleva monivalinta suljetaan Escapella ennen tekstiä
   const polku = join(a.projektitDir, projektiNimi('/x'), 's1.jsonl');
   const kysy = { type: 'tool_use', id: 'k1', name: 'AskUserQuestion', input: { questions: [{ question: 'Q?', options: [{ label: 'A' }] }] } };
   writeFileSync(polku, rivi({ type: 'assistant', timestamp: 't', message: { content: [kysy] } }));
-  const { aja, kutsut } = vaarennos();
+  const { aja, kutsut } = vastaanottava(polku);
   await luoViestit({ ...a, escapeTauko: 0 }, { aja }).lahetaSkooppiin('a', 'oma vastaus');
   assert.deepEqual(kutsut.slice(1).map((k) => k.argumentit),
     [['send-keys', '-t', '%5', 'Escape'], ['send-keys', '-t', '%5', '-l', 'oma vastaus'], ['send-keys', '-t', '%5', 'Enter']]);
+});
+
+// V-305 14.10.2026: viestit jäivät istunnon syöttökenttään, eikä äppi tiennyt siitä.
+test('lahetaSkooppiin: viesti, joka ei näy transkriptissa, on 504 ja kirjataan ruudun kanssa', async () => {
+  const a = { ...ymparisto(), perillaRaja: 0, toimintoloki: join(mkdtempSync(join(tmpdir(), 'scopes-l-')), 't.loki') };
+  const { aja, kutsut } = vaarennos();
+  await hylkaa(luoViestit(a, { aja }).lahetaSkooppiin('a', 'jumiin jäävä'), 504);
+  assert.deepEqual(kutsut.at(-1).argumentit, ['capture-pane', '-p', '-t', '%5']);
+  const [r] = readFileSync(a.toimintoloki, 'utf8').trim().split('\n').map((x) => JSON.parse(x));
+  assert.equal(r.toiminto, 'viesti');
+  assert.equal(r.tulos, 'ei näkynyt');
+  assert.equal(r.alku, 'jumiin jäävä');
+  assert.deepEqual(r.ruutu, []);
+  // Perillä: kirjataan ok, ja aiempi sama teksti transkriptissa ei kelpaa todisteeksi.
+  const ok = { ...ymparisto(), perillaRaja: 0, toimintoloki: a.toimintoloki };
+  await luoViestit(ok, vastaanottava(s1(ok))).lahetaSkooppiin('a', 'jatka');
+  assert.equal(JSON.parse(readFileSync(a.toimintoloki, 'utf8').trim().split('\n')[1]).tulos, 'ok');
+  await hylkaa(luoViestit({ ...ymparisto(), perillaRaja: 0 }, { aja }).lahetaSkooppiin('a', 'jatka'), 504);
+});
+
+test('transkriptissa: käyttäjän viesti, jonoon mennyt komento ja yhdistetyt viestit; ali-agentti ei', () => {
+  assert.equal(transkriptissa(rivi({ type: 'user', message: { content: [{ type: 'text', text: 'moi  sinä' }] } }), 'moi sinä'), true);
+  assert.equal(transkriptissa(rivi({ type: 'attachment', attachment: { type: 'queued_command', prompt: 'Jatka' } }), 'Jatka'), true);
+  assert.equal(transkriptissa(rivi({ type: 'queue-operation', operation: 'enqueue', content: 'Jatka' }), 'Jatka'), true);
+  assert.equal(transkriptissa(rivi({ type: 'user', message: { content: 'eka\nJatkaJatka' } }), 'Jatka'), true);
+  assert.equal(transkriptissa(rivi({ type: 'user', isSidechain: true, message: { content: 'Jatka' } }), 'Jatka'), false);
+  assert.equal(transkriptissa(rivi({ type: 'assistant', message: { content: [{ type: 'text', text: 'Jatka' }] } }), 'Jatka'), false);
 });
 
 test('suljeKysymys: auki oleva monivalinta suljetaan pelkällä Escapella; muuten 409', async () => {
@@ -301,7 +340,7 @@ test('suljeKysymys: auki oleva monivalinta suljetaan pelkällä Escapella; muute
 test('palvelin: chat- ja viestipolut avaimella, iso runko sallittu', async () => {
   const a = ymparisto();
   const avain = 'k'.repeat(32);
-  const { aja } = vaarennos();
+  const { aja } = vastaanottava(s1(a));
   const srv = createServer(kasittelija({ ...a, avain }, undefined, luoViestit(a, { aja }))).listen(0, '127.0.0.1');
   await new Promise((r) => srv.once('listening', r));
   const hae = (polku, method = 'GET', runko = null, k = avain, ndjson = false) => new Promise((ok, ei) => {

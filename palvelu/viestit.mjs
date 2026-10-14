@@ -8,8 +8,8 @@
 // Agentin nimi tarkistetaan listalta, istunnon id muodosta; vapaa teksti ei päädy komentoriville.
 
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 import { istunnot, lueSkoopit, projektiNimi, pysahdys } from './lahteet.mjs';
 import { ajaKomento, Hylatty } from './toiminnot.mjs';
 
@@ -124,8 +124,40 @@ export function keskustelu(transkripti, maara = 120) {
   return tulos.slice(-maara);
 }
 
-export function luoViestit(asetukset, { aja = ajaKomento } = {}) {
+// Transkriptin kohdasta `koko` eteenpäin kirjoitetut rivit sisältävät tekstin `teksti`: käyttäjän viestinä, jonoon
+// menneenä komentona (queued_command) tai jono-operaationa. Haku alun 60 merkin perusteella, koska Claude voi
+// yhdistää jonossa olleet viestit.
+export function transkriptissa(transkripti, teksti) {
+  const haku = teksti.replace(/\s+/g, ' ').slice(0, 60);
+  for (const r of transkripti.split('\n')) {
+    let j;
+    try { j = JSON.parse(r); } catch { continue; }
+    if (j.isSidechain) continue;
+    const c = j.message?.content;
+    const osat = j.type === 'user' ? (typeof c === 'string' ? [c] : Array.isArray(c) ? c.filter((o) => o?.type === 'text').map((o) => o.text) : [])
+      : j.type === 'attachment' ? [j.attachment?.prompt] : j.type === 'queue-operation' ? [j.content] : [];
+    if (osat.some((o) => typeof o === 'string' && o.replace(/\s+/g, ' ').includes(haku))) return true;
+  }
+  return false;
+}
+
+export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimintoloki } = {}) {
   let chatKaynnissa = false;
+  const kirjaa = (rivi) => {
+    if (!loki) return;
+    try { mkdirSync(dirname(loki), { recursive: true }); appendFileSync(loki, JSON.stringify({ aika: new Date().toISOString(), ...rivi }) + '\n'); } catch { /* loki ei estä lähetystä */ }
+  };
+  // Odottaa, että lähetetty teksti ilmestyy transkriptiin (V-305); raja ja väli asetuksista testejä varten.
+  async function odotaTranskriptiin(polku, koko, teksti) {
+    const raja = Date.now() + (asetukset.perillaRaja ?? 10_000);
+    for (;;) {
+      let uusi = '';
+      try { uusi = readFileSync(polku).subarray(koko).toString('utf8'); } catch { /* transkripti ei vielä syntynyt */ }
+      if (transkriptissa(uusi, teksti)) return true;
+      if (Date.now() >= raja) return false;
+      await new Promise((r) => setTimeout(r, asetukset.perillaVali ?? 500));
+    }
+  }
 
   // Skoopin pakkaamattomat istunnot uusin ensin: pakattu istunto ei ole enää skoopin keskustelu (käyttäjä 13.10.2026),
   // ja automaattisiirron jälkeen uusi istunto korvaa vanhan samassa näkymässä.
@@ -328,10 +360,24 @@ export function luoViestit(asetukset, { aja = ajaKomento } = {}) {
         if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
         await new Promise((r) => setTimeout(r, asetukset.escapeTauko ?? 800));
       }
-      for (const a of [['-l', teksti.replace(/\s*\n\s*/g, ' ').trim()], ['Enter']]) {
+      const rivi = teksti.replace(/\s*\n\s*/g, ' ').trim();
+      const alku = Date.now();
+      let koko = 0;
+      try { koko = statSync(i.polku).size; } catch { /* uusi istunto ilman transkriptia */ }
+      for (const a of [['-l', rivi], ['Enter']]) {
         const t = await aja('tmux', ['send-keys', '-t', i.ruutu, ...a]);
         if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
       }
+      // V-305 (14.10.2026): kolme viestiä jäi istunnon syöttökenttään ja lähti myöhemmin yhtenä, eikä äppi tiennyt
+      // siitä. Lähetys on perillä vasta, kun teksti näkyy transkriptissa (käyttäjän viesti tai jonoon mennyt komento).
+      const perilla = await odotaTranskriptiin(i.polku, koko, rivi);
+      const kirjaus = { toiminto: 'viesti', nimi, istunto: i.id, merkkeja: rivi.length, alku: rivi.slice(0, 40), kesto: Date.now() - alku };
+      if (!perilla) {
+        const ruutu = await aja('tmux', ['capture-pane', '-p', '-t', i.ruutu]);
+        kirjaa({ ...kirjaus, tulos: 'ei näkynyt', ruutu: ruutu.stdout.split('\n').filter((r) => r.trim()).slice(-8) });
+        throw new Hylatty(504, 'viesti ei näkynyt istunnossa — se voi odottaa istunnon syöttökentässä; tarkista ennen uudelleenlähetystä');
+      }
+      kirjaa({ ...kirjaus, tulos: 'ok' });
       return { ok: true, istunto: i.id };
     },
 
