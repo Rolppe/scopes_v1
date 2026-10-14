@@ -44,6 +44,13 @@ struct Viestikupla: View {
     }
 }
 
+// Yhden merkin lisäys, joka on rivinvaihto, eli näppäimistön lähetysnäppäin: palauttaa sen kohdan.
+private func lisattyRivinvaihto(_ vanha: String, _ uusi: String) -> String.Index? {
+    guard uusi.count == vanha.count + 1 else { return nil }
+    let i = zip(uusi.indices, vanha).first { uusi[$0.0] != $0.1 }?.0 ?? uusi.index(before: uusi.endIndex)
+    return uusi[i] == "\n" ? i : nil
+}
+
 // Monivalinta korttina kuten Claude-äpissä: otsikko, kysymys ja vaihtoehdot kuvauksineen sekä Muu-kenttä.
 // Yksi kysymys ilman monivalintaa lähtee napautuksesta; muuten valinnat kootaan ja lähetetään Lähetä-napista.
 // Moniosainen kortti (CHAT-QUESTION-YKSI-KERRALLAAN, käyttäjä 14.10.2026): yksi kysymys kerrallaan, yläreunassa vaihe
@@ -60,6 +67,11 @@ struct KysymysKortti: View {
     @FocusState private var fokus: Int?
     @State private var lahetetty = false
     @State private var nyt = 0
+    // Vaakassa näppäimistö vie suurimman osan korkeudesta (käyttäjä 14.10.2026, kuten Syottorivi): Muu-kenttä alkaa yhdeltä
+    // riviltä ja kasvaa vasta, kun teksti ei mahdu; kirjoittaessa ei Lähetä/Seuraava-nappia, vaan rivinvaihto lähettää
+    // (viimeinen kysymys) tai siirtää seuraavaan. Ilman näppäimistöä nappi näkyy, jotta pelkät valinnat voi lähettää.
+    @Environment(\.verticalSizeClass) private var pystyKoko
+    private var vaaka: Bool { pystyKoko == .compact }
 
     private var heti: Bool { kysymykset.count == 1 && !kysymykset[0].monivalinta }
     private var monta: Bool { kysymykset.count > 1 }
@@ -101,15 +113,18 @@ struct KysymysKortti: View {
             }
             if vastaa != nil {
                 // Ei rivirajaa (käyttäjä 13.10.2026): kenttä ja kortti kasvavat kirjoittaessa, vanha teksti ei piiloudu.
-                TextField("Muu", text: Binding(get: { muut[q] ?? "" }, set: { muut[q] = $0 }), axis: .vertical)
+                // Sidos kiinnittää kysymyksen: vaihdon jälkeen vanha kenttä vielä kirjoitti tekstinsä uuden kysymyksen vastaukseksi.
+                let kq = q
+                TextField("Muu", text: Binding(get: { muut[kq] ?? "" }, set: { kirjoita(kq, $0) }), axis: .vertical)
                     .font(.body)
-                    .padding(.vertical, Teema.Vali.l)
+                    .submitLabel(vaaka ? (viimeinen ? .send : .next) : .return)
+                    .padding(.vertical, vaaka ? Teema.Vali.s : Teema.Vali.l)
                     .focused($fokus, equals: q)
                     .disabled(lahetetty)
                     .accessibilityIdentifier("kysymys-muu-\(q)")
                     .id(q)
             }
-            if let vastaa {
+            if let vastaa, !(vaaka && fokus == q) {
                 HStack {
                     Spacer()
                     if viimeinen {
@@ -227,6 +242,17 @@ struct KysymysKortti: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { if nyt == q { siirry(q + 1) } }
             }
         }
+    }
+
+    // Vaakassa rivinvaihto ei jää tekstiin, vaan toimii kuin Lähetä tai Seuraava; liitetty monirivinen teksti jää.
+    private func kirjoita(_ kq: Int, _ uusi: String) {
+        let vanha = muut[kq] ?? ""
+        guard vaaka, let i = lisattyRivinvaihto(vanha, uusi) else { muut[kq] = uusi; return }
+        var t = uusi
+        t.remove(at: i)
+        muut[kq] = t
+        guard kq == q else { return }
+        if !viimeinen { siirry(q + 1) } else if let vastaa, !lahetetty, !tyhja { fokus = nil; laheta(vastaa) }
     }
 
     // Vastaus tekstinä: kysymys kerrallaan "otsikko: valinnat tai oma vastaus".
@@ -361,13 +387,6 @@ struct Syottorivi<Vasen: View>: View {
         .overlay(RoundedRectangle(cornerRadius: Teema.Kulma.arkki, style: .continuous).stroke(Color(.separator).opacity(0.4)))
         .padding(.horizontal, Teema.Vali.m)
         .padding(.bottom, Teema.Vali.s)
-    }
-
-    // Yhden merkin lisäys, joka on rivinvaihto, eli näppäimistön lähetysnäppäin: palauttaa sen kohdan.
-    private func lisattyRivinvaihto(_ vanha: String, _ uusi: String) -> String.Index? {
-        guard uusi.count == vanha.count + 1 else { return nil }
-        let i = zip(uusi.indices, vanha).first { uusi[$0.0] != $0.1 }?.0 ?? uusi.index(before: uusi.endIndex)
-        return uusi[i] == "\n" ? i : nil
     }
 
     private var nappirivi: some View {
