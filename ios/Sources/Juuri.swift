@@ -118,7 +118,11 @@ struct JuuriView: View {
                     .frame(width: leveys)
                     // Siirto piirtovaiheen efektinä, ei asettelussa: .offset siirsi palkin UIKit-näkymien kehystä joka
                     // ruudulla, ja navigointi- ja listanäkymät asettelivat itsensä uudelleen (SCOPES-LISTA-SUMEUS).
-                    .visualEffect { [x = siirto - leveys] sisalto, _ in sisalto.offset(x: x) }
+                    // Vaakassa palkki alkaa loven turva-alueen jälkeen: suljettuna se siirtyy myös sen yli, muuten reuna
+                    // näkyi lovialueella (DESIGN-VAAKATUKI).
+                    .visualEffect { [x = siirto - leveys - g.safeAreaInsets.leading * (1 - siirto / leveys)] sisalto, _ in
+                        sisalto.offset(x: x)
+                    }
                     .gesture(vetoEle(leveys))
                     .accessibilityHidden(!navigaatio.sivupalkkiAuki)
                 if Mittari.paalla { MittariTulos() }

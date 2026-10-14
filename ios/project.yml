@@ -28,7 +28,8 @@ targets:
       properties:
         CFBundleDisplayName: Scopes
         UILaunchScreen: {}
-        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        # Vaaka chat- ja listanäkymään (käyttäjä 14.10.2026, DESIGN-VAAKATUKI); ylösalaisin ei iPhonessa.
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         NSLocalNetworkUsageDescription: Sovellus lukee skooppien tilan kotipalvelimelta.
         NSCameraUsageDescription: Kameralla otettu kuva liitetään skoopin viestiin.
         NSAppTransportSecurity:
