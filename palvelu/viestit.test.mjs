@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { projektiNimi } from './lahteet.mjs';
 import { kasittelija } from './palvelin.mjs';
 import { Hylatty } from './toiminnot.mjs';
-import { keskustelu, luoViestit, MALLIT, paikallisetMallit, transkriptissa, tyokaluRivi } from './viestit.mjs';
+import { keskustelu, luoViestit, mallinNayttonimi, MALLIT, paikallisetMallit, transkriptissa, tyokaluRivi } from './viestit.mjs';
 
 const ID = '38c487b9-3c36-4723-b2af-5f07b106c172';
 const rivi = (o) => JSON.stringify(o);
@@ -83,9 +83,17 @@ const s1 = (a) => join(a.projektitDir, projektiNimi('/x'), 's1.jsonl');
 const hylkaa = async (lupaus, koodi) => assert.rejects(lupaus, (e) => e instanceof Hylatty && e.koodi === koodi);
 
 test('paikallisetMallit: LM Studion lista, upotukset ja kelvottomat pois', () => {
-  assert.deepEqual(paikallisetMallit(LMS_LISTA), [{ nimi: PAIKALLINEN, kuvaus: 'qwen3.6-35b-a3b', tyyppi: 'paikallinen' }]);
+  assert.deepEqual(paikallisetMallit(LMS_LISTA), [{ nimi: PAIKALLINEN, kuvaus: 'Qwen3.6 35B A3B', tyyppi: 'paikallinen' }]);
   assert.deepEqual(paikallisetMallit(''), []);
   assert.deepEqual(paikallisetMallit('{"data":5}'), []);
+});
+
+test('mallinNayttonimi: ilman tiedosto- ja kvantisointipäätettä, koot isolla (V-330)', () => {
+  assert.equal(mallinNayttonimi('qwen3.5-9b-q4_k_m.gguf'), 'Qwen3.5 9B');
+  assert.equal(mallinNayttonimi('qwen/qwen3.6-35b-a3b'), 'Qwen3.6 35B A3B');
+  assert.equal(mallinNayttonimi('llama-3.1-8b-instruct-iq4_xs'), 'Llama 3.1 8B Instruct');
+  assert.equal(mallinNayttonimi('lmstudio-community/gemma-3-12b-it-Q8_0'), 'Gemma 3 12B It');
+  assert.equal(mallinNayttonimi('mistral-7b-instruct-v0.3'), 'Mistral 7B Instruct v0.3');
 });
 
 test('keskustelu: teksti, komennot ja työkalurivit; ei tuloksia, metaa eikä ali-agentteja', () => {
