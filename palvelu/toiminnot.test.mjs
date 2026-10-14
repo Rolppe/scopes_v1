@@ -124,6 +124,28 @@ test('jono: varatulle istunnolle herätys ja siirto odottavat vapautumista, /pak
   assert.deepEqual(rivit.filter((r) => r.jonosta).map((r) => [r.toiminto, r.tulos]), [['herata', 'ok'], ['automaattisiirto', 'ok']]);
 });
 
+test('pakkaa: auki oleva kysymys suljetaan Escapella ennen /pakkaa; vastattu kysymys ei auta (käyttäjä 14.10.2026)', async () => {
+  const a = { ...ymparisto({ tila: 'waiting' }), escapeTauko: 0 };
+  const transkripti = join(a.projektitDir, projektiNimi('/x'), 's1.jsonl');
+  const kysymys = JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'k1', name: 'AskUserQuestion', input: { questions: [{ question: 'Mitä?', options: [{ label: 'x' }] }] } }] } });
+  writeFileSync(transkripti, kysymys + '\n');
+  const v = vaarennos();
+  const r = await luoToiminnot(a, { aja: v.aja })('pakkaa', 'a');
+  assert.deepEqual(r, { ok: true, toiminto: 'pakkaa', nimi: 'a', istunto: 's1', komento: '/pakkaa', kysymysSuljettiin: true });
+  assert.deepEqual(v.kutsut.slice(1), [['tmux', 'send-keys', '-t', '%5', 'Escape'], ['tmux', 'send-keys', '-t', '%5', '-l', '/pakkaa'], ['tmux', 'send-keys', '-t', '%5', 'Enter']]);
+  // Vastattu kysymys: waiting ilman auki olevaa kysymystä hylätään kuten ennen.
+  writeFileSync(transkripti, kysymys + '\n' + JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'k1', content: 'x' }] } }) + '\n');
+  const v2 = vaarennos();
+  await hylkaa(luoToiminnot(a, { aja: v2.aja })('pakkaa', 'a'), 409);
+  assert.equal(v2.kutsut.length, 0);
+  // Työtä tekevä istunto hylätään, vaikka kysymys näyttäisi auki olevalta.
+  writeFileSync(transkripti, kysymys + '\n');
+  const busy = { ...ymparisto({ tila: 'busy' }), escapeTauko: 0 };
+  mkdirSync(join(busy.projektitDir, projektiNimi('/x')), { recursive: true });
+  writeFileSync(join(busy.projektitDir, projektiNimi('/x'), 's1.jsonl'), kysymys + '\n');
+  await hylkaa(luoToiminnot(busy, { aja: vaarennos().aja })('pakkaa', 'a'), 409);
+});
+
 test('jono: komento putoaa, kun istunto päättyy; vapaa istunto ohittaa jonon', async () => {
   const a = ymparisto({ tila: 'busy' });
   const v = vaarennos();
