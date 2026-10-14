@@ -221,9 +221,12 @@ final class LrUITests: XCTestCase {
     // LOCALREGISTER-RIVIN-LISAYS: uusi rivi taulukon viimeisen rivin alle rivin pitkän painalluksen Lisää alle -valinnalla.
     // Return on välilyönti, rivi tulee heti ankkurin alle, taulukon perässä oleva tyhjä rivi jää uuden rivin perään, ja
     // synkan jälkeen juuritiiviste on sama molemmilla.
+    // Tuotantoa vastaan vain siivoavana (SCOPES_KOE_LR_POISTA=1): koerivi poistetaan lopuksi äpin Poista rivi -painikkeella.
     func testLrRivinLisays() throws {
-        guard ProcessInfo.processInfo.environment["SCOPES_KOE_LR"] == "1" else {
-            throw XCTSkip("kirjoittava koe vain koeinstanssia vastaan (SCOPES_KOE_LR=1)")
+        let ymp = ProcessInfo.processInfo.environment
+        let poistaLopuksi = ymp["SCOPES_KOE_LR_POISTA"] == "1"
+        guard ymp["SCOPES_KOE_LR"] == "1" || poistaLopuksi else {
+            throw XCTSkip("kirjoittava koe vain koeinstanssia vastaan (SCOPES_KOE_LR=1) tai siivoavana (SCOPES_KOE_LR_POISTA=1)")
         }
         let app = avaaLr()
         let polku = "scopes/localregister/REKISTERI.md"
@@ -288,6 +291,31 @@ final class LrUITests: XCTestCase {
         let uusi = try XCTUnwrap((try pyynto("/api/lr/hae", ["rekisteri": polku, "idt": uudet])["yksikot"] as? [[String: Any]])?.first)
         XCTAssertEqual(uusi["laji"] as? String, odotettuLaji)
         XCTAssertFalse((uusi["id"] as? String ?? "").hasPrefix("oneplus-"), "tunnus ei ole äpin laitteen")
+
+        // Koerivi pois, jottei se jää kaksoiskappaleeseen; seuraava tuonti tiivistää kiven (lr.mjs siivoa).
+        if poistaLopuksi {
+            let uusiId = try XCTUnwrap(uusi["id"] as? String)
+            let uusiNappi = app.buttons["lr-yksikko-\(uusiId)"]
+            for _ in 0..<15 where !(uusiNappi.exists && uusiNappi.isHittable) { app.swipeUp() }
+            XCTAssertTrue(uusiNappi.isHittable, "uutta riviä \(uusiId) ei näy")
+            uusiNappi.tap()
+            XCTAssertTrue(app.navigationBars["Muokkaa riviä"].waitForExistence(timeout: 5))
+            let poista = app.buttons["lr-poista"]
+            // Poista rivi on alapalkissa, jonka näppäimistö peittää: näppäimistö pois vetämällä tekstiä alas.
+            if !(poista.exists && poista.isHittable) { app.textViews["lr-teksti"].swipeDown() }
+            if !(poista.exists && poista.isHittable) { kuva("lr-poista") }
+            XCTAssertTrue(poista.isHittable, "Poista rivi -painike ei ole painettavissa")
+            poista.tap()
+            var poistettu = false
+            for _ in 0..<30 {
+                Thread.sleep(forTimeInterval: 2)
+                let y = (try pyynto("/api/lr/hae", ["rekisteri": polku, "idt": [uusiId]])["yksikot"] as? [[String: Any]])?.first
+                if y == nil || y?["poistettu"] as? Bool == true { poistettu = true; break }
+            }
+            XCTAssertTrue(poistettu, "koerivin poisto ei tullut palvelulle")
+            let tuloste = try XCTUnwrap(try pyynto("/api/lr/teksti/" + polku, nil)["teksti"] as? String)
+            XCTAssertFalse(tuloste.components(separatedBy: "\n").contains(uusiRivi), "poistettu koerivi on yhä tulosteessa")
+        }
 
         app.navigationBars["REKISTERI.md"].buttons.element(boundBy: 0).tap()
         app.buttons["lr-synkkaa"].tap()
