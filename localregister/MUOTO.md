@@ -1,0 +1,117 @@
+# scopes/localregister/MUOTO.md — rekisterien synkronoinnin muoto (luonnos)
+
+Tila: luonnos 14.10.2026 (paketti LOCALREGISTER-MUOTO), odottaa käyttäjän hyväksyntää. Ei koodia.
+Vaatimukset V1–V9 ja päätökset K1–K4: `REKISTERI.md`, Päätökset.
+
+## 1. Mittaus: kuinka usein samaa kohtaa muutetaan rinnakkain (K5)
+
+Lähde: git-historia 22.8.–14.10.2026, kaikki `REKISTERI.md`-muutokset (859 muutosta, 41 tiedostoa;
+495:ssä `Claude-Session`-tunniste, vain niistä voi päätellä istunnon). Skripti:
+`python3 scopes/localregister/mittaa-rinnakkaisuus.py 7200` projektijuuresta (argumentti = ikkuna sekunteina).
+
+| Mitattu (ikkuna 2 h) | Määrä |
+|---|---|
+| Eri istuntojen peräkkäiset muutokset samaan tiedostoon | 223 |
+| — joista istunnot olivat käynnissä yhtä aikaa (rinnakkaiset) | 3 |
+| — rinnakkaisista sama osio | 2 |
+| — rinnakkaisista sama rivi (pois lukien `Tilanne:`) | 1 (tyhjä rivi, ei todellinen) |
+
+Peräkkäisistä (pakkaus → uusi istunto → purku) 159 muutti `SEURAAVA PAKETTI` -riviä ja lähes kaikki
+`Tilanne:`-päivämäärää. Johtopäätökset:
+
+- Todellinen rinnakkaisuus on nyt harvinaista, koska pura hakee ja pakkaus pushaa vuorotellen.
+  Kun äppi muokkaa (K3) ja synkka ajetaan ilman pakkausta, rinnakkaisuus kasvaa: muoto suunnitellaan sille.
+- Kuumat kohdat ovat yksiarvoiset kentät: `Tilanne:` (jokainen muutos) ja `SEURAAVA` (joka pakkaus).
+- **K5-ehdotus: yksikkö on rivi.** Jokainen Päätös, Avoimet asiat -rivi, Vika-rivi ja muu luettelon
+  alkio on oma yksikkönsä omalla tunnuksellaan. Osiotaso ei riitä: rinnakkaisista 2/3 osui samaan osioon.
+- `Tilanne:` ei ole tallennettu kenttä vaan johdetaan uusimmasta muutoksesta: kuumin kohta katoaa.
+
+## 2. Yksikkö
+
+Yksi yksikkö = yksi JSON-tiedosto (`<rekisteri>/<yksikkö-id>.json`):
+
+```json
+{
+  "id": "oneplus-000412",
+  "rekisteri": "scopes/localregister",
+  "laji": "paatos | avoin | vika | seuraava | tarkoitus | osio | kappale",
+  "osio": "Päätökset",
+  "jarjestys": "m",
+  "sisalto": "markdown-teksti tai taulukon solut listana",
+  "versio": { "oneplus": 12, "iphone": 3 },
+  "muutettu": "2026-10-14T15:20:00+03:00",
+  "muuttaja": "oneplus",
+  "poistettu": false
+}
+```
+
+- **Tunnus** `<laite>-<laitteen laskuri>`: kaksi laitetta ei voi luoda samaa tunnusta ilman yhteyttä.
+- **Järjestys** on murtoindeksi (merkkijono, joka mahtuu kahden väliin): kaksi laitetta voi lisätä
+  rivin samaan väliin ilman ristiriitaa.
+- **Lajit** tulevat nykyisistä osioista; tuntematon osio tallentuu `osio`- ja `kappale`-yksikköinä,
+  joten mikään rekisterin teksti ei katoa (tarkistetaan kaksoiskappaleen edestakaistestillä, §7).
+
+## 3. Versiomerkintä (V3)
+
+`versio` on versiovektori: laite → laskuri. Laite kasvattaa omaa laskuriaan jokaisessa muutoksessa.
+Lähde näkyy merkinnässä aina, joten `oneplus:12` ja `iphone:12` eivät sekoitu.
+
+Vertailu kahden laitteen välillä:
+
+| Tilanne | Toimi |
+|---|---|
+| A ≥ B jokaisella laitteella | A on uudempi → B päivitetään |
+| sama vektori | ei mitään |
+| kumpikaan ei ≥ toista | rinnakkainen muutos → **ristiriita**, kysytään käyttäjältä (K4) |
+
+Ristiriidassa molemmat versiot säilyvät yksikön `rinnakkaiset`-listassa, kunnes käyttäjä valitsee
+toisen tai kirjoittaa yhdistelmän. Ratkaisu saa vektorin, joka on ≥ molempia, joten se leviää ilman
+uutta ristiriitaa.
+
+## 4. Poisto ja rekisterien määrä (V8)
+
+- Poistettu yksikkö jää hautakiveksi (`poistettu: true`, uusi versio). Ilman sitä toinen laite
+  palauttaisi poistetun rivin.
+- Rekisteri itse on `meta`-yksikkö (`<rekisteri>/_meta.json`: nimi, polku, versio, poistettu).
+  Synkassa rekisterijoukko on liitto: laitteella puuttuva rekisteri tuodaan, poistettu
+  merkitään hautakivellä. Hautakivet säilyvät ensimmäisessä vaiheessa ikuisesti (koko on pieni:
+  rekisterit yhteensä 306 kt).
+
+## 5. Vertailuprotokolla (V2, K1)
+
+Kolme tasoa, jotta muuttumaton tila maksaa yhden kyselyn:
+
+1. **Juuritiiviste**: yksi hajautusarvo kaikista `(id, versio)`-pareista. Sama → valmis.
+2. **Rekisterikohtaiset tiivisteet**: eroavat rekisterit tunnistetaan.
+3. **Yksikkölistat** eroavista rekistereistä: `(id, versio)`; siirretään yksiköt, joissa toinen on
+   uudempi, ja merkitään ristiriidat.
+
+Laukaisijat:
+
+- yhteys syntyy (mikä tahansa yhteys, K1): äppi etualalle tai verkko palaa;
+- paikallinen muutos: lähetetään pian (esim. 5 s viiveellä, jotta naputtelusarja menee yhtenä);
+- pakkaus ja purku (V4): kutsuvat synkkaa, eivät kuljeta dataa;
+- uudelleentarkistus, kun mitään ei ole muuttunut: **vähimmäisväli** (K1; arvo käyttäjän päätös, ehdotus 10 min).
+
+## 6. Kuljetus ensimmäisessä vaiheessa (V9, K2)
+
+Äppi ↔ palvelin HTTP:llä nykyisen Scopes-palvelun rinnalle (`scopes/palvelu`), omilla
+`/api/lr/…`-poluilla. Protokolla on symmetrinen: palvelin on ensimmäisessä vaiheessa aina
+auki oleva vertainen (K2), ei keskus. Myöhemmin Mac ja muut koneet liittyvät samalla protokollalla.
+
+## 7. Kaksoiskappale (V7, K6-ehdotus)
+
+1. **Tuonti**: palvelin jäsentää nykyiset `REKISTERI.md`:t yksiköiksi erilliseen hakemistoon
+   (ei gittiin; sijainti käyttäjän päätös).
+2. **Edestakaistesti**: yksiköistä tulostettu markdown verrataan alkuperäiseen; ero = jäsennysvika.
+   Hyväksyntä: kaikki tiedostot palautuvat merkki merkiltä (tai erot luetellaan ja hyväksytään).
+3. **Testivaihe**: äppi muokkaa vain kaksoiskappaletta. Alkuperäiset rekisterit ja git pysyvät
+   totuutena; tuonti ajetaan uudelleen git-muutosten jälkeen, jolloin git-puolen muutos on
+   oneplus-laitteen muutos.
+4. **Vaihto** nykyisestä uuteen on erillinen käyttäjän päätös testien jälkeen.
+
+## 8. Avoimet päätökset käyttäjälle
+
+- Vähimmäisväli uudelleentarkistukselle (§5).
+- Kuuluvatko HISTORIA.md ja ARKISTO.md synkkaan (V1 "kaikki rekisterit": 32 REKISTERI.md vs 78 tiedostoa).
+- Kaksoiskappaleen sijainti palvelimella (§7).
