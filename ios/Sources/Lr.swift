@@ -452,6 +452,27 @@ enum LrLaskenta {
         return uusiId
     }
 
+    // Rivin poisto. Lohkon viimeinen rivi kantaa lohkoa seuraavan tyhjän rivin hännässään (lisaa siirtää sen uudelle
+    // riville); poistossa häntä siirtyy edelliselle näkyvälle riville (uusi versio), muuten tyhjä rivi katoaisi ja
+    // seuraava otsake liimautuisi taulukkoon. Riidassa olevaa edellistä riviä ei muuteta: muutos ratkaisisi riidan.
+    func poista(_ polku: String, _ id: String) {
+        guard var r = rekisterit[polku], let y = r.yksikot[id] else { return }
+        let hanta = String(y.sisalto.dropFirst(LrTeksti.nakyva(y.sisalto).count))
+        if hanta.count > 1, var ed = LrLaskenta.jarjestyksessa(r.yksikot.values)
+            .last(where: { !$0.poistettu && LrLaskenta.ennen($0.jarjestys, y.jarjestys) }), !ed.riidassa {
+            let edYdin = LrTeksti.nakyva(ed.sisalto)
+            if ed.sisalto.count - edYdin.count == 1 {
+                ed.sisalto = edYdin + hanta
+                ed.versio[laite] = seuraava()
+                ed.muutettu = ISO8601DateFormatter().string(from: Date())
+                ed.muuttaja = laite
+                r.yksikot[ed.id] = ed
+                rekisterit[polku] = r
+            }
+        }
+        muokkaa(polku, id, sisalto: y.sisalto, poistettu: true)
+    }
+
     private func seuraava() -> Int {
         laskuri += 1
         tallennaLaite()

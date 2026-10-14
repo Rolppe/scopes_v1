@@ -203,14 +203,17 @@ struct LrMuokkausView: View {
                         .disabled(lisays && teksti.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .accessibilityIdentifier("lr-tallenna")
                     }
-                    ToolbarItemGroup(placement: .bottomBar) {
-                        if !lisays {
-                            Button("Poista rivi", role: .destructive) {
-                                Lr.jaettu.muokkaa(yksikko.rekisteri, yksikko.id, sisalto: yksikko.sisalto, poistettu: true)
-                                sulje()
-                            }
-                            .accessibilityIdentifier("lr-poista")
+                }
+                // Ei alapalkkia: editori ottaa fokuksen, ja näppäimistö peitti alapalkin Poista rivi -painikkeen.
+                // safeAreaInset nousee näppäimistön yläpuolelle.
+                .safeAreaInset(edge: .bottom) {
+                    if !lisays {
+                        Button("Poista rivi", role: .destructive) {
+                            Lr.jaettu.poista(yksikko.rekisteri, yksikko.id)
+                            sulje()
                         }
+                        .padding(.vertical, Teema.Vali.m)
+                        .accessibilityIdentifier("lr-poista")
                     }
                 }
         }

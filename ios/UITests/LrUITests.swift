@@ -301,8 +301,7 @@ final class LrUITests: XCTestCase {
             uusiNappi.tap()
             XCTAssertTrue(app.navigationBars["Muokkaa riviä"].waitForExistence(timeout: 5))
             let poista = app.buttons["lr-poista"]
-            // Poista rivi on alapalkissa, jonka näppäimistö peittää: näppäimistö pois vetämällä tekstiä alas.
-            if !(poista.exists && poista.isHittable) { app.textViews["lr-teksti"].swipeDown() }
+            // Poista rivi on editorin alla näppäimistön yläpuolella (safeAreaInset), ei näppäimistön peittämässä alapalkissa.
             if !(poista.exists && poista.isHittable) { kuva("lr-poista") }
             XCTAssertTrue(poista.isHittable, "Poista rivi -painike ei ole painettavissa")
             poista.tap()
@@ -314,7 +313,11 @@ final class LrUITests: XCTestCase {
             }
             XCTAssertTrue(poistettu, "koerivin poisto ei tullut palvelulle")
             let tuloste = try XCTUnwrap(try pyynto("/api/lr/teksti/" + polku, nil)["teksti"] as? String)
-            XCTAssertFalse(tuloste.components(separatedBy: "\n").contains(uusiRivi), "poistettu koerivi on yhä tulosteessa")
+            let jalkeen = tuloste.components(separatedBy: "\n")
+            XCTAssertFalse(jalkeen.contains(uusiRivi), "poistettu koerivi on yhä tulosteessa")
+            // Koerivin tyhjä häntä palaa ankkurille: taulukon perässä on yhä tyhjä rivi.
+            let a = try XCTUnwrap(jalkeen.firstIndex(of: ankkuririvi), "ankkuririvi puuttuu poiston jälkeen")
+            XCTAssertEqual((a + 1 < jalkeen.count ? jalkeen[a + 1] : nil), "", "taulukon perän tyhjä rivi katosi poistossa")
         }
 
         app.navigationBars["REKISTERI.md"].buttons.element(boundBy: 0).tap()
