@@ -84,6 +84,8 @@ const hylkaa = async (lupaus, koodi) => assert.rejects(lupaus, (e) => e instance
 
 test('paikallisetMallit: LM Studion lista, upotukset ja kelvottomat pois', () => {
   assert.deepEqual(paikallisetMallit(LMS_LISTA), [{ nimi: PAIKALLINEN, kuvaus: 'Qwen3.6 35B A3B', tyyppi: 'paikallinen' }]);
+  assert.deepEqual(paikallisetMallit(JSON.stringify({ data: [{ id: 'qwen/qwen3.5-9b' }, { id: 'qwen/qwen3.5-9b/qwen3.5-9b-q4_k_m.gguf' }] }))
+    .map((m) => m.kuvaus), ['Qwen3.5 9B', 'Qwen3.5 9B Q4_K_M']);
   assert.deepEqual(paikallisetMallit(''), []);
   assert.deepEqual(paikallisetMallit('{"data":5}'), []);
 });
