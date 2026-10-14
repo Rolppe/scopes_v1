@@ -86,9 +86,23 @@ enum LrTeksti {
         return t
     }
 
+    // Taulukkorivi on yksi tekstirivi: rivinvaihto sen sisällä katkaisisi taulukon (LOCALREGISTER-RIVINVAIHTO).
+    // Sama sääntö kuin palvelun lr.mjs vastaanota; kattaa myös rivin, johon rivinvaihto ehti jo tallentua.
+    static func yksirivinen(_ y: LrYksikko) -> Bool {
+        y.laji != "taulukko-otsake" && y.sisalto.drop { $0 == "\n" }.hasPrefix("|")
+    }
+
+    // Yksirivisen rivin rivinvaihdot välilyönneiksi; muut rivit sellaisinaan.
+    static func siisti(_ muokattu: String, yksikko: LrYksikko) -> String {
+        guard yksirivinen(yksikko) else { return muokattu }
+        return muokattu.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.joined(separator: " ")
+    }
+
     // Muokattu teksti saa alkuperäisen rivinvaihtohännän takaisin, jottei rekisterin tulostus liimaa rivejä yhteen.
-    static func talteen(_ muokattu: String, alkuperainen: String) -> String {
-        nakyva(muokattu) + String(alkuperainen.dropFirst(nakyva(alkuperainen).count))
+    static func talteen(_ muokattu: String, yksikko: LrYksikko) -> String {
+        let alkuperainen = yksikko.sisalto
+        return nakyva(siisti(muokattu, yksikko: yksikko)) + String(alkuperainen.dropFirst(nakyva(alkuperainen).count))
     }
 }
 
@@ -145,7 +159,7 @@ struct LrMuokkausView: View {
                     ToolbarItem(placement: .cancellationAction) { Button("Peruuta") { sulje() } }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Tallenna") {
-                            Lr.jaettu.muokkaa(yksikko.rekisteri, yksikko.id, sisalto: LrTeksti.talteen(teksti, alkuperainen: yksikko.sisalto))
+                            Lr.jaettu.muokkaa(yksikko.rekisteri, yksikko.id, sisalto: LrTeksti.talteen(teksti, yksikko: yksikko))
                             sulje()
                         }
                         .accessibilityIdentifier("lr-tallenna")
@@ -162,6 +176,13 @@ struct LrMuokkausView: View {
         .onAppear {
             teksti = LrTeksti.nakyva(alku)
             fokus = true
+        }
+        // Return taulukkorivissä on välilyönti. Yhdistettävät versiot ovat alussa omilla riveillään, joten niille
+        // vain talteen siistii.
+        .onChange(of: teksti) { _, uusi in
+            if !yksikko.riidassa && uusi.contains(where: \.isNewline) {
+                teksti = LrTeksti.siisti(uusi, yksikko: yksikko)
+            }
         }
     }
 }

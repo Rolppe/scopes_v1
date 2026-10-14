@@ -103,6 +103,59 @@ final class LrUITests: XCTestCase {
         odota(app, tulos: "ei muutoksia", 60)
     }
 
+    // LOCALREGISTER-RIVINVAIHTO: Return taulukkorivin muokkauksessa ei vie rivinvaihtoa riviin, ja palvelun
+    // tulostama taulukko pysyy ehjänä.
+    func testLrTaulukkoriviRivinvaihto() throws {
+        guard ProcessInfo.processInfo.environment["SCOPES_KOE_LR"] == "1" else {
+            throw XCTSkip("kirjoittava koe vain koeinstanssia vastaan (SCOPES_KOE_LR=1)")
+        }
+        let app = avaaLr()
+        let polku = "scopes/localregister/REKISTERI.md"
+        let lista = try XCTUnwrap(try pyynto("/api/lr/listat", ["rekisterit": [polku]])[polku] as? [String: Any])
+        let idt = (lista["yksikot"] as? [[String: Any]] ?? []).compactMap { $0["id"] as? String }
+        let yksikot = try XCTUnwrap(try pyynto("/api/lr/hae", ["rekisteri": polku, "idt": idt])["yksikot"] as? [[String: Any]])
+        let y = try XCTUnwrap(yksikot.first {
+            let s = $0["sisalto"] as? String ?? ""
+            return $0["laji"] as? String == "avoin" && s.hasPrefix("|") && !s.contains("Koe")
+                && !s.replacingOccurrences(of: "\\n+$", with: "", options: .regularExpression).contains("\n")
+                && $0["poistettu"] as? Bool == false && ($0["rinnakkaiset"] as? [Any] ?? []).isEmpty
+        }, "ei muokattavaa taulukkoriviä")
+        let id = try XCTUnwrap(y["id"] as? String)
+
+        let haku = app.searchFields["Hae rekistereistä"]
+        XCTAssertTrue(haku.waitForExistence(timeout: 5))
+        haku.tap()
+        haku.typeText("localregister/REKISTERI")
+        let rekisteri = app.buttons["lr-rekisteri-\(polku)"]
+        XCTAssertTrue(rekisteri.waitForExistence(timeout: 5), "rekisteriä ei löydy listasta")
+        rekisteri.tap()
+        let rivi = app.buttons["lr-yksikko-\(id)"]
+        for _ in 0..<15 where !(rivi.exists && rivi.isHittable) { app.swipeUp() }
+        XCTAssertTrue(rivi.isHittable, "riviä \(id) ei löydy")
+        rivi.tap()
+        let teksti = app.textViews["lr-teksti"]
+        XCTAssertTrue(teksti.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "editori ei ottanut fokusta")
+        teksti.typeText("\nKoe")
+        XCTAssertFalse((teksti.value as? String ?? "").contains("\n"), "editoriin jäi rivinvaihto")
+        kuva("lr-taulukkorivi")
+        app.buttons["lr-tallenna"].tap()
+
+        var tallennettu = ""
+        var ydin = ""
+        for _ in 0..<30 {
+            Thread.sleep(forTimeInterval: 2)
+            let nyt = try pyynto("/api/lr/hae", ["rekisteri": polku, "idt": [id]])["yksikot"] as? [[String: Any]]
+            tallennettu = nyt?.first?["sisalto"] as? String ?? ""
+            ydin = tallennettu.replacingOccurrences(of: "\\n+$", with: "", options: .regularExpression)
+            if ydin.hasSuffix("Koe") { break }
+        }
+        XCTAssertTrue(ydin.hasSuffix(" Koe"), "palvelulle ei tallentunut: \(tallennettu)")
+        XCTAssertFalse(ydin.contains("\n"), "taulukkoriviin tallentui rivinvaihto")
+        let tuloste = try XCTUnwrap(try pyynto("/api/lr/teksti/" + polku, nil)["teksti"] as? String)
+        XCTAssertFalse(tuloste.split(separator: "\n").contains("Koe"), "Koe omalla rivillään tulosteessa")
+    }
+
     private func avaaLr() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SCOPES_OSOITE"] = osoite
