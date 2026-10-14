@@ -11,8 +11,17 @@ struct SkoopitApp: App {
     @StateObject private var navigaatio = Navigaatio()
     @Environment(\.scenePhase) private var vaihe
     var body: some Scene {
-        WindowGroup { JuuriView().environmentObject(asetukset).environmentObject(navigaatio) }
-            .onChange(of: vaihe) { if vaihe == .active { Task { await Reitti.jaettu.heraa() } } }
+        WindowGroup {
+            JuuriView().environmentObject(asetukset).environmentObject(navigaatio)
+                .task {
+                    Ilmoittaja.jaettu.avaa = { navigaatio.avaaSkooppi($0) }
+                    Ilmoittaja.jaettu.kaynnista(asetukset)
+                }
+        }
+        .onChange(of: vaihe) {
+            if vaihe == .active { Task { await Reitti.jaettu.heraa() } }
+            Ilmoittaja.jaettu.vaihe(vaihe, asetukset)
+        }
     }
 }
 
