@@ -402,8 +402,10 @@ struct SivuttaisVeto: UIGestureRecognizerRepresentable {
             while let v = n { if v is UITextView || v is UITextField { return false }; n = v.superview }
             return true
         }
+        // Vain vierityksen veto odottaa: listan pitkä painallus (rivin nosto, .onMove ja .draggable) jäi odottamaan
+        // tämän eleen ratkaisua, joka ratkeaa vasta liikkeestä, eikä kortti koskaan irronnut (SCOPES-INFRA-JARJESTYS).
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy toinen: UIGestureRecognizer) -> Bool {
-            toinen.view is UIScrollView
+            toinen.view is UIScrollView && toinen is UIPanGestureRecognizer
         }
     }
 }
