@@ -31,6 +31,8 @@
 //   POST /api/skoopit/<nimi>/kysymys-pois         auki olevan monivalinnan sulku Escapella (kortin X)
 //   POST /api/diagnostiikka {"laite"?, "tapahtumat": [...]}   äpin jumi- ja pyyntötapahtumat äppilokiin → { kirjattu };
 //            jokainen pyyntö ja tapahtumasilmukan tukos kirjataan pyyntölokiin (diagnostiikka.mjs, SCOPES-JAATYMINEN)
+//   GET|POST /api/lr/…                rekisterisynkan kaksoiskappale (LOCALREGISTER-PROTOKOLLA 14.10.2026; polut ja
+//            ajopaikan perustelu scopes/localregister/palvelu.mjs)
 //   GET /api/wg-asetus                äpin oman WireGuard-tunnelin asetus { asetus } (SCOPES-ETAYHTEYS 14.10.2026);
 //            äppi hakee sen kotiverkossa ja käyttää sitä kodin ulkopuolella. 404, jos tiedostoa ei ole.
 //
@@ -55,6 +57,7 @@ import { luoLiitteet } from './liitteet.mjs';
 import { luoAsetukset, OLETUS_HAKEMISTO } from './toiminnot-asetukset.mjs';
 import { Hylatty, luoToiminnot } from './toiminnot.mjs';
 import { luoViestit } from './viestit.mjs';
+import { LrVirhe, luoLr } from '../localregister/palvelu.mjs';
 
 const tama = dirname(fileURLToPath(import.meta.url));
 
@@ -97,7 +100,7 @@ function runko(req, raja = 1024) {
   });
 }
 
-export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki })) {
+export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri })) {
   // Chat suoratoistona (DEMO-SCOPES-SUORATOISTO): NDJSON-rivit {tyyppi: 'pala', teksti} …, lopuksi
   // {tyyppi: 'valmis', vastaus, keskustelu, …} tai {tyyppi: 'virhe', virhe}. Hylkäys ennen agentin käynnistystä
   // palaa tavallisena virhekoodina. Yhteyden katketessa (puhelimen näyttölukko, äpin vaihto) agentti jatkaa, ja
@@ -151,6 +154,7 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
     try {
       if (polku === '/api/terveys') return vastaa(200, { ok: true });
       if (!avainKelpaa(req.headers.authorization, asetukset.avain)) return vastaa(401, { virhe: 'avain puuttuu tai väärä' });
+      if (polku.startsWith('/api/lr/')) return vastaa(200, await lr.kasittele(req.method, polku, () => runko(req, 16 << 20)));
       if (req.method === 'POST') {
         if (polku === '/api/diagnostiikka') return vastaa(200, await diagnostiikka.vastaanota(req));
         // Pakkauskytkimet (käyttäjä 14.10.2026): vain kaksi kiinteää nimeä ja paalle/pois, kirjataan toimintolokiin.
@@ -204,7 +208,7 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
       }
       return vastaa(404, { virhe: 'tuntematon polku' });
     } catch (e) {
-      return vastaa(e instanceof Hylatty ? e.koodi : 500, { virhe: e.message });
+      return vastaa(e instanceof Hylatty || e instanceof LrVirhe ? e.koodi : 500, { virhe: e.message });
     }
   };
 }
@@ -222,6 +226,8 @@ if (paaohjelma) {
   }
   const diagnostiikka = luoDiagnostiikka(asetukset);
   diagnostiikka.silmukka();
-  createServer(diagnostiikka.kaari(kasittelija(asetukset, undefined, undefined, undefined, undefined, diagnostiikka))).listen(portti, osoite, () =>
+  const lr = luoLr({ repoJuuri: asetukset.juuri });
+  lr.ajasta();
+  createServer(diagnostiikka.kaari(kasittelija(asetukset, undefined, undefined, undefined, undefined, diagnostiikka, undefined, lr))).listen(portti, osoite, () =>
     console.log(`scopes-palvelu: http://${osoite}:${portti}/api/skoopit`));
 }

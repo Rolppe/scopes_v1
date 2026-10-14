@@ -128,3 +128,15 @@ yksiköt sisällön pisimmällä yhteisellä osajonolla; muuttumaton pitää tun
 samalla tunnuksella, poistunut hautakiven, uusi avaimen naapuriensa väliin; gitistä poistunut rekisteri saa
 hautakiven. Testit 5/5. Oikea ajo 3d6d569e → 58cc59b2: 77 muuttumatonta, 1 muuttunut rekisteri
 (13 sama / 3 muuttunut / 1 uusi / 1 poistettu), edestakaisin 78/78, toinen ajo muuttumaton.
+
+## 10. Tila: protokolla palvelimella (LOCALREGISTER-PROTOKOLLA 14.10.2026)
+
+Palvelinpää `scopes/localregister/palvelu.mjs` Scopes-palvelun `/api/lr/`-poluilla (ajopaikan perustelu
+tiedoston alussa; käyttäjä "selvitä itse"). Uudelleentuonti ennen tiivistekyselyä, kun HEAD muuttui, ja
+10 min välein (käyttäjä: "molemmat"), lapsiprosessissa. Yksikkö muistaa gitin puolen (`lahdeSisalto`,
+`lahdeVersio`): jos äppi on muuttanut riviä, saman rivin git-muutos tallentuu rinnakkaiseksi ristiriidaksi
+eikä kumoa äpin muutosta. Testit: lr 8/8 + palvelu 3/3, Scopes-palvelu 76/76. Päästä päähän testiportissa:
+ensimmäinen tiiviste 2,0 s (tuonti), välimuistista 74 ms; ilman avainta 401.
+
+Käyttöön tulo vaatii Scopes-palvelun uudelleenkäynnistyksen. Seuraavaksi äppi: paikallinen kopio,
+synkka laukaisijoineen (§5) ja ristiriitojen ratkaisunäkymä.
