@@ -1,10 +1,14 @@
 // node --test scopes/localregister/lr.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { avaimet, hae, lista, lueSiivotut, lueYksikot, luoLaite, pilko, poistaRekisteri, ristiriidat, siivoa, tiivisteet, tuoRekisteri, tulosta, uudelleentuo, valiin, vastaanota, vertaa } from './lr.mjs';
+
+const LR = join(dirname(fileURLToPath(import.meta.url)), 'lr.mjs');
 
 const REK = `# x/REKISTERI.md
 
@@ -297,4 +301,21 @@ test('hautakivien siivous: kivi tiivistyy merkinnäksi, vanha versio ei herätä
   assert.deepEqual(vastaanota(juuri, { yksikot: [herata] }), { otettu: 1, ohitettu: 0, ristiriidat: [], muuttuneet: new Set([P]) });
   assert.match(tulosta(juuri, P), /- kaksi takaisin/);
   assert.deepEqual(lueSiivotut(juuri, P), {});
+});
+
+test('tuo-komento siivoaa lopuksi hautakivet (LOCALREGISTER-SIIVOUS-TUOTANTO)', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'lr-repo-'));
+  const juuri = mkdtempSync(join(tmpdir(), 'lr-'));
+  const git = (...a) => execFileSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { encoding: 'utf8' });
+  const tuo = () => execFileSync(process.execPath, [LR, 'tuo', '--juuri', juuri], { cwd: repo, encoding: 'utf8' });
+  git('init', '-q');
+  mkdirSync(join(repo, 'x'));
+  writeFileSync(join(repo, 'x/REKISTERI.md'), REK);
+  git('add', '.'); git('commit', '-qm', 'a');
+  assert.match(tuo(), /siivottuja hautakiviä 0$/m);
+  writeFileSync(join(repo, 'x/REKISTERI.md'), REK.replace('| c | d |\n', ''));
+  git('commit', '-qam', 'b');
+  assert.match(tuo(), /poistettu 1 .*siivottuja hautakiviä 1$/m);
+  assert.equal(Object.keys(lueSiivotut(juuri, 'x/REKISTERI.md')).length, 1);
+  assert.equal(lueYksikot(juuri, 'x/REKISTERI.md').some((y) => y.poistettu), false);
 });

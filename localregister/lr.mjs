@@ -5,7 +5,7 @@
 // on lähteen raaka teksti perässä olevine tyhjine riveineen, ja `tulosta` liittää ne järjestysavaimen
 // mukaan takaisin. `testaa` on edestakaistesti: tulostus verrataan tuonnin lähdecommitin sisältöön.
 //
-//   node scopes/localregister/lr.mjs tuo [--juuri DIR] [--laite oneplus]   (uudelleen ajettuna: uudelleentuonti)
+//   node scopes/localregister/lr.mjs tuo [--juuri DIR] [--laite oneplus]   (uudelleen ajettuna: uudelleentuonti; lopuksi siivoa)
 //   node scopes/localregister/lr.mjs testaa [--juuri DIR]
 //   node scopes/localregister/lr.mjs tiiviste [--juuri DIR]
 //   node scopes/localregister/lr.mjs tulosta <rekisteripolku> [--juuri DIR]
@@ -466,7 +466,7 @@ function main(argv) {
     const commit = git('rev-parse', 'HEAD').trim();
     const polut = git('ls-tree', '-r', '--name-only', commit).split('\n').filter((p) => REKISTERITIEDOSTO.test(p));
     const olemassa = new Set(rekisterit(juuri));
-    const s = { uusiaRek: 0, yksikoita: 0, sama: 0, muuttunut: 0, uusi: 0, poistettu: 0, ristiriita: 0, muuttumattomia: 0, poistettujaRek: 0 };
+    const s = { uusiaRek: 0, yksikoita: 0, sama: 0, muuttunut: 0, uusi: 0, poistettu: 0, ristiriita: 0, muuttumattomia: 0, poistettujaRek: 0, siivottu: 0 };
     try {
       for (const p of polut) {
         const teksti = git('show', `${commit}:${p}`);
@@ -477,10 +477,13 @@ function main(argv) {
       }
       const gitissa = new Set(polut);
       for (const p of olemassa) if (!gitissa.has(p) && poistaRekisteri(juuri, laite, p)) s.poistettujaRek++;
+      // Siivous tuonnin lopussa (LOCALREGISTER-SIIVOUS-TUOTANTO): palvelu tyhjentää tiivistevälimuistinsa tuonnin
+      // jälkeen, joten tiivisteet eivät jää vanhoiksi kuten käsiajossa käynnissä olevaa palvelua vastaan.
+      for (const p of rekisterit(juuri)) s.siivottu += siivoa(juuri, p);
     } finally { laite.tallenna(); }
     console.log(`TUOTU: commit ${commit.slice(0, 8)} → ${juuri}: uusia rekistereitä ${s.uusiaRek} (${s.yksikoita} yksikköä), `
       + `muuttumattomia ${s.muuttumattomia}, muuttuneissa yksiköitä sama ${s.sama} / muuttunut ${s.muuttunut} / uusi ${s.uusi} / `
-      + `poistettu ${s.poistettu} / ristiriita ${s.ristiriita}; poistettuja rekistereitä ${s.poistettujaRek}`);
+      + `poistettu ${s.poistettu} / ristiriita ${s.ristiriita}; poistettuja rekistereitä ${s.poistettujaRek}; siivottuja hautakiviä ${s.siivottu}`);
     return 0;
   }
   if (komento === 'testaa') {
