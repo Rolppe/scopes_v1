@@ -13,6 +13,7 @@ struct SkoopitApp: App {
     var body: some Scene {
         WindowGroup {
             JuuriView().environmentObject(asetukset).environmentObject(navigaatio)
+                .tint(Teema.korostus)
                 .task {
                     Ilmoittaja.jaettu.avaa = { navigaatio.avaaSkooppi($0) }
                     Ilmoittaja.jaettu.kaynnista(asetukset)
