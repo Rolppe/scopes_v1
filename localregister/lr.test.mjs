@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { avaimet, luoLaite, pilko, tiivisteet, tuoRekisteri, tulosta, valiin } from './lr.mjs';
+import { avaimet, lueYksikot, luoLaite, pilko, poistaRekisteri, tiivisteet, tuoRekisteri, tulosta, uudelleentuo, valiin } from './lr.mjs';
 
 const REK = `# x/REKISTERI.md
 
@@ -71,4 +71,27 @@ test('tuonti, tulostus ja tiiviste', () => {
   assert.match(t.juuri, /^[0-9a-f]{64}$/);
   assert.deepEqual(Object.keys(t.rekisterit), ['x/REKISTERI.md']);
   assert.equal(tiivisteet(juuri).juuri, t.juuri);
+});
+
+test('uudelleentuonti: muokattu pitää tunnuksen, poistettu saa hautakiven, uusi asettuu väliin', () => {
+  const juuri = mkdtempSync(join(tmpdir(), 'lr-'));
+  const laite = luoLaite(juuri, 'testi');
+  const P = 'x/REKISTERI.md';
+  tuoRekisteri(juuri, laite, P, REK, { commit: 'a' });
+  const ennen = Object.fromEntries(lueYksikot(juuri, P).map((y) => [y.sisalto, y]));
+  const uusi = REK.replace('| a | b |', '| a | valmis |').replace('- kaksi\n', '- kolme\n- kaksi\n').replace('| c | d |\n', '');
+  const t = uudelleentuo(juuri, laite, P, uusi, { commit: 'b' });
+  assert.deepEqual(t, { sama: 10, muuttunut: 1, uusi: 1, poistettu: 1 });
+  assert.equal(tulosta(juuri, P), uusi);
+  const jalkeen = lueYksikot(juuri, P);
+  const muokattu = jalkeen.find((y) => y.sisalto === '| a | valmis |\n\n');
+  assert.equal(muokattu.id, ennen['| a | b |\n'].id);
+  assert.ok(muokattu.versio.testi > ennen['| a | b |\n'].versio.testi);
+  assert.equal(jalkeen.find((y) => y.id === ennen['| c | d |\n\n'].id).poistettu, true);
+  assert.equal(jalkeen.find((y) => y.sisalto === '- kaksi\n\n').id, ennen['- kaksi\n\n'].id);
+  assert.deepEqual(uudelleentuo(juuri, laite, P, uusi, { commit: 'c' }).sama, -1);
+  assert.equal(poistaRekisteri(juuri, laite, P), true);
+  assert.equal(poistaRekisteri(juuri, laite, P), false);
+  uudelleentuo(juuri, laite, P, REK, { commit: 'd' });
+  assert.equal(tulosta(juuri, P), REK);
 });

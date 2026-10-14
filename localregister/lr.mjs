@@ -5,7 +5,7 @@
 // on lähteen raaka teksti perässä olevine tyhjine riveineen, ja `tulosta` liittää ne järjestysavaimen
 // mukaan takaisin. `testaa` on edestakaistesti: tulostus verrataan tuonnin lähdecommitin sisältöön.
 //
-//   node scopes/localregister/lr.mjs tuo [--juuri DIR] [--laite oneplus]
+//   node scopes/localregister/lr.mjs tuo [--juuri DIR] [--laite oneplus]   (uudelleen ajettuna: uudelleentuonti)
 //   node scopes/localregister/lr.mjs testaa [--juuri DIR]
 //   node scopes/localregister/lr.mjs tiiviste [--juuri DIR]
 //   node scopes/localregister/lr.mjs tulosta <rekisteripolku> [--juuri DIR]
@@ -141,6 +141,90 @@ export function tuoRekisteri(juuri, laite, polku, teksti, lahde, nyt = new Date(
   return osat.length;
 }
 
+// Uudelleentuonti (LOCALREGISTER-UUDELLEENTUONTI, MUOTO §7 kohta 3): git-puolen muutos on tämän laitteen
+// muutos. Vanhat ja uudet osat kohdistetaan pisimmällä yhteisellä osajonolla sisällön mukaan: osuma pitää
+// tunnuksensa, osumattomien välien vanhat ja uudet paritetaan järjestyksessä (muokattu rivi = sama tunnus,
+// uusi versio), ylijääneet vanhat saavat hautakiven ja uudet avaimen naapuriensa väliin.
+export function uudelleentuo(juuri, laite, polku, teksti, lahde, nyt = new Date().toISOString()) {
+  const hak = rekisterihakemisto(juuri, polku);
+  const meta = lueJson(join(hak, '_meta.json'));
+  const tulos = { sama: 0, muuttunut: 0, uusi: 0, poistettu: 0 };
+  const shaUusi = createHash('sha256').update(teksti).digest('hex');
+  if (meta.lahde.sha256 === shaUusi && !meta.poistettu) { tulos.sama = -1; return tulos; }
+  const vanhat = lueYksikot(juuri, polku).filter((y) => !y.poistettu)
+    .sort((a, b) => (a.jarjestys < b.jarjestys ? -1 : a.jarjestys > b.jarjestys ? 1 : 0));
+  const uudet = pilko(teksti);
+  const muuta = (y, muutos) => {
+    Object.assign(y, muutos, { versio: { ...y.versio, [laite.nimi]: laite.seuraava() }, muutettu: nyt, muuttaja: laite.nimi });
+    kirjoitaJson(join(hak, `${y.id}.json`), y);
+  };
+  // LCS sisällön mukaan; yhteinen alku ja loppu ensin, jotta taulukko pysyy pienenä.
+  const n = vanhat.length, m = uudet.length;
+  let a = 0;
+  while (a < n && a < m && vanhat[a].sisalto === uudet[a].sisalto) a++;
+  let b = 0;
+  while (b < n - a && b < m - a && vanhat[n - 1 - b].sisalto === uudet[m - 1 - b].sisalto) b++;
+  const N = n - a - b, M = m - a - b;
+  const L = Array.from({ length: N + 1 }, () => new Int32Array(M + 1));
+  for (let i = N - 1; i >= 0; i--) for (let j = M - 1; j >= 0; j--)
+    L[i][j] = vanhat[a + i].sisalto === uudet[a + j].sisalto ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  const parit = []; // [vanha-indeksi | null, uusi-indeksi | null]
+  for (let k = 0; k < a; k++) parit.push([k, k]);
+  let i = 0, j = 0, ov = [], ou = [];
+  const tyhjenna = () => {
+    const k = Math.min(ov.length, ou.length);
+    for (let t = 0; t < k; t++) parit.push([ov[t], ou[t]]);
+    for (const v of ov.slice(k)) parit.push([v, null]);
+    for (const u of ou.slice(k)) parit.push([null, u]);
+    ov = []; ou = [];
+  };
+  while (i < N || j < M) {
+    if (i < N && j < M && vanhat[a + i].sisalto === uudet[a + j].sisalto) { tyhjenna(); parit.push([a + i, a + j]); i++; j++; }
+    else if (j >= M || (i < N && L[i + 1][j] >= L[i][j + 1])) ov.push(a + i++);
+    else ou.push(a + j++);
+  }
+  tyhjenna();
+  for (let k = 0; k < b; k++) parit.push([n - b + k, m - b + k]);
+  // Avaimet: säilyneiden järjestys on ennallaan; uudet saavat avaimen edellisen ja seuraavan säilyneen väliin.
+  let edellinen = '';
+  parit.forEach(([v, u], k) => {
+    if (v !== null && u === null) { muuta(vanhat[v], { poistettu: true }); tulos.poistettu++; return; }
+    if (v !== null) {
+      const y = vanhat[v], o = uudet[u];
+      if (y.sisalto !== o.sisalto || y.laji !== o.laji || y.osio !== o.osio) { muuta(y, { sisalto: o.sisalto, laji: o.laji, osio: o.osio }); tulos.muuttunut++; }
+      else tulos.sama++;
+      edellinen = y.jarjestys;
+      return;
+    }
+    const seur = parit.slice(k + 1).find(([sv, su]) => sv !== null && su !== null);
+    const o = uudet[u];
+    const c = laite.seuraava();
+    const id = `${laite.nimi}-${String(c).padStart(6, '0')}`;
+    edellinen = valiin(edellinen, seur ? vanhat[seur[0]].jarjestys : null);
+    kirjoitaJson(join(hak, `${id}.json`), {
+      id, rekisteri: polku, laji: o.laji, osio: o.osio, jarjestys: edellinen, sisalto: o.sisalto,
+      versio: { [laite.nimi]: c }, muutettu: nyt, muuttaja: laite.nimi, poistettu: false,
+    });
+    tulos.uusi++;
+  });
+  if (meta.poistettu) meta.versio = { ...meta.versio, [laite.nimi]: laite.seuraava() };
+  meta.poistettu = false;
+  meta.lahde = { ...lahde, sha256: shaUusi };
+  kirjoitaJson(join(hak, '_meta.json'), meta);
+  return tulos;
+}
+
+// Gitistä poistunut rekisteri saa hautakiven (MUOTO §4); yksiköt jäävät ennalleen.
+export function poistaRekisteri(juuri, laite, polku) {
+  const p = join(rekisterihakemisto(juuri, polku), '_meta.json');
+  const meta = lueJson(p);
+  if (meta.poistettu) return false;
+  meta.poistettu = true;
+  meta.versio = { ...meta.versio, [laite.nimi]: laite.seuraava() };
+  kirjoitaJson(p, meta);
+  return true;
+}
+
 export function lueYksikot(juuri, polku) {
   const hak = rekisterihakemisto(juuri, polku);
   return readdirSync(hak).filter((f) => f.endsWith('.json') && f !== '_meta.json').map((f) => lueJson(join(hak, f)));
@@ -190,15 +274,26 @@ function main(argv) {
     const laite = luoLaite(juuri, lippu('--laite', 'oneplus'));
     const commit = git('rev-parse', 'HEAD').trim();
     const polut = git('ls-tree', '-r', '--name-only', commit).split('\n').filter((p) => REKISTERITIEDOSTO.test(p));
-    let yks = 0;
+    const olemassa = new Set(rekisterit(juuri));
+    const s = { uusiaRek: 0, yksikoita: 0, sama: 0, muuttunut: 0, uusi: 0, poistettu: 0, muuttumattomia: 0, poistettujaRek: 0 };
     try {
-      for (const p of polut) yks += tuoRekisteri(juuri, laite, p, git('show', `${commit}:${p}`), { commit });
+      for (const p of polut) {
+        const teksti = git('show', `${commit}:${p}`);
+        if (!olemassa.has(p)) { s.yksikoita += tuoRekisteri(juuri, laite, p, teksti, { commit }); s.uusiaRek++; continue; }
+        const t = uudelleentuo(juuri, laite, p, teksti, { commit });
+        if (t.sama === -1) { s.muuttumattomia++; continue; }
+        for (const k of ['sama', 'muuttunut', 'uusi', 'poistettu']) s[k] += t[k];
+      }
+      const gitissa = new Set(polut);
+      for (const p of olemassa) if (!gitissa.has(p) && poistaRekisteri(juuri, laite, p)) s.poistettujaRek++;
     } finally { laite.tallenna(); }
-    console.log(`TUOTU: ${polut.length} rekisteriä, ${yks} yksikköä, commit ${commit.slice(0, 8)} → ${juuri}`);
+    console.log(`TUOTU: commit ${commit.slice(0, 8)} → ${juuri}: uusia rekistereitä ${s.uusiaRek} (${s.yksikoita} yksikköä), `
+      + `muuttumattomia ${s.muuttumattomia}, muuttuneissa yksiköitä sama ${s.sama} / muuttunut ${s.muuttunut} / uusi ${s.uusi} / `
+      + `poistettu ${s.poistettu}; poistettuja rekistereitä ${s.poistettujaRek}`);
     return 0;
   }
   if (komento === 'testaa') {
-    const polut = rekisterit(juuri);
+    const polut = rekisterit(juuri).filter((p) => !lueJson(join(rekisterihakemisto(juuri, p), '_meta.json')).poistettu);
     const erot = [];
     let muuttunut = 0;
     for (const p of polut) {
