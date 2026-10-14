@@ -35,13 +35,25 @@ const PAIKALLINEN_ID = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 export const lmsLataa = (id) => `L=~/.lmstudio/bin/lms; $L ps --json | grep -qF '"identifier":"${id}"' || `
   + `{ $L unload --all >/dev/null && $L load '${id}' -y --identifier '${id}' -c 8192; }`;
 
-// LM Studion /v1/models → [{ nimi: 'palvelin/<id>', kuvaus, tyyppi: 'paikallinen' }]; upotusmallit pois.
+// Paikallisen mallin näyttönimi (CHAT-MALLINIMET, V-330): tunnuksen viimeinen osa ilman tiedosto- ja kvantisointipäätettä,
+// kokomerkinnät isolla (qwen3.5-9b-q4_k_m.gguf → Qwen3.5 9B, qwen/qwen3.6-35b-a3b → Qwen3.6 35B A3B).
+const KVANTISOINTI = /^(i?q\d.*|f16|f32|bf16|fp16|fp8|\d+bit|mlx|gguf)$/i;
+export function mallinNayttonimi(id) {
+  const osat = id.split('/').pop().replace(/@.*$/, '').replace(/\.gguf$/i, '').split(/[-_](?=[^-_])/);
+  while (osat.length > 1 && KVANTISOINTI.test(osat.at(-1))) osat.pop();
+  // q4_k_m jakautuu alaviivoista: pudota kvantisoinnin alku ja sen perään jääneet k/m/s/l-osat.
+  const q = osat.findIndex((o, i) => i > 0 && /^i?q\d$/i.test(o));
+  if (q > 0) osat.length = q;
+  return osat.map((o) => (/^a?\d+(\.\d+)?[bkm]$/i.test(o) ? o.toUpperCase() : /^v\d/.test(o) ? o : o[0].toUpperCase() + o.slice(1))).join(' ');
+}
+
+// LM Studion /v1/models → [{ nimi: 'palvelin/<id>', kuvaus: näyttönimi, tyyppi: 'paikallinen' }]; upotusmallit pois.
 export function paikallisetMallit(stdout) {
   let data;
   try { data = JSON.parse(stdout).data; } catch { return []; }
   if (!Array.isArray(data)) return [];
   return data.map((m) => m?.id).filter((id) => typeof id === 'string' && PAIKALLINEN_ID.test(id) && !/embed/i.test(id))
-    .map((id) => ({ nimi: PAIKALLINEN + id, kuvaus: id.split('/').pop(), tyyppi: 'paikallinen' }));
+    .map((id) => ({ nimi: PAIKALLINEN + id, kuvaus: mallinNayttonimi(id), tyyppi: 'paikallinen' }));
 }
 
 // Työkalukutsu yhdeksi lyhyeksi riviksi (DEMO-SCOPES-PARANNUKSET 13.10.2026): komento tai muokattu tiedosto.

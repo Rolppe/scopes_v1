@@ -458,12 +458,12 @@ struct ChatView: View {
     }
 
     // Mallin valinta syöttökentän alla Claude-äpin tapaan: nimi ja alasnuoli; Claude-mallit ja palvelimen
-    // paikalliset mallit omina osioinaan (jälkimmäinen puuttuu, kun palvelin on pois päältä).
+    // paikalliset mallit omina osioinaan (jälkimmäinen puuttuu, kun palvelin on pois päältä; otsikko V-330).
     private var mallinValinta: some View {
         Menu {
             Section("Claude") { ForEach(agentit.filter { $0.tyyppi == "malli" }) { valinta($0) } }
             let paikalliset = agentit.filter { $0.tyyppi == "paikallinen" }
-            if !paikalliset.isEmpty { Section("palvelin") { ForEach(paikalliset) { valinta($0) } } }
+            if !paikalliset.isEmpty { Section("Paikalliset") { ForEach(paikalliset) { valinta($0) } } }
         } label: {
             HStack(spacing: Teema.Vali.xs) {
                 Text(valittuAgentti?.otsikko ?? "Valitse malli").font(.subheadline.weight(.medium)).lineLimit(1)
