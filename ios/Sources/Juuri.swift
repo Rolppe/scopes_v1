@@ -79,6 +79,7 @@ struct JuuriView: View {
     @State private var sumea: UIImage?
     // Vedon alussa otettu kuva kelpaa vedon päättävään avaukseen; painikkeen avaus ottaa omansa.
     @State private var sumeaVedosta = false
+    @State private var sumeaElava = false
 
     var body: some View {
         GeometryReader { g in
@@ -97,6 +98,9 @@ struct JuuriView: View {
                         .id("\(nimi)#\(navigaatio.skooppiAvaus)")
                     }
                 }
+                // Käännön jälkeen kuvaa ei ole (alla): sumeus lasketaan elävänä, kunnes seuraava avaus ottaa uuden kuvan.
+                // Raskas vain tämän palkin sulkuliukuman ajan (käyttäjä 14.10.2026: "sumennus katoaa käännön yhteydessä").
+                .blur(radius: sumeaElava && Mittari.sumeus ? 5 * max(0, siirto / leveys - 0.7) / 0.3 : 0, opaque: true)
                 // Sivuttaisveto missä kohtaa tahansa avaa palkin (käyttäjä 13.10.2026).
                 .gesture(vetoEle(leveys))
                 // Palkin ollessa esillä päänäkymä on sumea (käyttäjä 13.10.2026): sumeus seuraa palkin siirtoa, joten se
@@ -128,15 +132,15 @@ struct JuuriView: View {
                 if Mittari.paalla { MittariTulos() }
             }
             // Kääntö palkin ollessa auki venytti pystykuvan vaakaan (käyttäjä 14.10.2026). Uutta ei voi ottaa, koska
-            // ikkunassa on jo palkki: tausta jää pelkäksi himmennykseksi, ja seuraava avaus ottaa kuvan uudesta asennosta.
-            .onChange(of: g.size) { sumea = nil }
+            // ikkunassa on jo palkki: päänäkymä sumennetaan elävänä, ja seuraava avaus ottaa kuvan uudesta asennosta.
+            .onChange(of: g.size) { sumea = nil; sumeaElava = navigaatio.sivupalkkiAuki }
         }
         // Käynnistys (käyttäjä 13.10.2026): kun mikään keskustelu ei ole kesken, äppi aukeaa listaan eikä tyhjään chattiin.
         // Juurinäkymä ilmestyy kerran käynnistyksessä, joten paluu taustalta ei avaa palkkia.
         .task { if navigaatio.nakyma == .chat && navigaatio.nykyinenChat == nil { navigaatio.sivupalkkiAuki = true } }
         .task { if Mittari.itseajo { await itseajo() } }
         .onChange(of: navigaatio.sivupalkkiAuki) { _, auki in
-            if auki && !sumeaVedosta { sumea = Mittari.jaettu.kuva(Sumennus.kuva) }
+            if auki && !sumeaVedosta { sumea = Mittari.jaettu.kuva(Sumennus.kuva); sumeaElava = false }
             sumeaVedosta = false
             auki ? fokus.piilota(navigaatio) : fokus.palauta(navigaatio)
         }
@@ -183,6 +187,7 @@ struct JuuriView: View {
                 if veto == 0, !navigaatio.sivupalkkiAuki {
                     sumea = Mittari.jaettu.kuva(Sumennus.kuva)
                     sumeaVedosta = true
+                    sumeaElava = false
                     fokus.piilota(navigaatio)
                 }
                 var ilman = Transaction()
