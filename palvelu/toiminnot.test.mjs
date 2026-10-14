@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { projektiNimi } from './lahteet.mjs';
 import { kasittelija } from './palvelin.mjs';
-import { Hylatty, istuntoOsoite, luoToiminnot, UUSI_NIMI } from './toiminnot.mjs';
+import { Hylatty, istuntoOsoite, luoToiminnot, oletusJonotiedosto, UUSI_NIMI } from './toiminnot.mjs';
 
 const URL_OK = 'OK: https://claude.ai/code/session_abc123';
 
@@ -163,6 +163,30 @@ test('jono: komento putoaa, kun istunto päättyy; vapaa istunto ohittaa jonon',
   writeFileSync(join(b.istunnotDir, `${process.pid}.json`), JSON.stringify({ pid: process.pid, sessionId: 's1', cwd: '/x', name: 'a', status: 'idle', tmux: 'siirto-a-1:@1.%5' }));
   assert.equal((await s2('herata-pois', 'a')).jonossa, undefined);
   assert.deepEqual(s2.jono('a'), []);
+});
+
+test('jono: säilyy palvelun uudelleenkäynnistyksen yli; levyn kelvoton rivi ohitetaan (scopes siirto 14.10.2026)', async () => {
+  const a = ymparisto({ tila: 'busy' });
+  const tiedosto = oletusJonotiedosto(a);
+  assert.equal(tiedosto, join(a.toimintoloki, '../scopes-toiminnot-jono.json'));
+  const ensimmainen = luoToiminnot(a, { aja: vaarennos().aja, jonoVali: 0 });
+  await ensimmainen('automaattisiirto', 'a');
+  await ensimmainen('herata', 'a');
+  assert.deepEqual(JSON.parse(readFileSync(tiedosto, 'utf8')).map((j) => j.komento), ['/automaattisiirto', '/sa']);
+  // Uusi palvelu samoilla asetuksilla: jono luetaan levyltä ja puretaan, kun istunto vapautuu.
+  const v = vaarennos();
+  const toinen = luoToiminnot(a, { aja: v.aja, jonoVali: 0 });
+  assert.deepEqual(toinen.jono('a').map((j) => j.komento), ['/automaattisiirto', '/sa']);
+  writeFileSync(join(a.istunnotDir, `${process.pid}.json`), JSON.stringify({ pid: process.pid, sessionId: 's1', cwd: '/x', name: 'a', status: 'idle', tmux: 'siirto-a-1:@1.%5' }));
+  await toinen.puraJono();
+  await toinen.puraJono();
+  assert.deepEqual(v.kutsut.filter((k) => k[1] === 'send-keys').map((k) => k.at(-1)), ['/sa', 'Enter', '/automaattisiirto', 'Enter']);
+  assert.deepEqual(JSON.parse(readFileSync(tiedosto, 'utf8')), []);
+  // Levyltä ei oteta komentoa, jota puhelin ei voisi jonottaa, eikä rikkinäinen tiedosto estä käynnistystä.
+  writeFileSync(tiedosto, JSON.stringify([{ nimi: 'a', istunto: 's1', komento: 'rm -rf /', toiminto: 'herata', aika: 1 }, { nimi: 'a', istunto: 's1', komento: '/sa', toiminto: 'herata', aika: 2 }]));
+  assert.deepEqual(luoToiminnot(a, { aja: vaarennos().aja, jonoVali: 0 }).jono('a'), [{ komento: '/sa', aika: 2 }]);
+  writeFileSync(tiedosto, '{rikki');
+  assert.deepEqual(luoToiminnot(a, { aja: vaarennos().aja, jonoVali: 0 }).jono('a'), []);
 });
 
 test('uusi: tiukka nimi, ei olemassa olevaa', async () => {
