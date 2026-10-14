@@ -51,7 +51,7 @@ struct SkooppiNakymaView: View {
                 }
                 if let k = kaynnissa { ProgressView(k == .pura ? "Avataan istuntoa…" : "Lähetetään \(komento(k))…") }
                 if let toimintoVirhe { Text(toimintoVirhe).foregroundStyle(.red).accessibilityIdentifier("toiminto-virhe") }
-                if let tulos { ToimintoTulos(tulos: tulos) }
+                if let tulos { ToimintoTulos(tulos: tulos, skooppi: nimi) }
             }
             .disabled(kaynnissa != nil)
             if let n = nakyma {
@@ -178,14 +178,22 @@ struct SkooppiNakymaView: View {
     }
 }
 
-// Onnistuneen toiminnon tulos: avatun istunnon linkki (pura, uusi) tai pakkauksen kuittaus.
+// Onnistuneen toiminnon tulos: avatun istunnon linkki (pura, uusi) tai pakkauksen kuittaus. "Avaa chat" vie skoopin
+// viesteihin äpissä (käyttäjä 14.10.2026); listarivin painikkeet ovat borderless, jotta napautus osuu vain yhteen.
 struct ToimintoTulos: View {
     let tulos: ToimintoVastaus
+    var skooppi: String? = nil
+    var avattu: () -> Void = {}
+    @EnvironmentObject private var navigaatio: Navigaatio
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if let o = tulos.osoite, let url = URL(string: o) {
                 Text("Istunto avattu.").accessibilityIdentifier("toiminto-tulos")
-                Link("Avaa istunto Claudessa", destination: url)
+                if let skooppi {
+                    Button("Avaa chat") { avattu(); navigaatio.avaaSkooppi(skooppi) }
+                        .buttonStyle(.borderless).accessibilityIdentifier("toiminto-avaa-chat")
+                }
+                Link("Avaa istunto Claudessa", destination: url).buttonStyle(.borderless)
             } else if let i = tulos.istunto, tulos.jonossa == true {
                 Text("Istunto \(i.prefix(8)) on varattu: \(tulos.komento ?? "komento") lähtee, kun se vapautuu.").accessibilityIdentifier("toiminto-tulos")
             } else if let i = tulos.istunto {
@@ -220,7 +228,7 @@ struct UusiSkooppiView: View {
                         .accessibilityIdentifier("uusi-luo")
                     if kaynnissa { ProgressView("Avataan istuntoa…") }
                     if let virhe { Text(virhe).foregroundStyle(.red).accessibilityIdentifier("uusi-virhe") }
-                    if let tulos { ToimintoTulos(tulos: tulos) }
+                    if let tulos { ToimintoTulos(tulos: tulos, skooppi: nimi) { sulje() } }
                 }
             }
             .navigationTitle("Uusi skooppi")
