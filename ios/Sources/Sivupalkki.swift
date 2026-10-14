@@ -73,10 +73,9 @@ struct Sivupalkki: View, Equatable {
         let h = haku.trimmingCharacters(in: .whitespaces)
         // Aika jäsennetään kerran riviä kohden, ei joka vertailussa (SCOPES-LISTA-SUMEUS 13.10.2026: ISO-jäsennys
         // lajittelun sisällä vei pääsäikeeltä ~170 ms ruutua kohden).
-        return (h.isEmpty ? kaikki : kaikki.filter { $0.osuu(h) })
-            .map { ($0, $0.taso, $0.aika) }
-            .sorted { $0.1 != $1.1 ? $0.1 < $1.1 : $0.2 > $1.2 }
-            .map(\.0)
+        let osuvat: [Kohde] = h.isEmpty ? kaikki : kaikki.filter { $0.osuu(h) }
+        let avaimet: [(kohde: Kohde, taso: Int, aika: Date)] = osuvat.map { ($0, $0.taso, $0.aika) }
+        return avaimet.sorted { a, b in a.taso != b.taso ? a.taso < b.taso : a.aika > b.aika }.map(\.kohde)
     }
 
     var body: some View {
