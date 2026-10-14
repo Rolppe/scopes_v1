@@ -752,6 +752,16 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertEqual(herata.value as? String, "0")
         XCTAssertFalse(app.buttons["toiminto-pakkaa"].isEnabled, "pakkaus ilman istuntoa ei saa olla painettavissa")
         XCTAssertFalse(siirto.isEnabled, "siirto ilman istuntoa ei saa olla painettavissa")
+        // Automaattijatko ja Autopack ovat globaaleja: herätyskytkimen alla, eivätkä lukitu ilman istuntoa (käyttäjä 14.10.2026).
+        // Vaatii palvelun, jolla on /api/asetukset; vanhalla palvelulla kytkimet ovat piilossa. Autopack voi olla ruudun alapuolella.
+        let jatko = app.switches["toiminto-automaattijatko"], autopack = app.switches["toiminto-autopack"]
+        XCTAssertTrue(jatko.exists, "automaattijatko-kytkin puuttuu")
+        XCTAssertLessThan(herata.frame.minY, jatko.frame.minY)
+        for _ in 0..<3 where !autopack.exists { app.swipeUp() }
+        XCTAssertTrue(autopack.exists, "autopack-kytkin puuttuu")
+        XCTAssertLessThan(jatko.frame.minY, autopack.frame.minY)
+        XCTAssertTrue(jatko.isEnabled && autopack.isEnabled, "globaalit kytkimet eivät saa olla lukossa")
+        // Selite on kytkinten alla, joten se haetaan vasta rullauksen jälkeen.
         XCTAssertTrue(app.staticTexts["toiminto-ei-istuntoa"].exists, "selite puuttuu")
         kuva("toiminnot")
         // Vahvistus kertoo seurauksen, ei komentoa (U6). Vahvistusta ei paineta: se avaisi istunnon.

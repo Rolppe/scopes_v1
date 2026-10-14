@@ -49,6 +49,13 @@ struct Asiakas {
         try await hae("/api/skoopit/\(koodattu(nimi))/\(toiminto.rawValue)", metodi: "POST", aikaraja: 150)
     }
 
+    // Pakkauskytkimet (käyttäjä 14.10.2026): vanha palvelu ilman reittiä vastaa 404, jolloin näkymä piilottaa kytkimet.
+    func pakkausKytkimet() async throws -> PakkausKytkimet { try await hae("/api/asetukset") }
+
+    func aseta(_ kytkin: PakkausKytkin, paalle: Bool) async throws -> PakkausKytkimet {
+        try await hae("/api/asetukset/\(kytkin.rawValue)/\(paalle ? "paalle" : "pois")", metodi: "POST")
+    }
+
     func uusi(_ nimi: String) async throws -> ToimintoVastaus {
         try await hae("/api/uusi", metodi: "POST", runko: try JSONEncoder().encode(["nimi": nimi]), aikaraja: 150)
     }

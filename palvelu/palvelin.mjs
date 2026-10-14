@@ -11,6 +11,8 @@
 //   POST /api/skoopit/<nimi>/pakkaa   /pakkaa skoopin vapaaseen tmux-istuntoon → { istunto, komento }
 //   POST /api/skoopit/<nimi>/automaattisiirto | herata | herata-pois   samoin /automaattisiirto, /sa, /sa pois
 //            varatulle istunnolle jonoon → { istunto, komento, jonossa: true }; GET-näkymän jonossa: [{ komento, aika }]
+//   GET /api/asetukset                Automaattijatko- ja Autopack-kytkimet { automaattijatko, autopack } (toiminnot-asetukset.mjs)
+//   POST /api/asetukset/<automaattijatko|autopack>/<paalle|pois>   kytkimen asetus → samat kaksi arvoa (käyttäjä 14.10.2026)
 //   POST /api/uusi  {"nimi": "…"}     uusi istunto, ensimmäinen viesti /pura uusi <nimi> → { osoite }
 //   GET /api/kayttoraja               Clauden 5 h ja viikkoraja { viisiTuntia, viikko: { kaytto %, nollautuu } | null } (kayttoraja.mjs)
 //   GET /api/agentit                  chatin mallit: Claude ja palvelimen LM Studio (DEMO-SCOPES-UI)
@@ -34,7 +36,8 @@
 // SCOPES_CHAT_DIR (chatin työhakemisto), SCOPES_LIITTEET_DIR (oletus ~/.local/state/scopes-liitteet), SCOPES_AVAIN_TIEDOSTO (oletus ~/.config/scopes/avain; ei repossa),
 // SCOPES_WG_TIEDOSTO (oletus ~/.config/scopes/wg.conf, wg-quick-muoto; ei repossa), SCOPES_TOIMINTOLOKI (oletus
 // ~/.local/state/scopes-toiminnot.loki), SCOPES_PYYNTOLOKI (oletus ~/.local/state/scopes-pyynnot.loki), SCOPES_APPILOKI
-// (oletus ~/.local/state/scopes-app.loki). Ilman avainta palvelu ei käynnisty.
+// (oletus ~/.local/state/scopes-app.loki), SCOPES_TILA_DIR (pakkauskytkinten tilatiedostot; oletus
+// ~/.claude/skills/keskustelun-siirto/state). Ilman avainta palvelu ei käynnisty.
 
 import { timingSafeEqual } from 'node:crypto';
 import { readFileSync, realpathSync } from 'node:fs';
@@ -46,6 +49,7 @@ import { luoDiagnostiikka } from './diagnostiikka.mjs';
 import { luoKayttoraja } from './kayttoraja.mjs';
 import { lista, lueSkoopit, yksi } from './lahteet.mjs';
 import { luoLiitteet } from './liitteet.mjs';
+import { luoAsetukset, OLETUS_HAKEMISTO } from './toiminnot-asetukset.mjs';
 import { Hylatty, luoToiminnot } from './toiminnot.mjs';
 import { luoViestit } from './viestit.mjs';
 
@@ -63,6 +67,7 @@ export function asetuksetYmparistosta(env = process.env) {
     liitteetDir: env.SCOPES_LIITTEET_DIR ?? join(homedir(), '.local/state/scopes-liitteet'),
     pyyntoloki: env.SCOPES_PYYNTOLOKI ?? join(homedir(), '.local/state/scopes-pyynnot.loki'),
     appiloki: env.SCOPES_APPILOKI ?? join(homedir(), '.local/state/scopes-app.loki'),
+    tilaDir: env.SCOPES_TILA_DIR ?? OLETUS_HAKEMISTO,
   };
 }
 
@@ -89,7 +94,7 @@ function runko(req, raja = 1024) {
   });
 }
 
-export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset)) {
+export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki })) {
   // Chat suoratoistona (DEMO-SCOPES-SUORATOISTO): NDJSON-rivit {tyyppi: 'pala', teksti} …, lopuksi
   // {tyyppi: 'valmis', vastaus, keskustelu, …} tai {tyyppi: 'virhe', virhe}. Hylkäys ennen agentin käynnistystä
   // palaa tavallisena virhekoodina. Yhteyden katketessa (puhelimen näyttölukko, äpin vaihto) agentti jatkaa, ja
@@ -145,6 +150,9 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
       if (!avainKelpaa(req.headers.authorization, asetukset.avain)) return vastaa(401, { virhe: 'avain puuttuu tai väärä' });
       if (req.method === 'POST') {
         if (polku === '/api/diagnostiikka') return vastaa(200, await diagnostiikka.vastaanota(req));
+        // Pakkauskytkimet (käyttäjä 14.10.2026): vain kaksi kiinteää nimeä ja paalle/pois, kirjataan toimintolokiin.
+        const as = polku.match(/^\/api\/asetukset\/([^/]+)\/(paalle|pois)$/);
+        if (as) return vastaa(200, kytkimet.aseta(decodeURIComponent(as[1]), as[2] === 'paalle'));
         if (polku === '/api/uusi') return vastaa(200, await suorita('uusi', (await runko(req)).nimi));
         if (polku === '/api/chat') return vastaa(200, await viestit.chat(await runko(req, 32_768)));
         if (polku === '/api/chat/virta') return await virtaa(res, await runko(req, 32_768));
@@ -163,6 +171,7 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         return vastaa(404, { virhe: 'tuntematon toiminto' });
       }
       if (polku === '/api/skoopit') return vastaa(200, lista(asetukset));
+      if (polku === '/api/asetukset') return vastaa(200, kytkimet.lue());
       if (polku === '/api/agentit') return vastaa(200, await viestit.agentit());
       if (polku === '/api/kayttoraja') return vastaa(200, await kayttoraja());
       // Luetaan joka pyynnöllä: avaimen vaihto ei vaadi palvelun uudelleenkäynnistystä.
