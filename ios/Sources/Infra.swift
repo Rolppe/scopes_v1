@@ -64,15 +64,16 @@ struct InfraRivi: View {
         HStack(spacing: 8) {
             if let lapset = solmu.lapset {
                 Button(action: vaihda) {
+                    // Pelkkä kääntyvä nuoli ilman taustaa kuten DisclosureGroup: lista on sisältökerros, jossa HIG ei
+                    // käytä Liquid Glassia (DESIGN-LASIPINNAT-LAITE 14.10.2026), joten nappi on sama lasin kanssa ja ilman.
                     VStack(spacing: 2) {
                         Image(systemName: "chevron.right")
                             .font(.body.weight(.semibold))
+                            .foregroundStyle(Teema.korostus)
                             .rotationEffect(.degrees(auki ? 90 : 0))
-                        Text("\(lapset.count)").font(.caption2.monospacedDigit())
+                        Text("\(lapset.count)").font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
                     }
                     .frame(width: 36, height: 44)
-                    .lasiPinta(Teema.korostus.opacity(auki ? 0.22 : 0.12), savy: Teema.korostus.opacity(auki ? 0.3 : 0.15),
-                               in: RoundedRectangle(cornerRadius: Teema.Kulma.pieni))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
