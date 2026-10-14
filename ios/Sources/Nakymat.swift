@@ -192,6 +192,8 @@ struct SkooppiNakymaView: View {
         toimintoVirhe = nil
         do {
             tulos = try await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).toiminto(t, nimi)
+            // Pakkaus ja purku laukaisevat rekisterisynkan (LOCALREGISTER V4).
+            if t == .pakkaa || t == .pura { Lr.jaettu.laukaise(.toiminto) }
             await lataa()
         } catch {
             toimintoVirhe = error.localizedDescription

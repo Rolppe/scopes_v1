@@ -25,6 +25,9 @@ struct InfraView: View {
                             .accessibilityIdentifier("infra-rekisterit")
                     }
                 }
+                Section {
+                    NavigationLink { LrView() } label: { LrYhteenveto() }.accessibilityIdentifier("infra-lr")
+                }
                 // Jokainen pääskooppi on oma korttinsa, ja sen alaskoopit avautuvat saman kortin sisään (käyttäjä 14.10.2026).
                 // Kortti on yksi listarivi, jotta pitkä painallus irrottaa sen ja .onMove siirtää sen toiseen kohtaan
                 // (SCOPES-INFRA-JARJESTYS 14.10.2026; Sectionia ei voi siirtää). Nosto vaatii, ettei sivuttaisveto
