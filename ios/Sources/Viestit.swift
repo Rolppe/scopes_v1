@@ -19,7 +19,7 @@ struct Viestikupla: View {
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-                .padding(.leading, 10)
+                .padding(.leading, Teema.Vali.m)
                 .accessibilityIdentifier("tyokalu-rivi")
         } else if let kysymykset = viesti.kysymykset, !kysymykset.isEmpty {
             // Vastattu tai ohitettu kysymys katoaa (käyttäjä 13.10.2026); vastaus jää omaksi kuplakseen.
@@ -34,7 +34,7 @@ struct Viestikupla: View {
             if viesti.omaViesti { Spacer(minLength: 40) }
             Text(LocalizedStringKey(viesti.teksti))
                 .textSelection(.enabled)
-                .padding(10)
+                .padding(Teema.Vali.m)
                 .background(viesti.omaViesti ? Teema.korostusTausta : Teema.pinta,
                             in: RoundedRectangle(cornerRadius: Teema.Kulma.kortti))
             if !viesti.omaViesti { Spacer(minLength: 40) }
@@ -64,8 +64,8 @@ struct KysymysKortti: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(kysymykset.enumerated()), id: \.offset) { q, k in
-                if q > 0 { Divider().padding(.vertical, 20) }
-                HStack(alignment: .top, spacing: 12) {
+                if q > 0 { Divider().padding(.vertical, Teema.Vali.xl) }
+                HStack(alignment: .top, spacing: Teema.Vali.m) {
                     Text(verbatim: k.kysymys).font(.title2.weight(.medium))
                         .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
                     Spacer(minLength: 0)
@@ -82,7 +82,7 @@ struct KysymysKortti: View {
                         .accessibilityIdentifier("kysymys-sulje")
                     }
                 }
-                .padding(.bottom, 16)
+                .padding(.bottom, Teema.Vali.l)
                 ForEach(Array(k.vaihtoehdot.enumerated()), id: \.offset) { i, v in
                     Button { valitse(q, i) } label: { vaihtoehto(k, q, i, v) }
                         .buttonStyle(.plain)
@@ -94,7 +94,7 @@ struct KysymysKortti: View {
                     // Ei rivirajaa (käyttäjä 13.10.2026): kenttä ja kortti kasvavat kirjoittaessa, vanha teksti ei piiloudu.
                     TextField("Muu", text: Binding(get: { muut[q] ?? "" }, set: { muut[q] = $0 }), axis: .vertical)
                         .font(.body)
-                        .padding(.vertical, 18)
+                        .padding(.vertical, Teema.Vali.l)
                         .focused($fokus, equals: q)
                         .disabled(lahetetty)
                         .accessibilityIdentifier("kysymys-muu-\(q)")
@@ -106,14 +106,14 @@ struct KysymysKortti: View {
                     Button { laheta(vastaa) } label: {
                         // Väri Claude-äpin Submit-napista (kuvakaappaus 13.10.2026): vaaleanharmaa kapseli, tummanharmaa teksti.
                         Text("Lähetä").font(.body.weight(.semibold)).foregroundStyle(Color(white: 0.24))
-                            .padding(.horizontal, 26).padding(.vertical, 12)
+                            .padding(.horizontal, Teema.Vali.xl).padding(.vertical, Teema.Vali.m)
                             .background(Color(white: lahetetty || tyhja ? 0.80 : 0.92), in: Capsule())
                     }
                     .buttonStyle(.plain)
                     .disabled(lahetetty || tyhja)
                     .accessibilityIdentifier("kysymys-laheta")
                 }
-                .padding(.top, 8)
+                .padding(.top, Teema.Vali.s)
             }
         }
         // Oman vastauksen kentän valinta poistaa saman kysymyksen valinnat (käyttäjä 13.10.2026: valinnasta, ei kirjoituksesta).
@@ -125,18 +125,18 @@ struct KysymysKortti: View {
             }
         }
         .onChange(of: muut) { if fokus != nil { nayta?() } }
-        .padding(24)
+        .padding(Teema.Vali.xl)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.systemGray5), in: RoundedRectangle(cornerRadius: 28))
-        .overlay(RoundedRectangle(cornerRadius: 28).stroke(Color.white.opacity(0.08), lineWidth: 1))
+        .background(Color(.systemGray5), in: RoundedRectangle(cornerRadius: Teema.Kulma.arkki))
+        .overlay(RoundedRectangle(cornerRadius: Teema.Kulma.arkki).stroke(Color.white.opacity(0.08), lineWidth: 1))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("kysymys-kortti")
     }
 
     private func vaihtoehto(_ k: Kysymys, _ q: Int, _ i: Int, _ v: Vaihtoehto) -> some View {
         let valittu = valinnat[q]?.contains(i) == true
-        return HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
+        return HStack(alignment: .center, spacing: Teema.Vali.m) {
+            VStack(alignment: .leading, spacing: Teema.Vali.s) {
                 Text(verbatim: v.nimi).font(.body.weight(.medium)).fixedSize(horizontal: false, vertical: true)
                 if let kuvaus = v.kuvaus {
                     Text(verbatim: kuvaus).font(.subheadline).foregroundStyle(.secondary).lineSpacing(4)
@@ -150,7 +150,7 @@ struct KysymysKortti: View {
                     .foregroundStyle(valittu ? Teema.korostus : Teema.toissijainen)
             }
         }
-        .padding(.vertical, 18)
+        .padding(.vertical, Teema.Vali.l)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
     }
@@ -197,16 +197,16 @@ struct Viestilista: View {
                 // Ei LazyVStack (CHAT-MUSTA 13.10.2026): laiska lista arvioi rivikorkeudet, ja scrollTo("loppu") osui
                 // vaihdossa ja uuden viestin jälkeen sisällön ohi, jolloin näkymä jäi mustaksi. Viestejä on enintään 120
                 // (palvelu/viestit.mjs), joten kaikki rivit mitataan kerralla.
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: Teema.Vali.s) {
                     ForEach(Array(viestit.enumerated()), id: \.offset) { i, v in
                         Viestikupla(viesti: v, vastaa: vastaa, sulje: sulje,
                                     nayta: { nosta(vierita) }).id(i)
                     }
-                    if odottaa { ProgressView().padding(.leading, 12).id("odottaa") }
+                    if odottaa { ProgressView().padding(.leading, Teema.Vali.m).id("odottaa") }
                     Color.clear.frame(height: 1).id("loppu")
                 }
                 .padding(.horizontal)
-                .padding(.vertical, 8)
+                .padding(.vertical, Teema.Vali.s)
             }
             // Lista pysyy alareunassaan, kun sen korkeus muuttuu (CHAT-NOUSU-TODENNUS 13.10.2026): näppäimistön avautuessa
             // keskustelu nousee kutistuksen mukana eikä jää lyhyeksi, jos kutistus ehtii vasta keyboardDidShow'n jälkeen.
@@ -274,11 +274,11 @@ struct Syottorivi<Vasen: View>: View {
     private var tyhja: Bool { teksti.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !liitteita }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Teema.Vali.s) {
             TextField("Kirjoita viesti", text: $teksti, axis: .vertical)
                 .lineLimit(1...6)
                 .accessibilityIdentifier("\(tunnus)-kentta")
-            HStack(spacing: 8) {
+            HStack(spacing: Teema.Vali.s) {
                 vasen
                 Spacer()
                 Button(action: laheta) {
@@ -293,12 +293,12 @@ struct Syottorivi<Vasen: View>: View {
                 .accessibilityIdentifier("\(tunnus)-laheta")
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .lasiPinta(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Color(.separator).opacity(0.4)))
-        .padding(.horizontal, 12)
-        .padding(.bottom, 8)
+        .padding(.horizontal, Teema.Vali.l)
+        .padding(.vertical, Teema.Vali.m)
+        .lasiPinta(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: Teema.Kulma.arkki, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Teema.Kulma.arkki, style: .continuous).stroke(Color(.separator).opacity(0.4)))
+        .padding(.horizontal, Teema.Vali.m)
+        .padding(.bottom, Teema.Vali.s)
     }
 }
 
@@ -338,7 +338,7 @@ struct ChatView: View {
                             .font(.subheadline.weight(.medium))
                     }
                     .disabled(yhdistetaan)
-                    .padding(.horizontal).padding(.vertical, 6)
+                    .padding(.horizontal).padding(.vertical, Teema.Vali.s)
                     .accessibilityIdentifier("chat-yhdista")
                 }
                 if let virhe { Text(virhe).foregroundStyle(.red).padding(.horizontal).accessibilityIdentifier("chat-virhe") }
@@ -392,7 +392,7 @@ struct ChatView: View {
             let paikalliset = agentit.filter { $0.tyyppi == "paikallinen" }
             if !paikalliset.isEmpty { Section("palvelin") { ForEach(paikalliset) { valinta($0) } } }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: Teema.Vali.xs) {
                 Text(valittuAgentti?.otsikko ?? "Valitse malli").font(.subheadline.weight(.medium)).lineLimit(1)
                 Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
             }
@@ -632,7 +632,7 @@ struct SkooppiViestitView: View {
                     }
                 } else {
                     Spacer()
-                    VStack(spacing: 16) {
+                    VStack(spacing: Teema.Vali.l) {
                         Text(t.pakattu == true ? "Skooppi on pakattu." : "Skooppi ei ole auki.").font(.headline)
                             .accessibilityIdentifier(t.pakattu == true ? "pakattu" : "ei-auki")
                         Button { Task { await pura() } } label: { Label("Pura", systemImage: "play.circle") }

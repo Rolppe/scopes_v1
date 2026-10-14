@@ -24,17 +24,24 @@ enum Korostus: String, CaseIterable, Identifiable {
         }
     }
 
-    var vari: Color {
+    /// Vaalean ja tumman tilan sävy heksoina.
+    private var savyt: (vaalea: UInt32, tumma: UInt32) {
         switch self {
-        case .turkoosi: Color(vaalea: 0x0F766E, tumma: 0x2DD4BF)
-        case .sininen: Color(vaalea: 0x1D4ED8, tumma: 0x60A5FA)
-        case .indigo: Color(vaalea: 0x4338CA, tumma: 0x818CF8)
-        case .violetti: Color(vaalea: 0x7E22CE, tumma: 0xC084FC)
-        case .pinkki: Color(vaalea: 0xBE185D, tumma: 0xF472B6)
-        case .vihrea: Color(vaalea: 0x15803D, tumma: 0x4ADE80)
-        case .grafiitti: Color(vaalea: 0x374151, tumma: 0xD1D5DB)
+        case .turkoosi: (0x0F766E, 0x2DD4BF)
+        case .sininen: (0x1D4ED8, 0x60A5FA)
+        case .indigo: (0x4338CA, 0x818CF8)
+        case .violetti: (0x7E22CE, 0xC084FC)
+        case .pinkki: (0xBE185D, 0xF472B6)
+        case .vihrea: (0x15803D, 0x4ADE80)
+        case .grafiitti: (0x374151, 0xD1D5DB)
         }
     }
+
+    var vari: Color { Color(vaalea: savyt.vaalea, tumma: savyt.tumma) }
+
+    /// Kytkimen rata: vaalea sävy molemmissa tiloissa, koska valkoinen nuppi katoaa tumman tilan kirkkaalle sävylle
+    /// (KATSELMUS K3: #2DD4BF on valkoisella 1,6:1, #0F766E 5,5:1).
+    var kytkin: Color { Color(vaalea: savyt.vaalea, tumma: savyt.vaalea) }
 
     /// Teksti täytetyn korostuspinnan päällä: valkoinen vaaleassa tilassa, lähes musta tummassa (≥ 6,3:1).
     var paalla: Color {
@@ -160,6 +167,7 @@ struct UlkoasuAsetukset: View {
             }
             Section {
                 Toggle("Liquid Glass", isOn: $ulkoasu.lasi)
+                    .tint(Teema.kytkin)
                     .disabled(!Ulkoasu.lasiTuettu)
                     .accessibilityIdentifier("ulkoasu-lasi")
                 esikatselu

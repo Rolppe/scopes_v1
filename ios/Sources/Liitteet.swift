@@ -130,23 +130,23 @@ struct LiiteRivi: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: Teema.Vali.s) {
                 ForEach(liitteet) { l in
                     ZStack(alignment: .topTrailing) {
                         Group {
                             if let k = l.esikatselu {
                                 Image(uiImage: k).resizable().scaledToFill()
                             } else {
-                                VStack(spacing: 4) {
+                                VStack(spacing: Teema.Vali.xs) {
                                     Image(systemName: "doc")
                                     Text(verbatim: l.nimi).font(.caption2).lineLimit(2).multilineTextAlignment(.center)
                                 }
-                                .padding(4)
+                                .padding(Teema.Vali.xs)
                             }
                         }
                         .frame(width: 64, height: 64)
                         .background(Color(.secondarySystemBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: Teema.Kulma.pieni, style: .continuous))
                         Button { liitteet.removeAll { $0.id == l.id } } label: {
                             Image(systemName: "xmark.circle.fill").symbolRenderingMode(.palette)
                                 .foregroundStyle(.white, Color.black.opacity(0.6))
@@ -159,9 +159,9 @@ struct LiiteRivi: View {
                     .accessibilityIdentifier("liite")
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, Teema.Vali.l)
         }
-        .padding(.bottom, 4)
+        .padding(.bottom, Teema.Vali.xs)
     }
 }
 

@@ -197,11 +197,16 @@ struct IlmoitusAsetukset: View {
             Section("Ilmoita") {
                 ForEach(IlmoitusLaji.allCases, id: \.self) { l in
                     Toggle(l.nimi, isOn: Binding(get: { paalla[l] ?? true }, set: { paalla[l] = $0 }))
+                        .tint(Teema.kytkin)
                         .accessibilityIdentifier("ilmoitus-\(l.rawValue)")
                 }
             }
             Section {
-                Stepper("Konteksti ≥ \(tokenit(raja))", value: $raja, in: ilmoitusRajaAlue, step: 25_000)
+                // Lyhyt selite mahtuu riville isollakin tekstillä (KATSELMUS K8: "Konteksti ≥ / 100 k"); otsikko kertoo lajin.
+                Stepper(value: $raja, in: ilmoitusRajaAlue, step: 25_000) {
+                    Text(verbatim: "≥ \(tokenit(raja))").monospacedDigit().lineLimit(1)
+                }
+                    .accessibilityLabel("Konteksti ≥ \(tokenit(raja))")
                     .accessibilityIdentifier("ilmoitusraja")
                     .disabled(paalla[.konteksti] == false)
             } header: { Text("Kontekstiraja") } footer: {
