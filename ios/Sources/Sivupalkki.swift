@@ -105,6 +105,7 @@ struct Sivupalkki: View, Equatable {
                     Button { navigaatio.uusiSkooppiAuki = true } label: { Image(systemName: "plus") }
                         .accessibilityIdentifier("uusi")
                 }
+                .lasiKapseli()
             }
             // Alapalkki listan alla eikä päällä (DESIGN-UX-A U2): työkalurivin kelluvat napit peittivät alimman rivin
             // merkit ilman taustaa. Turva-alueen lisäys lyhentää listaa, joten viimeinen rivi vierii palkin yläpuolelle.

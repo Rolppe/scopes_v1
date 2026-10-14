@@ -456,6 +456,7 @@ struct ChatView: View {
                         .disabled(odottaa)
                         .accessibilityIdentifier("chat-uusi")
                 }
+                .lasiKapseli()
             }
             .task(id: asetukset.osoite + asetukset.avain) {
                 // Mallilista päivittyy 30 s välein: palvelimen mallit katoavat valitsimesta, kun kone ei vastaa.
@@ -755,12 +756,14 @@ struct SkooppiViestitView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) { KayttorajaRenkaat(raja: kayttoraja) }
+                .lasiKapseli()
             // Kolme pistettä kuten Claude-äpissä (käyttäjä 13.10.2026), avaa skoopin tiedot.
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink(value: SkooppiReitti.tiedot(nimi)) { Image(systemName: "ellipsis") }
                     .accessibilityLabel("Skoopin tiedot")
                     .accessibilityIdentifier("tiedot")
             }
+            .lasiKapseli()
         }
         .task {
             // Käyttöraja minuutin välein: palvelu välimuistittaa, eikä rengas tarvitse tarkempaa.

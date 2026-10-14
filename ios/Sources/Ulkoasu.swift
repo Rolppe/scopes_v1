@@ -134,6 +134,19 @@ extension View {
     }
 }
 
+extension ToolbarContent {
+    /// Yläpalkin napin järjestelmän lasikapseli vain, kun Liquid Glass on päällä: tasaisessa tilassa nappi on pelkkä
+    /// kuvake (käyttäjä 14.10.2026).
+    @ToolbarContentBuilder
+    func lasiKapseli() -> some ToolbarContent {
+        if #available(iOS 26, *) {
+            sharedBackgroundVisibility(Ulkoasu.jaettu.lasiKaytossa ? .automatic : .hidden)
+        } else {
+            self
+        }
+    }
+}
+
 // Asetukset → Ulkoasu: teema, korostusväri ja Liquid Glass. Valinta näkyy heti koko äpissä (myös tämän arkin takana);
 // AsetuksetView tallentaa tai palauttaa sen.
 struct UlkoasuAsetukset: View {
