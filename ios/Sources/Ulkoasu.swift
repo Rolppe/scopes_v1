@@ -86,12 +86,13 @@ enum Tekstikoko: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Askeleet Dynamic Typen asteikolla: oletuskoossa leipäteksti 16 / 17 / 21 pt.
+    /// Askeleet Dynamic Typen asteikolla: oletuskoossa leipäteksti 16 / 17 / 19 pt (Suuri +2 = 21 pt oli puhelimessa liian
+    /// suuri, käyttäjä 14.10.2026).
     private var askel: Int {
         switch self {
         case .pieni: -1
         case .normaali: 0
-        case .suuri: 2
+        case .suuri: 1
         }
     }
 
