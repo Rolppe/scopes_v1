@@ -73,7 +73,7 @@ struct LiiteValikko: View {
                 .accessibilityIdentifier("liite-leikepoyta")
         } label: {
             Image(systemName: "plus")
-                .font(.body.weight(.semibold))
+                .font(.body.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge)
                 .foregroundStyle(.primary)
                 .frame(width: 32, height: 32)
                 .background(Circle().fill(Color(.systemGray5)))

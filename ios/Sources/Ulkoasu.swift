@@ -71,6 +71,61 @@ enum Teematila: String, CaseIterable, Identifiable {
     }
 }
 
+/// Tekstikoko askelina iPhonen oman tekstikokoasetuksen ympärillä (DESIGN-FONTTI, käyttäjä 14.10.2026: suhteessa
+/// iPhoneen), jotta saavutettavuuskoot toimivat yhä. Kattoja (palkit, kuvakenapit) noudatetaan kaikilla tasoilla.
+enum Tekstikoko: String, CaseIterable, Identifiable {
+    case pieni, normaali, suuri
+
+    var id: String { rawValue }
+
+    var nimi: String {
+        switch self {
+        case .pieni: "Pieni"
+        case .normaali: "Normaali"
+        case .suuri: "Suuri"
+        }
+    }
+
+    /// Askeleet Dynamic Typen asteikolla: oletuskoossa leipäteksti 16 / 17 / 21 pt.
+    private var askel: Int {
+        switch self {
+        case .pieni: -1
+        case .normaali: 0
+        case .suuri: 2
+        }
+    }
+
+    func koko(_ jarjestelma: DynamicTypeSize) -> DynamicTypeSize {
+        let kaikki = DynamicTypeSize.allCases
+        let i = (kaikki.firstIndex(of: jarjestelma) ?? kaikki.firstIndex(of: .large) ?? 0) + askel
+        return kaikki[min(max(i, 0), kaikki.count - 1)]
+    }
+}
+
+/// Viestikuplan ja kysymyskortin kirjasin (DESIGN-FONTTI). Järjestelmän omia muotoiluja: ei pakattuja fontteja, ja
+/// Dynamic Typen optiset koot säilyvät. Valikot, palkit ja koodi pysyvät SF Prona ja SF Monona.
+enum Viestifontti: String, CaseIterable, Identifiable {
+    case sfPro, pyorea, serif
+
+    var id: String { rawValue }
+
+    var nimi: String {
+        switch self {
+        case .sfPro: "SF Pro"
+        case .pyorea: "SF Rounded"
+        case .serif: "New York"
+        }
+    }
+
+    var muoto: Font.Design {
+        switch self {
+        case .sfPro: .default
+        case .pyorea: .rounded
+        case .serif: .serif
+        }
+    }
+}
+
 @Observable final class Ulkoasu {
     static let jaettu = Ulkoasu()
 
@@ -87,6 +142,10 @@ enum Teematila: String, CaseIterable, Identifiable {
         }
     }
     var lasi: Bool { didSet { UserDefaults.standard.set(lasi, forKey: "ulkoasu.lasi") } }
+    var tekstikoko: Tekstikoko { didSet { UserDefaults.standard.set(tekstikoko.rawValue, forKey: "ulkoasu.tekstikoko") } }
+    var viestifontti: Viestifontti {
+        didSet { UserDefaults.standard.set(viestifontti.rawValue, forKey: "ulkoasu.viestifontti") }
+    }
 
     var lasiKaytossa: Bool { lasi && Self.lasiTuettu }
 
@@ -95,14 +154,18 @@ enum Teematila: String, CaseIterable, Identifiable {
         var korostus: Korostus
         var teema: Teematila
         var lasi: Bool
+        var tekstikoko: Tekstikoko
+        var viestifontti: Viestifontti
     }
 
     var tila: Tila {
-        get { Tila(korostus: korostus, teema: teema, lasi: lasi) }
+        get { Tila(korostus: korostus, teema: teema, lasi: lasi, tekstikoko: tekstikoko, viestifontti: viestifontti) }
         set {
             if korostus != newValue.korostus { korostus = newValue.korostus }
             if teema != newValue.teema { teema = newValue.teema }
             if lasi != newValue.lasi { lasi = newValue.lasi }
+            if tekstikoko != newValue.tekstikoko { tekstikoko = newValue.tekstikoko }
+            if viestifontti != newValue.viestifontti { viestifontti = newValue.viestifontti }
         }
     }
 
@@ -110,6 +173,8 @@ enum Teematila: String, CaseIterable, Identifiable {
         korostus = oletukset.string(forKey: "ulkoasu.korostus").flatMap(Korostus.init) ?? .turkoosi
         teema = oletukset.string(forKey: "ulkoasu.teema").flatMap(Teematila.init) ?? .jarjestelma
         lasi = oletukset.object(forKey: "ulkoasu.lasi") as? Bool ?? true
+        tekstikoko = oletukset.string(forKey: "ulkoasu.tekstikoko").flatMap(Tekstikoko.init) ?? .normaali
+        viestifontti = oletukset.string(forKey: "ulkoasu.viestifontti").flatMap(Viestifontti.init) ?? .sfPro
     }
 
     /// Teema ikkunoiden tyylinä eikä `.preferredColorScheme`:nä: SwiftUI ei palaa järjestelmän tyyliin, kun
@@ -132,6 +197,26 @@ extension View {
             background(tausta, in: muoto)
         }
     }
+}
+
+/// Asettaa iPhonen tekstikoon Tekstikoko-askelin siirrettynä; alemmat `...`-katot rajaavat yhä. iPhonen koko luetaan
+/// UIKitistä eikä perityn ympäristön kautta, jotta arkin oma `.tekstikoko()` ei siirrä kokoa kahdesti: arkki ei perinyt
+/// juuren kokoa (simulaattori 14.10.2026). Ympäristön luku piirtää uudelleen, kun iPhonen asetus vaihtuu.
+private struct TekstikokoMuokkain: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var peritty
+
+    func body(content: Content) -> some View {
+        let jarjestelma = DynamicTypeSize(UIApplication.shared.preferredContentSizeCategory) ?? peritty
+        return content.dynamicTypeSize(Ulkoasu.jaettu.tekstikoko.koko(jarjestelma))
+    }
+}
+
+extension View {
+    /// Ulkoasu-asetuksen tekstikoko koko näkymäpuulle (juuri, Juuri.swift).
+    func tekstikoko() -> some View { modifier(TekstikokoMuokkain()) }
+
+    /// Viestitekstin kirjasin Ulkoasu-asetuksesta (viestikupla ja kysymyskortti).
+    func viestifontti() -> some View { fontDesign(Ulkoasu.jaettu.viestifontti.muoto) }
 }
 
 extension ToolbarContent {
@@ -188,6 +273,32 @@ struct UlkoasuAsetukset: View {
                 Text(Ulkoasu.lasiTuettu
                      ? "Suodatinnapit, lähetysnappi ja kirjoituskenttä lasina. Pois: tasaiset värit."
                      : "Liquid Glass vaatii iOS 26:n; pinnat ovat tasaisia.")
+            }
+            Section {
+                Picker("Tekstikoko", selection: $ulkoasu.tekstikoko) {
+                    ForEach(Tekstikoko.allCases) { Text($0.nimi).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("ulkoasu-tekstikoko")
+                ForEach(Viestifontti.allCases) { f in
+                    Button { ulkoasu.viestifontti = f } label: {
+                        HStack {
+                            Text(f.nimi).fontDesign(f.muoto).foregroundStyle(Color.primary)
+                            Spacer()
+                            if ulkoasu.viestifontti == f { Image(systemName: "checkmark").font(.body.weight(.semibold)) }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .accessibilityIdentifier("viestifontti-\(f.rawValue)")
+                    .accessibilityAddTraits(ulkoasu.viestifontti == f ? .isSelected : [])
+                }
+                Text("Hei! Tältä näyttää viesti valitulla kirjasimella ja koolla.")
+                    .viestifontti()
+                    .padding(Teema.Vali.m)
+                    .background(Teema.pinta, in: RoundedRectangle(cornerRadius: Teema.Kulma.kortti))
+                    .accessibilityIdentifier("ulkoasu-tekstinayte")
+            } header: { Text("Teksti") } footer: {
+                Text("Koko on suhteessa iPhonen tekstikokoon ja koskee koko äppiä. Kirjasin koskee viestejä ja kysymyskorttia; valikot, palkit ja koodi pysyvät ennallaan.")
             }
         }
         .navigationTitle("Ulkoasu")

@@ -14,9 +14,10 @@ struct SkoopitApp: App {
         WindowGroup {
             // Kysymyskortin simulaattorikoe ilman palvelua (CHAT-QUESTION-YKSI-KERRALLAAN, Viestit.swift).
             if KysymysKoe.paalla {
-                KysymysKoe()
+                KysymysKoe().tekstikoko()
             } else {
                 JuuriView().environmentObject(asetukset).environmentObject(navigaatio)
+                    .tekstikoko()
                     .task {
                         Ulkoasu.jaettu.kayta()
                         Ilmoittaja.jaettu.avaa = { navigaatio.avaaSkooppi($0) }
@@ -144,8 +145,8 @@ struct JuuriView: View {
             sumeaVedosta = false
             auki ? fokus.piilota(navigaatio) : fokus.palauta(navigaatio)
         }
-        .sheet(isPresented: $navigaatio.asetuksetAuki) { AsetuksetView() }
-        .sheet(isPresented: $navigaatio.uusiSkooppiAuki) { UusiSkooppiView() }
+        .sheet(isPresented: $navigaatio.asetuksetAuki) { AsetuksetView().tekstikoko() }
+        .sheet(isPresented: $navigaatio.uusiSkooppiAuki) { UusiSkooppiView().tekstikoko() }
         // Korostusväri näkymän bodyssä eikä Scenessä: Observation seuraa lukua tässä, joten valinnan vaihto
         // (Asetukset → Ulkoasu) vaihtaa järjestelmän napit ja arkit heti (DESIGN-ULKOASU).
         .tint(Teema.korostus)
