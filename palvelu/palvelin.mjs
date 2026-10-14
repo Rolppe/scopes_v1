@@ -42,7 +42,8 @@
 // SCOPES_WG_TIEDOSTO (oletus ~/.config/scopes/wg.conf, wg-quick-muoto; ei repossa), SCOPES_TOIMINTOLOKI (oletus
 // ~/.local/state/scopes-toiminnot.loki), SCOPES_PYYNTOLOKI (oletus ~/.local/state/scopes-pyynnot.loki), SCOPES_APPILOKI
 // (oletus ~/.local/state/scopes-app.loki), SCOPES_TILA_DIR (pakkauskytkinten tilatiedostot; oletus
-// ~/.claude/skills/keskustelun-siirto/state). Ilman avainta palvelu ei käynnisty.
+// ~/.claude/skills/keskustelun-siirto/state), SCOPES_LR_VIENTI (rekisteripolun etuliite, jonka localregister vie
+// gittiin, esim. scopes/; oletus pois, LOCALREGISTER-VIENTI). Ilman avainta palvelu ei käynnisty.
 
 import { timingSafeEqual } from 'node:crypto';
 import { readFileSync, realpathSync } from 'node:fs';
@@ -74,6 +75,7 @@ export function asetuksetYmparistosta(env = process.env) {
     pyyntoloki: env.SCOPES_PYYNTOLOKI ?? join(homedir(), '.local/state/scopes-pyynnot.loki'),
     appiloki: env.SCOPES_APPILOKI ?? join(homedir(), '.local/state/scopes-app.loki'),
     tilaDir: env.SCOPES_TILA_DIR ?? OLETUS_HAKEMISTO,
+    lrVienti: env.SCOPES_LR_VIENTI || null,
   };
 }
 
@@ -100,7 +102,7 @@ function runko(req, raja = 1024) {
   });
 }
 
-export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri })) {
+export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null })) {
   // Chat suoratoistona (DEMO-SCOPES-SUORATOISTO): NDJSON-rivit {tyyppi: 'pala', teksti} …, lopuksi
   // {tyyppi: 'valmis', vastaus, keskustelu, …} tai {tyyppi: 'virhe', virhe}. Hylkäys ennen agentin käynnistystä
   // palaa tavallisena virhekoodina. Yhteyden katketessa (puhelimen näyttölukko, äpin vaihto) agentti jatkaa, ja
@@ -226,7 +228,7 @@ if (paaohjelma) {
   }
   const diagnostiikka = luoDiagnostiikka(asetukset);
   diagnostiikka.silmukka();
-  const lr = luoLr({ repoJuuri: asetukset.juuri });
+  const lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null });
   lr.ajasta();
   createServer(diagnostiikka.kaari(kasittelija(asetukset, undefined, undefined, undefined, undefined, diagnostiikka, undefined, lr))).listen(portti, osoite, () =>
     console.log(`scopes-palvelu: http://${osoite}:${portti}/api/skoopit`));

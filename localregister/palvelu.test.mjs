@@ -55,3 +55,38 @@ test('virheet: tuntematon polku 404, vieras rekisteripolku 400/404', async () =>
   await assert.rejects(k.lr.kasittele('POST', '/api/lr/hae', runko({ rekisteri: '../REKISTERI.md', idt: [] })), (e) => e.koodi === 400);
   await assert.rejects(k.lr.kasittele('POST', '/api/lr/listat', runko({ rekisterit: ['y/REKISTERI.md'] })), (e) => e.koodi === 404);
 });
+
+test('vienti: etuliitteen lähetys käynnistää viennin tuonnin jälkeen; muu polku ja oletus eivät (LOCALREGISTER-VIENTI)', async () => {
+  const lrJuuri = mkdtempSync(join(tmpdir(), 'lrp-'));
+  const laite = luoLaite(lrJuuri, 'oneplus');
+  const S = 'scopes/x/REKISTERI.md';
+  for (const p of [S, P]) tuoRekisteri(lrJuuri, laite, p, '# x\n\n- yksi\n- kaksi\n', { commit: 'a' });
+  laite.tallenna();
+  const jarjestys = [];
+  const luo = (vientiEtuliite) => luoLr({
+    lrJuuri, vientiEtuliite, head: async () => 'h1',
+    tuo: async () => { jarjestys.push('tuo'); await new Promise((r) => setTimeout(r, 20)); },
+    vienti: async () => { jarjestys.push('vie'); return { stdout: 'VIENTI: 0 viety, 0 ohitettu\n' }; },
+  });
+  const laheta = async (lr, polku) => {
+    const l = await lr.kasittele('POST', '/api/lr/listat', runko({ rekisterit: [polku] }));
+    const [y] = (await lr.kasittele('POST', '/api/lr/hae', runko({ rekisteri: polku, idt: [l[polku].yksikot[1].id] }))).yksikot;
+    const v = { ...y, sisalto: `- äppi ${jarjestys.length}\n`, versio: { ...y.versio, iphone: (y.versio.iphone ?? 0) + 1 } };
+    return lr.kasittele('POST', '/api/lr/laheta', runko({ yksikot: [v] }));
+  };
+  const pois = luo(null);
+  await laheta(pois, S);
+  assert.equal(await pois.vie(), null);
+  const lr = luo('scopes/');
+  await laheta(lr, P);
+  assert.deepEqual(jarjestys, []);
+  const t = lr.tuoJosMuuttunut();
+  await laheta(lr, S);
+  await t;
+  const hetki = () => new Promise((r) => setTimeout(r, 50));
+  await hetki();
+  assert.deepEqual(jarjestys, ['tuo', 'vie']);
+  await laheta(lr, S);
+  await hetki();
+  assert.deepEqual(jarjestys, ['tuo', 'vie', 'vie']);
+});
