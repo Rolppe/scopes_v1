@@ -404,6 +404,7 @@ struct Sivupalkkipainike: ToolbarContent {
             Button { withAnimation(.snappy) { navigaatio.sivupalkkiAuki = true } } label: { Image(systemName: "chevron.left") }
                 .accessibilityIdentifier("sivupalkki")
         }
+        .lasiKapseli()
     }
 }
 
