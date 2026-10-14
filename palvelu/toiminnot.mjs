@@ -8,13 +8,15 @@
 //   automaattisiirto, herata, herata-pois — samoin `/automaattisiirto` (pakkaus ja sessionvaihto), `/sa` ja `/sa pois`
 //            (välimuistin herätys päälle ja pois; käyttäjä 13.10.2026: nappi ja kytkin pakkausnapin alle). Varatulle
 //            istunnolle nämä menevät jonoon ja lähtevät, kun istunto on vapaa (käyttäjä 13.10.2026, V-294: autojatko
-//            pysähtyy kysymykseen, joten hylkäys esti kytkimen juuri silloin, kun sitä tarvitaan)
+//            pysähtyy kysymykseen, joten hylkäys esti kytkimen juuri silloin, kun sitä tarvitaan). Jono tallennetaan
+//            levylle jokaisen muutoksen jälkeen ja luetaan käynnistyksessä, joten palvelun uudelleenkäynnistys ei
+//            pudota sitä (käyttäjä 14.10.2026, scopes siirto)
 //   uusi   — uusi istunto, ensimmäinen viesti `/pura uusi <nimi>`; nimi on tiukka [a-z0-9-]-sanoja ja vielä vapaa
 // Skoopin nimi tarkistetaan skoopit.json:n avaimista (uudella: muodosta ja vapaudesta), ja komennot ajetaan
 // argumenttitaulukkona ilman kuorta. Yksi toiminto kerrallaan; jokainen yritys kirjataan lokiin, myös hylätty.
 
 import { execFile } from 'node:child_process';
-import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { istunnot, lueSkoopit } from './lahteet.mjs';
@@ -58,11 +60,39 @@ export const istuntoOsoite = (stdout) => /^OK: (https:\/\/claude\.ai\/code\/sess
 // ennen siirtoa, koska /automaattisiirto päättää istunnon.
 const JONO_RYHMA = { '/sa': 'herätys', '/sa pois': 'herätys', '/automaattisiirto': 'siirto' };
 
-export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toimintoloki, jonoVali = 5_000 } = {}) {
+// Jonotiedosto: oletuksena toimintolokin vieressä (palvelin.mjs: ~/.local/state/scopes-toiminnot-jono.json).
+export const oletusJonotiedosto = (asetukset) =>
+  asetukset.toimintojono ?? (asetukset.toimintoloki ? join(dirname(asetukset.toimintoloki), 'scopes-toiminnot-jono.json') : null);
+
+// Levyltä luettu jonorivi kelpaa vain jonotettavalla komennolla ja merkkijonokentillä: tiedosto ei saa tuoda
+// komentoriville mitään, mitä puhelin ei olisi voinut jonottaa.
+const kelpaaJonoon = (j) => j && typeof j.nimi === 'string' && typeof j.istunto === 'string' &&
+  typeof j.toiminto === 'string' && Object.hasOwn(JONO_RYHMA, j.komento) && Number.isFinite(j.aika);
+
+export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toimintoloki, jonoVali = 5_000, jonoTiedosto = oletusJonotiedosto(asetukset) } = {}) {
   const autovaihto = join(asetukset.juuri, 'claude/siirto/tools/autovaihto.sh');
   let kaynnissa = null;
   const jono = new Map(); // `${skooppi}\n${ryhmä}` → { nimi, istunto, komento, toiminto, aika }
   let ajastin = null;
+
+  // Tallennus kirjoittaa väliaikaiseen ja nimeää sen, ettei kesken katkennut kirjoitus jätä rikkinäistä tiedostoa.
+  const tallennaJono = () => {
+    if (!jonoTiedosto) return;
+    try {
+      mkdirSync(dirname(jonoTiedosto), { recursive: true });
+      writeFileSync(`${jonoTiedosto}.tmp`, JSON.stringify([...jono.values()]) + '\n');
+      renameSync(`${jonoTiedosto}.tmp`, jonoTiedosto);
+    } catch { /* tallennus ei estä toimintoa */ }
+  };
+  const kaynnistaAjastin = () => {
+    if (jonoVali && !ajastin) { ajastin = setInterval(() => { puraJono().catch(() => {}); }, jonoVali); ajastin.unref(); }
+  };
+  if (jonoTiedosto) {
+    let rivit = [];
+    try { rivit = JSON.parse(readFileSync(jonoTiedosto, 'utf8')); } catch { /* ei jonoa tai rikki: tyhjä */ }
+    for (const j of Array.isArray(rivit) ? rivit : []) if (kelpaaJonoon(j)) jono.set(`${j.nimi}\n${JONO_RYHMA[j.komento]}`, j);
+    if (jono.size) kaynnistaAjastin();
+  }
 
   const kirjaa = (rivi) => {
     if (!loki) return;
@@ -112,7 +142,7 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
     if (omat.length !== 1) throw new Hylatty(409, omat.length ? 'skoopissa on useita tmux-istuntoja' : `skoopilla ei ole tmux-istuntoa, johon ${komento} voi lähettää`);
     const [i] = omat;
     const ryhma = JONO_RYHMA[komento];
-    if (ryhma) jono.delete(`${nimi}\n${ryhma}`);
+    if (ryhma && jono.delete(`${nimi}\n${ryhma}`)) tallennaJono();
     if (i.tila === 'waiting' && komento === '/pakkaa' && kysymysAuki(i)) {
       // Kuten viestin lähetys (viestit.mjs): Enter valitsisi korostetun vaihtoehdon, joten Escape ensin ja tauko,
       // ettei Escape + kirjain tulkitu Alt-näppäimeksi.
@@ -126,7 +156,8 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
     if (i.tila !== 'idle') {
       if (!ryhma) throw new Hylatty(409, `istunto on varattu (${i.tila ?? 'tila tuntematon'}); yritä vuoron jälkeen`);
       jono.set(`${nimi}\n${ryhma}`, { nimi, istunto: i.id, komento, toiminto, aika: Date.now() });
-      if (jonoVali && !ajastin) { ajastin = setInterval(() => { puraJono().catch(() => {}); }, jonoVali); ajastin.unref(); }
+      tallennaJono();
+      kaynnistaAjastin();
       return { istunto: i.id, komento, jonossa: true };
     }
     await tarkistaRuutu(i);
@@ -143,11 +174,13 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
       const i = skoopinIstunnot(j.nimi, lueSkoopit(asetukset.juuri)).find((x) => x.id === j.istunto);
       if (!i || i.pakattu || !i.ruutu) {
         jono.delete(avain);
+        tallennaJono();
         kirjaa({ toiminto: j.toiminto, nimi: j.nimi, tulos: 'hylätty', syy: 'jonossa ollut istunto päättyi', istunto: j.istunto });
         continue;
       }
       if (i.tila !== 'idle') continue;
       jono.delete(avain);
+      tallennaJono();
       kaynnissa = j.toiminto;
       try {
         await tarkistaRuutu(i);
