@@ -204,8 +204,10 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
       if (omat.some((i) => !i.pakattu)) throw new Hylatty(409, 'skoopissa on jo käynnissä oleva istunto');
       // Pakattu istunto suljetaan ennen uutta (käyttäjä 13.10.2026): äpissä skoopin keskustelu jatkuu samassa
       // näkymässä uudella istunnolla. Remote Control -istuntoa ilman ruutua ei voi sulkea; se jää piiloon.
+      // Varattu estää myös ilman ruutua (SIIRTO-PURA-PAINIKE 14.10.2026): puhelimesta avattu istunto voi olla pakattu,
+      // mutta yhä autovaihdossa, ja uusi istunto ei ehkä vielä näy skoopissa; Pura avaisi silloin toisen istunnon.
       const suljettavat = omat.filter((i) => i.ruutu);
-      const varattu = suljettavat.find((i) => i.tila !== 'idle');
+      const varattu = omat.find((i) => i.tila !== 'idle');
       if (varattu) throw new Hylatty(409, `pakattu istunto on vielä varattu (${varattu.tila ?? 'tila tuntematon'}); yritä vuoron jälkeen`);
       for (const i of suljettavat) { await tarkistaRuutu(i); await kirjoita(i, '/exit'); }
       return { ...await avaaIstunto(nimi, `/pura ${nimi}`), suljettiin: suljettavat.map((i) => i.id) };
