@@ -123,6 +123,8 @@ auki oleva vertainen (K2), ei keskus. Myöhemmin Mac ja muut koneet liittyvät s
 (lähde 2,7 Mt): 4 kt:n lohko per yksikkötiedosto. Yksikön koko: mediaani 161 merkkiä, p95 2,6 k,
 suurin 33 k (`claude/siirto/HISTORIA.md`, yksi pitkä luettelon alkio).
 
-Puuttuu ennen äpin muokkauksia: uudelleentuonti git-muutoksista (§7 kohta 3), jossa muuttumaton
-yksikkö säilyttää tunnuksensa, muuttunut saa uuden version, poistunut hautakiven ja uusi järjestysavaimen
-naapuriensa väliin.
+Uudelleentuonti (LOCALREGISTER-UUDELLEENTUONTI 14.10.2026): `lr.mjs tuo` uudelleen ajettuna kohdistaa
+yksiköt sisällön pisimmällä yhteisellä osajonolla; muuttumaton pitää tunnuksensa, muokattu saa uuden version
+samalla tunnuksella, poistunut hautakiven, uusi avaimen naapuriensa väliin; gitistä poistunut rekisteri saa
+hautakiven. Testit 5/5. Oikea ajo 3d6d569e → 58cc59b2: 77 muuttumatonta, 1 muuttunut rekisteri
+(13 sama / 3 muuttunut / 1 uusi / 1 poistettu), edestakaisin 78/78, toinen ajo muuttumaton.
