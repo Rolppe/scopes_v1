@@ -97,9 +97,12 @@ export function pysahdys(transkripti) {
 }
 
 // Onko istunto pakattu (käyttäjä 13.10.2026: pakkauksen jälkeen äppi tyhjentää skoopin keskustelun ja tarjoaa
-// purun): agentin viimeinen `PAKKAUS: vahvistettu` -rivi on viimeisen käyttäjän viestin jälkeen. Työkalutulokset,
+// purun): agentin viimeinen pakkausrivi on viimeisen käyttäjän viestin jälkeen. Työkalutulokset,
 // meta-rivit, komentokääreen tulosteet ja /sa-herätykset eivät ole käyttäjän viestejä.
+// Pakkausrivi (V-284 14.10.2026): `PAKKAUS: vahvistettu`, `PAKATTU:` (kirjoitetaan vasta commitin ja pushin jälkeen)
+// tai `PAKKAUS: epäselvä`, jonka rivillä on commitin sha — esim. salaisuusgrepin vanha osuma ei peru pakkausta.
 const EI_KAYTTAJAN = /^(<(local-command|system-reminder|task-notification)|sa-tick:|sa-uusinta:)/;
+const PAKKAUSRIVI = /^[\s*`>]*(PAKKAUS:[*`\s]*vahvistettu|PAKATTU:|PAKKAUS:[*`\s]*epäselvä.*\bcommit(it)?[\s`]+[0-9a-f]{7,})/m;
 export function pakattu(transkripti) {
   let tulos = false;
   for (const rivi of transkripti.split('\n')) {
@@ -109,7 +112,7 @@ export function pakattu(transkripti) {
     const c = j.message?.content;
     const teksti = (typeof c === 'string' ? [c] : Array.isArray(c) ? c.filter((o) => o?.type === 'text').map((o) => o.text) : []).join('\n').trim();
     if (!teksti) continue;
-    if (j.type === 'assistant' && /^[\s*`>]*PAKKAUS:[*`\s]*vahvistettu/m.test(teksti)) tulos = true;
+    if (j.type === 'assistant' && PAKKAUSRIVI.test(teksti)) tulos = true;
     else if (j.type === 'user' && !EI_KAYTTAJAN.test(teksti)) tulos = false;
   }
   return tulos;
