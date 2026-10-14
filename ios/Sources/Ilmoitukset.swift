@@ -1,7 +1,8 @@
 // Paikalliset ilmoitukset (NOTIFICATIONS-PAIKALLINEN, käyttäjä 14.10.2026): äppi hakee /api/skoopit 10 s välein ja
 // ilmoittaa muutoksista kuten Claude iOS -äppi. Ilmainen allekirjoitus ei salli APNs-pushia, joten ilmoitus syntyy vain,
 // kun äppi on auki tai enintään noin 30 s taustalla (beginBackgroundTask). Ensimmäinen haku on lähtötaso, ei ilmoituksia.
-// UI-testit (SCOPES_AVAIN annettu) eivät kysy ilmoituslupaa, ellei SCOPES_ILMOITUKSET=1.
+// UI-testit (SCOPES_AVAIN annettu) eivät kysy ilmoituslupaa, ellei SCOPES_ILMOITUKSET=1. SCOPES_KOEILMOITUS="<skooppi>"
+// lähettää luvan jälkeen yhden koeilmoituksen, jonka napautus avaa skoopin (NOTIFICATIONS-SIMULAATTORI).
 import Foundation
 
 enum IlmoitusLaji: String {
@@ -17,6 +18,15 @@ struct Ilmoitus: Equatable {
 // Kontekstirajan oletus: pienimmät mallikohtaiset pakkausrajat ovat 71–72 k ja suurin 220 k (rd-trigger.sh ctx_limit),
 // joten 100 k varoittaa ennen useimpia rajoja. UserDefaults-avain "ilmoitusRaja" ohittaa.
 let oletusIlmoitusRaja = 100_000
+// Asetusten säätö (NOTIFICATIONS-SIMULAATTORI) 25 k:n askelin; 0 tai puuttuva arvo on oletus.
+let ilmoitusRajaAlue = 50_000...250_000
+
+func ilmoitusRaja(_ d: UserDefaults = .standard) -> Int {
+    let r = d.integer(forKey: "ilmoitusRaja")
+    return r > 0 ? r : oletusIlmoitusRaja
+}
+
+func tallennaIlmoitusRaja(_ r: Int, _ d: UserDefaults = .standard) { d.set(r, forKey: "ilmoitusRaja") }
 
 // Käyttäjää odottava skooppi: kysymys tai lupa (odottaa) tai valmis vuoro. V-300 erottaa valmiin vuoron omaksi tilakseen,
 // joten kaikki muu kuin käsittely ja pakattu lasketaan odottavaksi.
@@ -61,16 +71,18 @@ final class Ilmoittaja: NSObject, UNUserNotificationCenterDelegate {
     private var tausta = UIBackgroundTaskIdentifier.invalid
     private let ymparisto = ProcessInfo.processInfo.environment
     private var paalla: Bool { ymparisto["SCOPES_AVAIN"] == nil || ymparisto["SCOPES_ILMOITUKSET"] == "1" }
-    private var raja: Int {
-        let r = UserDefaults.standard.integer(forKey: "ilmoitusRaja")
-        return r > 0 ? r : oletusIlmoitusRaja
-    }
 
     func kaynnista(_ asetukset: Asetukset) {
         guard paalla else { return }
         let keskus = UNUserNotificationCenter.current()
         keskus.delegate = self
-        keskus.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+        let koe = ymparisto["SCOPES_KOEILMOITUS"]
+        Task {
+            let sallittu = (try? await keskus.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+            guard sallittu, let koe else { return }
+            try? await Task.sleep(for: .seconds(2))
+            laheta(Ilmoitus(skooppi: koe, laji: .odottaa, teksti: "Koeilmoitus"))
+        }
         silmukka?.cancel()
         silmukka = Task { [weak self] in
             while !Task.isCancelled {
@@ -106,7 +118,7 @@ final class Ilmoittaja: NSObject, UNUserNotificationCenterDelegate {
               let uusi = try? await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).skoopit() else { return }
         defer { edellinen = uusi }
         guard let vanha = edellinen else { return }
-        for i in ilmoitukset(edellinen: vanha, uusi: uusi, raja: raja) { laheta(i) }
+        for i in ilmoitukset(edellinen: vanha, uusi: uusi, raja: ilmoitusRaja()) { laheta(i) }
     }
 
     private func laheta(_ i: Ilmoitus) {
@@ -129,6 +141,20 @@ final class Ilmoittaja: NSObject, UNUserNotificationCenterDelegate {
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         guard let nimi = response.notification.request.content.userInfo["skooppi"] as? String else { return }
         await MainActor.run { avaa?(nimi) }
+    }
+}
+
+// Asetusten osio; arvo tallennetaan Tallenna-painikkeella kuten muut asetukset.
+struct IlmoitusRajaOsio: View {
+    @Binding var raja: Int
+
+    var body: some View {
+        Section {
+            Stepper("Konteksti ≥ \(tokenit(raja))", value: $raja, in: ilmoitusRajaAlue, step: 25_000)
+                .accessibilityIdentifier("ilmoitusraja")
+        } header: { Text("Ilmoitukset") } footer: {
+            Text("Ilmoitus, kun skoopin istunnon konteksti ylittää rajan. Oletus \(tokenit(oletusIlmoitusRaja)).")
+        }
     }
 }
 #endif

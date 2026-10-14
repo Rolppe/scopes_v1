@@ -258,6 +258,7 @@ struct AsetuksetView: View {
     @State private var osoite = ""
     @State private var avain = ""
     @State private var reitti = Reitti.Tila.tuntematon
+    @State private var raja = ilmoitusRaja()
 
     var body: some View {
         NavigationStack {
@@ -276,6 +277,7 @@ struct AsetuksetView: View {
                 } header: { Text("Avain") } footer: {
                     Text("Palvelimen tiedostosta ~/.config/scopes/avain. Tallennetaan laitteen avainnippuun.")
                 }
+                IlmoitusRajaOsio(raja: $raja)
             }
             .navigationTitle("Asetukset")
             .toolbar {
@@ -284,6 +286,7 @@ struct AsetuksetView: View {
                     Button("Tallenna") {
                         asetukset.osoite = osoite
                         asetukset.avain = avain
+                        tallennaIlmoitusRaja(raja)
                         sulje()
                     }
                 }
