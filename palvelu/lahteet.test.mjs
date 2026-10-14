@@ -1,7 +1,7 @@
 // node --test scopes/palvelu/lahteet.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request } from 'node:http';
@@ -100,7 +100,7 @@ function ymparisto() {
 test('istunnot: vain elävät, skooppi ja konteksti transkriptista', () => {
   const a = ymparisto();
   const i = istunnot({ ...a, skooppiNimet: ['a', 'b'] });
-  assert.deepEqual(i, [{ id: 's1', nimi: 'kone-1', tila: 'idle', skooppi: 'a', konteksti: { tokenit: 50005, aika: 't' }, pysahdys: null, pakattu: false, hereilla: false, alkoi: 0,
+  assert.deepEqual(i, [{ id: 's1', nimi: 'kone-1', tila: 'idle', kysely: false, skooppi: 'a', konteksti: { tokenit: 50005, aika: 't' }, pysahdys: null, pakattu: false, hereilla: false, alkoi: 0,
     pid: process.pid, vanhempi: process.ppid, ruutu: null, polku: join(a.projektitDir, '-x-y', 's1.jsonl') }]);
 });
 
@@ -129,6 +129,24 @@ test('skooppiTila: busy käsittelyssä, muu pakkaamaton odottaa, pakattu tai ei 
   // Taustakomento käynnissä (shell) on käsittelyä, ei odotusta.
   assert.equal(skooppiTila([{ tila: 'shell', pakattu: false }]), 'kasittely');
   assert.equal(skooppiTila([{ tila: 'shell', pakattu: true }]), 'pakattu');
+});
+
+test('skooppiTila: kyselykortti on kysely, myös käsittelyn rinnalla; pakattu kysely ei', () => {
+  assert.equal(skooppiTila([{ tila: 'waiting', kysely: true, pakattu: false }]), 'kysely');
+  assert.equal(skooppiTila([{ tila: 'waiting', kysely: true, pakattu: false }, { tila: 'busy', pakattu: false }]), 'kysely');
+  assert.equal(skooppiTila([{ tila: 'waiting', kysely: true, pakattu: true }]), 'pakattu');
+  // Lupakysely ilman korttia on tavallinen odotus.
+  assert.equal(skooppiTila([{ tila: 'waiting', kysely: false, pakattu: false }]), 'odottaa');
+});
+
+test('istunnot: kysely vain waiting + input needed', () => {
+  const a = ymparisto();
+  const tiedosto = join(a.istunnotDir, `${process.pid}.json`);
+  const s = JSON.parse(readFileSync(tiedosto, 'utf8'));
+  for (const [status, waitingFor, odotettu] of [['waiting', 'input needed', true], ['waiting', 'permission prompt', false], ['idle', undefined, false]]) {
+    writeFileSync(tiedosto, JSON.stringify({ ...s, status, waitingFor }));
+    assert.equal(istunnot({ ...a, skooppiNimet: ['a'] })[0].kysely, odotettu, `${status} ${waitingFor}`);
+  }
 });
 
 test('palvelin: polut ja virhekoodit', async () => {

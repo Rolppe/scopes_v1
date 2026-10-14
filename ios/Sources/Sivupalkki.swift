@@ -219,8 +219,10 @@ private struct KansioIkoni: View {
                     ikoni.shadow(color: Teema.kansio.opacity(hehku ? 0.95 : 0.25), radius: hehku ? 7 : 2)
                 } animation: { _ in .easeInOut(duration: 0.9) }
                 .accessibilityLabel("käsittelyssä")
+        case "kysely":
+            Image(systemName: "folder.fill").foregroundStyle(Teema.kysely).accessibilityLabel("kysely odottaa vastausta")
         case "odottaa":
-            Image(systemName: "folder.fill").foregroundStyle(Teema.odottaa).accessibilityLabel("odottaa vastausta")
+            Image(systemName: "folder.fill").foregroundStyle(Teema.odottaa).accessibilityLabel("odottaa sinua")
         default:
             Image(systemName: "folder").foregroundStyle(Color(.systemGray)).accessibilityLabel("pakattu")
         }
