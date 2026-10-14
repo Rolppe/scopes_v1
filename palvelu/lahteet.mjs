@@ -225,12 +225,14 @@ function viimeisinMuutos(juuri, rekisteri, istunnot) {
 }
 
 // Skoopin tila listan kansioikonia varten (SCOPES-LISTA-TILAVARIT, käyttäjä 13.10.2026): kasittely, jos jokin
-// pakkaamaton istunto on busy; odottaa, jos pakkaamaton istunto odottaa käyttäjää (waiting = kysymys tai lupa,
-// idle = vuoro valmis); muuten pakattu, myös ilman istuntoja. Pakatun istunnon /sa-herätys ei tee siitä käsittelyä;
-// automaattisiirron uusi istunto on pakkaamaton, joten skooppi pysyy aktiivisena siirron yli.
+// pakkaamaton istunto on busy tai shell (taustakomento käynnissä, vuoro odottaa sen ilmoitusta; Claude Code näyttää
+// kummankin tilana working, käyttäjä 14.10.2026); odottaa, jos pakkaamaton istunto odottaa käyttäjää (waiting = kysymys
+// tai lupa, idle = vuoro valmis); muuten pakattu, myös ilman istuntoja. Pakatun istunnon /sa-herätys ei tee siitä
+// käsittelyä; automaattisiirron uusi istunto on pakkaamaton, joten skooppi pysyy aktiivisena siirron yli.
+const TYOSKENTELEE = new Set(['busy', 'shell']);
 export function skooppiTila(istunnot) {
   const auki = istunnot.filter((i) => !i.pakattu);
-  if (auki.some((i) => i.tila === 'busy')) return 'kasittely';
+  if (auki.some((i) => TYOSKENTELEE.has(i.tila))) return 'kasittely';
   return auki.length ? 'odottaa' : 'pakattu';
 }
 

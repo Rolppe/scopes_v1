@@ -126,6 +126,9 @@ test('skooppiTila: busy käsittelyssä, muu pakkaamaton odottaa, pakattu tai ei 
   assert.equal(skooppiTila([{ tila: 'waiting', pakattu: false }]), 'odottaa');
   assert.equal(skooppiTila([{ tila: 'idle', pakattu: true }, { tila: 'busy', pakattu: false }]), 'kasittely');
   assert.equal(skooppiTila([{ tila: 'waiting', pakattu: false }, { tila: 'busy', pakattu: false }]), 'kasittely');
+  // Taustakomento käynnissä (shell) on käsittelyä, ei odotusta.
+  assert.equal(skooppiTila([{ tila: 'shell', pakattu: false }]), 'kasittely');
+  assert.equal(skooppiTila([{ tila: 'shell', pakattu: true }]), 'pakattu');
 });
 
 test('palvelin: polut ja virhekoodit', async () => {
