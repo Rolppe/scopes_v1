@@ -12,13 +12,18 @@ struct SkoopitApp: App {
     @Environment(\.scenePhase) private var vaihe
     var body: some Scene {
         WindowGroup {
-            JuuriView().environmentObject(asetukset).environmentObject(navigaatio)
-                .task {
-                    Ulkoasu.jaettu.kayta()
-                    Ilmoittaja.jaettu.avaa = { navigaatio.avaaSkooppi($0) }
-                    Ilmoittaja.jaettu.kaynnista(asetukset)
-                    Diagnostiikka.jaettu.kaynnista(asetukset)
-                }
+            // Kysymyskortin simulaattorikoe ilman palvelua (CHAT-QUESTION-YKSI-KERRALLAAN, Viestit.swift).
+            if KysymysKoe.paalla {
+                KysymysKoe()
+            } else {
+                JuuriView().environmentObject(asetukset).environmentObject(navigaatio)
+                    .task {
+                        Ulkoasu.jaettu.kayta()
+                        Ilmoittaja.jaettu.avaa = { navigaatio.avaaSkooppi($0) }
+                        Ilmoittaja.jaettu.kaynnista(asetukset)
+                        Diagnostiikka.jaettu.kaynnista(asetukset)
+                    }
+            }
         }
         .onChange(of: vaihe) {
             if vaihe == .active { Task { await Reitti.jaettu.heraa() } }
