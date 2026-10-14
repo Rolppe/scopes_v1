@@ -30,6 +30,7 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSLocalNetworkUsageDescription: Sovellus lukee skooppien tilan kotipalvelimelta.
+        NSCameraUsageDescription: Kameralla otettu kuva liitetään skoopin viestiin.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
   SkoopitUITests:

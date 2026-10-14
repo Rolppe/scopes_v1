@@ -214,12 +214,12 @@ struct Viestilista: View {
             // Näppäimistö pois napautuksella tai vedolla viestilistassa (käyttäjä 13.10.2026); kortin painikkeet toimivat yhä.
             .scrollDismissesKeyboard(.interactively)
             .gesture(NappaimistoPois())
-            .onChange(of: viestit.count) { nosta(vierita) }
+            .onChange(of: viestit.count) { alkuun(vierita) }
             // Suoratoistossa viimeinen kupla kasvaa ilman uutta viestiä.
             .onChange(of: viestit.last?.teksti) { nosta(vierita) }
             // Kortin lähetys tai sulku (käyttäjä 13.10.2026): kortti katoaa ja vastaus nousee näkyviin listan loppuun.
             .onChange(of: viestit.last?.vastattu) { nosta(vierita) }
-            .onAppear { if !viestit.isEmpty { vierita.scrollTo("loppu", anchor: .bottom) } }
+            .onAppear { if !viestit.isEmpty { alkuun(vierita, animoi: false) } }
             // Näppäimistön avautuminen nostaa keskustelun niin ylös kuin käsin vetäen, sekä kortin kentästä että
             // syöttökentästä (käyttäjä 13.10.2026); vieritys vasta näppäimistön jälkeen, kun lista on jo kutistunut.
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in nosta(vierita) }
@@ -227,6 +227,14 @@ struct Viestilista: View {
     }
 
     private func nosta(_ vierita: ScrollViewProxy) { withAnimation { vierita.scrollTo("loppu", anchor: .bottom) } }
+
+    // Auki oleva kysymyskortti näytetään yläreunastaan (DESIGN-SKOOPPINAKYMA U8): loppuun vieritettäessä ruutua pidemmän
+    // kortin otsikko ja X jäivät otsikkopalkin alle. Lyhyt kortti jää silti alareunaan, koska vieritys ei ylitä loppua.
+    private func alkuun(_ vierita: ScrollViewProxy, animoi: Bool = true) {
+        let kortti = viestit.last.map { !($0.kysymykset ?? []).isEmpty && $0.vastattu != true } ?? false
+        let siirra = { kortti ? vierita.scrollTo(viestit.count - 1, anchor: .top) : vierita.scrollTo("loppu", anchor: .bottom) }
+        if animoi { withAnimation { siirra() } } else { siirra() }
+    }
 }
 
 // Napautus muualle kuin tekstikenttään sulkee näppäimistön. Ei peru kosketuksia, joten painikkeet toimivat, ja
@@ -259,9 +267,11 @@ struct Syottorivi<Vasen: View>: View {
     let estetty: Bool
     let tunnus: String
     let laheta: () -> Void
+    // Valitut liitteet sallivat lähetyksen tyhjälläkin tekstillä (skoopin viestit, CHAT-MEDIA-SKOOPPI).
+    var liitteita = false
     @ViewBuilder var vasen: Vasen
 
-    private var tyhja: Bool { teksti.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var tyhja: Bool { teksti.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !liitteita }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -541,8 +551,11 @@ struct KayttorajaRenkaat: View {
 
     var body: some View {
         Menu {
-            Text(rivi("5 h", raja?.viisiTuntia, muoto: .dateTime.hour().minute()))
-            Text(rivi("Viikko", raja?.viikko, muoto: .dateTime.weekday(.abbreviated).hour().minute()))
+            // Valikko nimeää renkaat (DESIGN-SKOOPPINAKYMA U8): väri yksin ei kerro, kumpi raja on kumpi.
+            Section("Käyttöraja") {
+                Text(rivi("Ulompi keltainen, 5 h", raja?.viisiTuntia, muoto: .dateTime.hour().minute()))
+                Text(rivi("Sisempi punainen, viikko", raja?.viikko, muoto: .dateTime.weekday(.abbreviated).hour().minute()))
+            }
         } label: {
             ZStack {
                 rengas(raja?.viisiTuntia, vari: .yellow, koko: 21)
@@ -584,6 +597,7 @@ struct SkooppiViestitView: View {
     @State private var puretaan = false
     @State private var virhe: String?
     @State private var kayttoraja: Kayttoraja?
+    @State private var liitteet: [Liite] = []
 
     private var asiakas: Asiakas { Asiakas(osoite: asetukset.osoite, avain: asetukset.avain) }
 
@@ -592,16 +606,25 @@ struct SkooppiViestitView: View {
             if let virhe { Text(virhe).foregroundStyle(.red).padding(.horizontal).accessibilityIdentifier("viestit-virhe") }
             if let t = tila {
                 if t.auki {
+                    // Istunnon tila suomeksi ja konteksti samalla merkillä kuin skoopin näkymässä (DESIGN-SKOOPPINAKYMA U8, U9).
                     if let i = t.istunto {
-                        Text([i.tila, i.konteksti.map { tokenit($0.tokenit) }].compactMap { $0 }.joined(separator: " · "))
-                            .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("viestit-istunto")
+                        Text("\(istunnonTila(i.tila) ?? "Istunto auki")\(i.konteksti.map { Text(" · \(Image(systemName: "brain")) \(tokenit($0.tokenit))") } ?? Text(""))")
+                            .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                            .padding(.bottom, Teema.Vali.xs)
+                            .accessibilityIdentifier("viestit-istunto")
                     }
                     Viestilista(viestit: t.viestit, vastaa: t.voiLahettaa ? { v in Task { await laheta(v) } } : nil,
                                 sulje: t.voiLahettaa ? { Task { await suljeKysymys() } } : nil)
                     // Auki oleva kysymyskortti korvaa syöttökentän (käyttäjä 13.10.2026): vapaa vastaus kulkee kortin Muu-kentästä.
                     let kysymysAuki = t.viestit.contains { !($0.kysymykset ?? []).isEmpty && $0.vastattu != true }
                     if t.voiLahettaa {
-                        if !kysymysAuki { Syottorivi(teksti: $teksti, estetty: lahettaa, tunnus: "viestit") { Task { await laheta() } } }
+                        if !kysymysAuki {
+                            if !liitteet.isEmpty { LiiteRivi(liitteet: $liitteet) }
+                            Syottorivi(teksti: $teksti, estetty: lahettaa, tunnus: "viestit", laheta: { Task { await laheta() } },
+                                       liitteita: !liitteet.isEmpty) {
+                                LiiteValikko(liitteet: $liitteet, virhe: $virhe)
+                            }
+                        }
                     } else {
                         Text("Istunto ei ole tmuxissa: viestit vain luettavissa.").font(.caption).foregroundStyle(.secondary).padding()
                             .accessibilityIdentifier("viestit-vain-luku")
@@ -662,11 +685,14 @@ struct SkooppiViestitView: View {
     }
 
     private func laheta(_ kortista: String? = nil) async {
-        let viesti = kortista ?? teksti.trimmingCharacters(in: .whitespacesAndNewlines)
         lahettaa = true
         do {
+            // Liitteet ensin palveluun; viesti lähtee vasta, kun kaikki polut ovat tiedossa (kortin vastaus ilman liitteitä).
+            var polut: [String] = []
+            if kortista == nil { for l in liitteet { polut.append(try await asiakas.lahetaLiite(nimi, l).polku) } }
+            let viesti = kortista ?? Liite.viesti(teksti.trimmingCharacters(in: .whitespacesAndNewlines), polut: polut)
             _ = try await asiakas.laheta(nimi, viesti)
-            if kortista == nil { teksti = "" }
+            if kortista == nil { teksti = ""; liitteet = [] }
             virhe = nil
             try? await Task.sleep(for: .seconds(1))
             await lataa()

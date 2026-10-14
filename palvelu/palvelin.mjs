@@ -21,13 +21,15 @@
 //   GET /api/chat/keskustelut/<id>    yhden chat-keskustelun viestit ja agentti
 //   GET /api/skoopit/<nimi>/viestit   skoopin istunnon viestit; { auki: false }, jos istuntoa ei ole
 //   POST /api/skoopit/<nimi>/viesti {"teksti"}   viesti skoopin tmux-istuntoon (viestit.mjs)
+//   POST /api/skoopit/<nimi>/liite?nimi=<tiedosto>   runko = tiedoston tavut (enintään 25 Mt) → { polku, koko };
+//            äppi lisää polun viestiin, ja istunto lukee liitteen itse (liitteet.mjs, CHAT-MEDIA-SKOOPPI)
 //   POST /api/skoopit/<nimi>/kysymys-pois         auki olevan monivalinnan sulku Escapella (kortin X)
 //   GET /api/wg-asetus                äpin oman WireGuard-tunnelin asetus { asetus } (SCOPES-ETAYHTEYS 14.10.2026);
 //            äppi hakee sen kotiverkossa ja käyttää sitä kodin ulkopuolella. 404, jos tiedostoa ei ole.
 //
 // Ympäristö: SCOPES_JUURI (projektijuuri; oletus kaksi hakemistoa tämän tiedoston yläpuolella),
 // SCOPES_OSOITE (oletus 127.0.0.1), SCOPES_PORTTI (oletus 8787), CLAUDE_ISTUNNOT_DIR, CLAUDE_PROJEKTIT_DIR,
-// SCOPES_CHAT_DIR (chatin työhakemisto), SCOPES_AVAIN_TIEDOSTO (oletus ~/.config/scopes/avain; ei repossa),
+// SCOPES_CHAT_DIR (chatin työhakemisto), SCOPES_LIITTEET_DIR (oletus ~/.local/state/scopes-liitteet), SCOPES_AVAIN_TIEDOSTO (oletus ~/.config/scopes/avain; ei repossa),
 // SCOPES_WG_TIEDOSTO (oletus ~/.config/scopes/wg.conf, wg-quick-muoto; ei repossa), SCOPES_TOIMINTOLOKI (oletus
 // ~/.local/state/scopes-toiminnot.loki). Ilman avainta palvelu ei käynnisty.
 
@@ -38,7 +40,8 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { luoKayttoraja } from './kayttoraja.mjs';
-import { lista, yksi } from './lahteet.mjs';
+import { lista, lueSkoopit, yksi } from './lahteet.mjs';
+import { luoLiitteet } from './liitteet.mjs';
 import { Hylatty, luoToiminnot } from './toiminnot.mjs';
 import { luoViestit } from './viestit.mjs';
 
@@ -53,6 +56,7 @@ export function asetuksetYmparistosta(env = process.env) {
     wgTiedosto: env.SCOPES_WG_TIEDOSTO ?? join(homedir(), '.config/scopes/wg.conf'),
     toimintoloki: env.SCOPES_TOIMINTOLOKI ?? join(homedir(), '.local/state/scopes-toiminnot.loki'),
     chatDir: env.SCOPES_CHAT_DIR ?? join(homedir(), '.local/state/scopes-chat'),
+    liitteetDir: env.SCOPES_LIITTEET_DIR ?? join(homedir(), '.local/state/scopes-liitteet'),
   };
 }
 
@@ -79,7 +83,7 @@ function runko(req, raja = 1024) {
   });
 }
 
-export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset), kayttoraja = luoKayttoraja()) {
+export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset)) {
   // Chat suoratoistona (DEMO-SCOPES-SUORATOISTO): NDJSON-rivit {tyyppi: 'pala', teksti} …, lopuksi
   // {tyyppi: 'valmis', vastaus, keskustelu, …} tai {tyyppi: 'virhe', virhe}. Hylkäys ennen agentin käynnistystä
   // palaa tavallisena virhekoodina. Yhteyden katketessa (puhelimen näyttölukko, äpin vaihto) agentti jatkaa, ja
@@ -128,7 +132,8 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
       res.end(JSON.stringify(data));
     };
     if (req.method !== 'GET' && req.method !== 'POST') return vastaa(405, { virhe: 'vain GET ja POST' });
-    const polku = new URL(req.url, 'http://x').pathname;
+    const url = new URL(req.url, 'http://x');
+    const polku = url.pathname;
     try {
       if (polku === '/api/terveys') return vastaa(200, { ok: true });
       if (!avainKelpaa(req.headers.authorization, asetukset.avain)) return vastaa(401, { virhe: 'avain puuttuu tai väärä' });
@@ -138,6 +143,12 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         if (polku === '/api/chat/virta') return await virtaa(res, await runko(req, 32_768));
         const v = polku.match(/^\/api\/skoopit\/([^/]+)\/viesti$/);
         if (v) return vastaa(200, await viestit.lahetaSkooppiin(decodeURIComponent(v[1]), (await runko(req, 32_768)).teksti));
+        const l = polku.match(/^\/api\/skoopit\/([^/]+)\/liite$/);
+        if (l) {
+          const nimi = decodeURIComponent(l[1]);
+          if (!Object.hasOwn(lueSkoopit(asetukset.juuri), nimi)) { req.resume(); return vastaa(404, { virhe: 'tuntematon skooppi' }); }
+          return vastaa(200, await liitteet(nimi, url.searchParams.get('nimi'), req));
+        }
         const kp = polku.match(/^\/api\/skoopit\/([^/]+)\/kysymys-pois$/);
         if (kp) return vastaa(200, await viestit.suljeKysymys(decodeURIComponent(kp[1])));
         const t = polku.match(/^\/api\/skoopit\/([^/]+)\/(pura|pakkaa|automaattisiirto|herata|herata-pois)$/);

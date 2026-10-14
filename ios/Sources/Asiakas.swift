@@ -105,6 +105,13 @@ struct Asiakas {
         try await hae("/api/skoopit/\(koodattu(nimi))/viesti", metodi: "POST", runko: try JSONEncoder().encode(["teksti": teksti]))
     }
 
+    // Liite raakarunkona; palvelu tallentaa sen ja palauttaa polun (liitteet.mjs). Iso kuva hitaalla yhteydellä: 120 s.
+    func lahetaLiite(_ nimi: String, _ liite: Liite) async throws -> LiiteVastaus {
+        let tiedosto = liite.nimi.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "liite"
+        return try await hae("/api/skoopit/\(koodattu(nimi))/liite?nimi=\(tiedosto)", metodi: "POST", runko: liite.data,
+                             tyyppi: "application/octet-stream", aikaraja: 120)
+    }
+
     // Kortin X: palvelu sulkee auki olevan monivalinnan Escapella.
     func suljeKysymys(_ nimi: String) async throws -> LahetysVastaus {
         try await hae("/api/skoopit/\(koodattu(nimi))/kysymys-pois", metodi: "POST", runko: nil)
@@ -129,13 +136,13 @@ struct Asiakas {
         }
     }
 
-    private func pyynto(_ polku: String, metodi: String, runko: Data?, aikaraja: TimeInterval) async throws -> URLRequest {
+    private func pyynto(_ polku: String, metodi: String, runko: Data?, tyyppi: String = "application/json", aikaraja: TimeInterval) async throws -> URLRequest {
         let osoite = await Reitti.jaettu.osoite(self.osoite, avain: avain)
         guard let url = URL(string: osoite.trimmingCharacters(in: CharacterSet(charactersIn: "/ ")) + polku) else { throw Virhe.osoite }
         var pyynto = URLRequest(url: url, timeoutInterval: aikaraja)
         pyynto.httpMethod = metodi
         pyynto.httpBody = runko
-        if runko != nil { pyynto.setValue("application/json", forHTTPHeaderField: "Content-Type") }
+        if runko != nil { pyynto.setValue(tyyppi, forHTTPHeaderField: "Content-Type") }
         pyynto.setValue("Bearer \(avain)", forHTTPHeaderField: "Authorization")
         return pyynto
     }
@@ -144,8 +151,9 @@ struct Asiakas {
         .palvelu(koodi, (try? JSONDecoder().decode([String: String].self, from: data))?["virhe"] ?? "tuntematon virhe")
     }
 
-    private func hae<T: Decodable>(_ polku: String, metodi: String = "GET", runko: Data? = nil, aikaraja: TimeInterval = 10) async throws -> T {
-        let p = try await pyynto(polku, metodi: metodi, runko: runko, aikaraja: aikaraja)
+    private func hae<T: Decodable>(_ polku: String, metodi: String = "GET", runko: Data? = nil, tyyppi: String = "application/json",
+                                   aikaraja: TimeInterval = 10) async throws -> T {
+        let p = try await pyynto(polku, metodi: metodi, runko: runko, tyyppi: tyyppi, aikaraja: aikaraja)
         let (data, vastaus) = try await reititetty { try await URLSession.shared.data(for: p) }
         let koodi = (vastaus as? HTTPURLResponse)?.statusCode ?? 0
         guard koodi == 200 else { throw virhe(koodi, data) }
