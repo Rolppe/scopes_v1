@@ -13,6 +13,8 @@ enum Teema {
     static var korostus: Color { Ulkoasu.jaettu.korostus.vari }
     /// Teksti ja kuvake täytetyn korostuspinnan päällä (valittu suodatin, lähetysnappi).
     static var korostusPaalla: Color { Ulkoasu.jaettu.korostus.paalla }
+    /// Kytkimen (Toggle) rata päällä; `.tint` koko äpille ei käy, koska tumman tilan korostus vie nupin näkyvyyden.
+    static var kytkin: Color { Ulkoasu.jaettu.korostus.kytkin }
     /// Valitun rivin ja oman viestin tausta.
     static var korostusTausta: Color { korostus.opacity(0.14) }
     /// Avoimet viat (> 0). Ei virhe eikä toiminto.
@@ -158,7 +160,7 @@ private struct OsaVirta: Layout {
 /// Merkkirivi (asiat, viat, konteksti) vaakarivinä, kun se mahtuu, muuten pinona (K6: "1 / 76 k" katkesi
 /// kahdelle riville). Luku ei koskaan rivity: jokainen merkki on yksi rivi.
 struct MerkkiRivi<Sisalto: View>: View {
-    var vali: CGFloat = 12
+    var vali: CGFloat = Teema.Vali.m
     @ViewBuilder let sisalto: () -> Sisalto
 
     var body: some View {

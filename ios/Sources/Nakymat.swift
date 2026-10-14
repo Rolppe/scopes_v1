@@ -7,7 +7,7 @@ import SwiftUI
 struct SkooppiRivi: View {
     let skooppi: SkooppiYhteenveto
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Teema.Vali.xs) {
             Text(skooppi.nimi).font(.headline)
             Tunnus(teksti: skooppi.seuraava ?? "ei seuraavaa pakettia")
                 .font(.subheadline).foregroundStyle(skooppi.seuraava == nil ? .secondary : .primary)
@@ -52,7 +52,7 @@ struct SkooppiNakymaView: View {
                         NavigationLink {
                             KontekstiView(nimi: nimi, konteksti: k)
                         } label: {
-                            VStack(alignment: .leading, spacing: 6) {
+                            VStack(alignment: .leading, spacing: Teema.Vali.s) {
                                 MerkkiRivi {
                                     Text("Tiedostot ≈ \(tokenit(k.tokenit))").monospacedDigit()
                                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -90,6 +90,7 @@ struct SkooppiNakymaView: View {
                     .disabled(avoinIstunto == nil)
                     .accessibilityIdentifier("toiminto-automaattisiirto")
                 Toggle("Pidä muisti hereillä", isOn: Binding(get: { hereilla }, set: { p in Task { await kytke(p) } }))
+                    .tint(Teema.kytkin)
                     .disabled(avoinIstunto == nil)
                     .accessibilityIdentifier("toiminto-hereilla")
                 ForEach(nakyma?.jonossa ?? [], id: \.self) { j in
@@ -215,7 +216,7 @@ struct ToimintoTulos: View {
     var avattu: () -> Void = {}
     @EnvironmentObject private var navigaatio: Navigaatio
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Teema.Vali.xs) {
             if let o = tulos.osoite, let url = URL(string: o) {
                 Text("Istunto avattu.").accessibilityIdentifier("toiminto-tulos")
                 if let skooppi {
@@ -365,13 +366,18 @@ struct YhteysAsetukset: View {
                 Text("Kodin ulkopuolella äppi käyttää omaa WireGuard-tunneliaan. Asetus haetaan palvelimelta kotiverkossa.")
             }
             Section("Palvelin") {
-                TextField("http://osoite:8787", text: $osoite)
+                // Rivittyy isolla tekstikoolla eikä katkea (KATSELMUS K8); rivinvaihtoa ei tallenneta osoitteeseen.
+                TextField("http://osoite:8787", text: Binding(get: { osoite }, set: { osoite = $0.filter { !$0.isNewline } }),
+                          axis: .vertical)
+                    .lineLimit(1...3)
                     .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
             }
             Section {
                 SecureField("Bearer-avain", text: $avain)
             } header: { Text("Avain") } footer: {
-                Text("Palvelimen tiedostosta ~/.config/scopes/avain. Tallennetaan laitteen avainnippuun.")
+                // Kenttä ei kerro, onko avain tallessa (KATSELMUS K11), joten tila sanotaan tekstinä.
+                Text("\(avain.isEmpty ? "Avainta ei ole annettu." : "Avain annettu (\(avain.count) merkkiä).") Palvelimen tiedostosta ~/.config/scopes/avain. Tallennetaan laitteen avainnippuun.")
+                    .accessibilityIdentifier("avain-tila")
             }
         }
         .navigationTitle("Yhteys")
@@ -504,8 +510,8 @@ struct OsuusRivi: View {
     var vari: Color = .accentColor
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+        VStack(alignment: .leading, spacing: Teema.Vali.xs) {
+            HStack(alignment: .firstTextBaseline, spacing: Teema.Vali.s) {
                 Circle().fill(vari).frame(width: 8, height: 8)
                 Text(nimi).lineLimit(2)
                 Spacer()
@@ -538,7 +544,7 @@ struct OsuusPalkki: View {
             }
         }
         .frame(height: 10)
-        .clipShape(RoundedRectangle(cornerRadius: 3))
+        .clipShape(Capsule())
     }
 }
 

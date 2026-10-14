@@ -145,10 +145,10 @@ struct Sivupalkki: View, Equatable {
     // Kolme rinnakkaista nappia otsikon paikalla; valittu korostettu. Navigointipalkin tapaan koko pysyy oletuksessa
     // (DESIGN-ISOTEKSTI K5: isolla koolla "Sco…", "C…"); suurempi koko näkyy pitkällä painalluksella.
     private var suodatinNapit: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Teema.Vali.s) {
             ForEach(Suodatin.allCases, id: \.self) { s in
                 Button { suodatin = s } label: {
-                    Text(s.rawValue).font(.body.weight(.semibold)).padding(.horizontal, 20).padding(.vertical, 8)
+                    Text(s.rawValue).font(.body.weight(.semibold)).padding(.horizontal, Teema.Vali.l).padding(.vertical, Teema.Vali.s)
                         .foregroundStyle(suodatin == s ? Teema.korostusPaalla : Color.primary)
                         .lasiPinta(suodatin == s ? Teema.korostus : Teema.passiivinen,
                                    savy: suodatin == s ? Teema.korostus : nil, in: Capsule(), kosketus: true)
@@ -181,16 +181,16 @@ struct Sivupalkki: View, Equatable {
     @ViewBuilder private func rivi(_ k: Kohde) -> some View {
         switch k {
         case let .chat(c):
-            HStack(alignment: .top, spacing: 10) {
+            HStack(alignment: .top, spacing: Teema.Vali.m) {
                 Image(systemName: "bubble.left").foregroundStyle(.secondary).frame(width: 22)
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: Teema.Vali.xs) {
                     Text(c.otsikko).font(.body).lineLimit(2)
                     Text([agentit.first { $0.nimi == c.agentti }?.otsikko ?? c.agentti, paiva(c.aika)].compactMap { $0 }.joined(separator: " · "))
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
         case let .skooppi(s):
-            HStack(alignment: .top, spacing: 10) {
+            HStack(alignment: .top, spacing: Teema.Vali.m) {
                 KansioIkoni(tila: s.tilaNyt).frame(width: 22)
                 SkooppiRivi(skooppi: s)
             }
