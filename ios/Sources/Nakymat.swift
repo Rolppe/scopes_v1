@@ -31,6 +31,8 @@ struct SkooppiNakymaView: View {
     @State private var tulos: ToimintoVastaus?
     @State private var toimintoVirhe: String?
     @State private var hereillaToive: Bool?
+    // Globaalit pakkauskytkimet; nil = palvelu ei tunne reittiä (vanha palvelu) tai lataus epäonnistui, jolloin ne piilotetaan.
+    @State private var kytkimet: PakkausKytkimet?
 
     var body: some View {
         // Tiedot ennen toimintoja (DESIGN-SKOOPPINAKYMA U5): ensin seuraava paketti, konteksti ja istunnot, joiden
@@ -93,6 +95,17 @@ struct SkooppiNakymaView: View {
                     .tint(Teema.kytkin)
                     .disabled(avoinIstunto == nil)
                     .accessibilityIdentifier("toiminto-hereilla")
+                // Automaattijatko ja Autopack ovat globaaleja eivätkä tarvitse avointa istuntoa (käyttäjä 14.10.2026).
+                if let k = kytkimet {
+                    Toggle("Automaattijatko", isOn: Binding(get: { k.automaattijatko }, set: { p in Task { await asetaKytkin(.automaattijatko, p) } }))
+                        .tint(Teema.kytkin)
+                        .accessibilityIdentifier("toiminto-automaattijatko")
+                    Toggle("Autopack", isOn: Binding(get: { k.autopack }, set: { p in Task { await asetaKytkin(.autopack, p) } }))
+                        .tint(Teema.kytkin)
+                        .accessibilityIdentifier("toiminto-autopack")
+                    Text("Koskevat kaikkia skooppeja.").font(.caption).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("toiminto-kytkimet-selite")
+                }
                 ForEach(nakyma?.jonossa ?? [], id: \.self) { j in
                     Text("\(j.komento) odottaa vuoroa: lähtee, kun istunto vapautuu.")
                         .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("toiminto-jonossa")
@@ -199,11 +212,25 @@ struct SkooppiNakymaView: View {
     }
 
     private func lataa() async {
+        let asiakas = Asiakas(osoite: asetukset.osoite, avain: asetukset.avain)
         do {
-            nakyma = try await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).skooppi(nimi)
+            nakyma = try await asiakas.skooppi(nimi)
             virhe = nil
         } catch {
             virhe = error.localizedDescription
+        }
+        // Kytkinten puute ei ole virhe: vanha palvelu ei tunne reittiä, ja silloin kytkimet jäävät piiloon.
+        if let k = try? await asiakas.pakkausKytkimet() { kytkimet = k }
+    }
+
+    // Tila päivitetään palvelun vastauksesta, joten kytkin näyttää levylle kirjoitetun arvon eikä vain napautusta.
+    private func asetaKytkin(_ kytkin: PakkausKytkin, _ paalle: Bool) async {
+        toimintoVirhe = nil
+        do {
+            kytkimet = try await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).aseta(kytkin, paalle: paalle)
+        } catch {
+            toimintoVirhe = error.localizedDescription
+            if let k = try? await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).pakkausKytkimet() { kytkimet = k }
         }
     }
 }

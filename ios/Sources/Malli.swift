@@ -142,6 +142,16 @@ enum Toiminto: String {
     case herataPois = "herata-pois"
 }
 
+// Globaalit pakkauskytkimet (palvelu/toiminnot-asetukset.mjs, käyttäjä 14.10.2026): koskevat kaikkia skooppeja.
+struct PakkausKytkimet: Decodable, Hashable {
+    var automaattijatko: Bool
+    var autopack: Bool
+}
+
+enum PakkausKytkin: String {
+    case automaattijatko, autopack
+}
+
 struct ToimintoVastaus: Decodable, Hashable {
     let toiminto: String
     let nimi: String
