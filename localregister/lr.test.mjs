@@ -190,3 +190,64 @@ test('äpin lisäämä rivi taulukon loppuun säilyttää taulukon ja kestää u
   assert.equal(tulosta(juuri, P), odotettu.replace('- kaksi', '- KAKSI'));
   assert.equal(tulosta(juuri, P, { lahde: true }), git);
 });
+
+// Äpin koskema rivi: versio ≠ lahdeVersio. `sisalto` antaa äpin sisällön (oletus = gitin sisältö, kuten lähteen versiolla ratkaistu riita).
+const appiKoskee = (juuri, P, rivi, sisalto = rivi.sisalto) => {
+  const appi = { ...rivi, sisalto, versio: { ...rivi.versio, iphone: 1 }, muuttaja: 'iphone' };
+  delete appi.lahdeSisalto; delete appi.lahdeVersio;
+  assert.equal(vastaanota(juuri, { yksikot: [appi] }).otettu, 1);
+};
+
+test('paritus: gitin poistama ja eri lisäämä rivi eivät ole saman rivin muokkaus (tuotannon 005655)', () => {
+  const juuri = mkdtempSync(join(tmpdir(), 'lr-'));
+  const laite = luoLaite(juuri, 'oneplus');
+  const P = 'x/REKISTERI.md';
+  tuoRekisteri(juuri, laite, P, REK, { commit: 'a' });
+  const rivi = lueYksikot(juuri, P).find((y) => y.sisalto === '| c | d |\n\n');
+  appiKoskee(juuri, P, rivi);
+  const git = REK.replace('| c | d |\n', '| uusi asia | avoin |\n');
+  const t = uudelleentuo(juuri, laite, P, git, { commit: 'b' });
+  assert.deepEqual([t.muuttunut, t.uusi, t.poistettu, t.ristiriita], [0, 1, 1, 0]);
+  assert.equal(ristiriidat(juuri).length, 0);
+  assert.equal(tulosta(juuri, P), git);
+  const ys = lueYksikot(juuri, P);
+  const vanha = ys.find((y) => y.id === rivi.id);
+  assert.equal(vanha.poistettu, true);
+  assert.equal(vertaa(vanha.versio, { ...rivi.versio, iphone: 1 }), 'uudempi');
+  assert.notEqual(ys.find((y) => y.sisalto === '| uusi asia | avoin |\n\n').id, rivi.id);
+});
+
+test('paritus: äpin muokkaama rivi, jonka git korvaa eri rivillä, on poistoriita eikä vieras rinnakkainen', () => {
+  const juuri = mkdtempSync(join(tmpdir(), 'lr-'));
+  const laite = luoLaite(juuri, 'oneplus');
+  const P = 'x/REKISTERI.md';
+  tuoRekisteri(juuri, laite, P, REK, { commit: 'a' });
+  const rivi = lueYksikot(juuri, P).find((y) => y.sisalto === '| c | d |\n\n');
+  appiKoskee(juuri, P, rivi, '| c | äppi |\n\n');
+  const git = REK.replace('| c | d |\n', '| uusi asia | avoin |\n');
+  const t = uudelleentuo(juuri, laite, P, git, { commit: 'b' });
+  assert.deepEqual([t.uusi, t.poistettu, t.ristiriita], [1, 1, 1]);
+  const vanha = lueYksikot(juuri, P).find((y) => y.id === rivi.id);
+  assert.equal(vanha.sisalto, '| c | äppi |\n\n');
+  assert.equal(vanha.rinnakkaiset[0].poistettu, true);
+  assert.equal(tulosta(juuri, P, { lahde: true }), git);
+});
+
+test('paritus: samankaltainen muokkaus pitää tunnuksen myös välissä, ja palautettu äppimuutos ei ole riita', () => {
+  const juuri = mkdtempSync(join(tmpdir(), 'lr-'));
+  const laite = luoLaite(juuri, 'oneplus');
+  const P = 'x/REKISTERI.md';
+  tuoRekisteri(juuri, laite, P, REK, { commit: 'a' });
+  const ennen = lueYksikot(juuri, P);
+  const rivi = ennen.find((y) => y.sisalto === '| c | d |\n\n');
+  const kaksi = ennen.find((y) => y.sisalto === '- kaksi\n\n');
+  appiKoskee(juuri, P, rivi);
+  // Molemmat rivit muuttuvat ja väliin tulee uusi: c pitää avaimensa, lista-alkio Dice-samankaltaisena.
+  const git = REK.replace('| c | d |\n', '| c | valmis |\n').replace('- kaksi\n', '- kaksi, nyt pidempi\n- aivan muuta\n');
+  const t = uudelleentuo(juuri, laite, P, git, { commit: 'b' });
+  assert.deepEqual([t.muuttunut, t.uusi, t.poistettu, t.ristiriita], [2, 1, 0, 0]);
+  const ys = lueYksikot(juuri, P);
+  assert.equal(ys.find((y) => y.id === rivi.id).sisalto, '| c | valmis |\n\n');
+  assert.equal(ys.find((y) => y.id === kaksi.id).sisalto, '- kaksi, nyt pidempi\n');
+  assert.equal(tulosta(juuri, P), git);
+});
