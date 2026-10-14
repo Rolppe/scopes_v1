@@ -173,7 +173,7 @@ struct UlkoasuAsetukset: View {
                 esikatselu
             } header: { Text("Pinnat") } footer: {
                 Text(Ulkoasu.lasiTuettu
-                     ? "Suodatinnapit, lähetysnappi, kirjoituskenttä ja infrapuun laajennusnapit lasina. Pois: tasaiset värit."
+                     ? "Suodatinnapit, lähetysnappi ja kirjoituskenttä lasina. Pois: tasaiset värit."
                      : "Liquid Glass vaatii iOS 26:n; pinnat ovat tasaisia.")
             }
         }
