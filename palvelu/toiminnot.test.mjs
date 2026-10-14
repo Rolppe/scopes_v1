@@ -65,6 +65,12 @@ test('pura: pakattu tmux-istunto suljetaan ensin, varattu tai pakkaamaton estä�
   const v2 = vaarennos();
   await hylkaa(luoToiminnot(varattu, { aja: v2.aja })('pura', 'a'), 409);
   assert.equal(v2.kutsut.length, 0);
+  // Ruuduton (puhelimesta avattu) pakattu istunto, joka on yhä autovaihdossa, estää myös.
+  const ruuduton = ymparisto({ tila: 'busy', tmux: null });
+  pakkaa(ruuduton);
+  const v3 = vaarennos();
+  await hylkaa(luoToiminnot(ruuduton, { aja: v3.aja })('pura', 'a'), 409);
+  assert.equal(v3.kutsut.length, 0);
   // Pakattuun istuntoon ei lähetetä /pakkaa uudelleen.
   await hylkaa(luoToiminnot(a, { aja: vaarennos().aja })('pakkaa', 'a'), 409);
 });
