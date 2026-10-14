@@ -76,6 +76,13 @@ uutta ristiriitaa.
   Synkassa rekisterijoukko on liitto: laitteella puuttuva rekisteri tuodaan, poistettu
   merkitään hautakivellä. Hautakivet säilyvät ensimmäisessä vaiheessa ikuisesti (koko on pieni:
   rekisterit yhteensä 306 kt).
+- Siivous (LOCALREGISTER-HAUTAKIVET 14.10.2026): `lr.mjs siivoa` tiivistää kiven omasta tiedostostaan
+  (4 kt:n lohko) rekisterin `_siivotut.json`-merkinnäksi `{ id: versio }`; tieto poistosta säilyy.
+  Siivotaan vain kivet, joita gitissä ei ole (`lahdeSisalto` null) ja joissa ei ole riitaa. Listat
+  (`siivotut`) kertovat merkinnät: äppi poistaa saman tai vanhemman oman kopionsa lähettämättä sitä.
+  Vastaanotossa sama tai vanhempi versio ohitetaan, uudempi herättää yksikön, rinnakkainen palauttaa
+  kiven riitana (K4). Tiivisteet eivät sisällä merkintöjä. Ajetaan käsin, kunnes puhelimessa on
+  siivouksen tunteva äppi: vanha äppi lähettäisi kivet joka synkassa uudelleen.
 
 ## 5. Vertailuprotokolla (V2, K1)
 

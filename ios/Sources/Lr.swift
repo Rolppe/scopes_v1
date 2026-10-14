@@ -65,9 +65,11 @@ struct LrListaRivi: Decodable {
     let rinnakkaiset: [LrVektori]
 }
 
+// `siivotut`: palvelun tiivistämät hautakivet tunnus → versio (MUOTO §4); puuttuu vanhalta palvelulta.
 struct LrLista: Decodable {
     let meta: LrMeta
     let yksikot: [LrListaRivi]
+    let siivotut: [String: LrVektori]?
 }
 
 struct LrHaku: Decodable { let yksikot: [LrYksikko] }
@@ -301,6 +303,18 @@ enum LrLaskenta {
                 muuttuneet.insert(polku)
             }
             let palvelin = Dictionary(lista.yksikot.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            // Palvelu siivosi hautakiven (MUOTO §4): sama tai vanhempi oma kopio poistetaan lähettämättä, jottei
+            // poistettu rivi palaa; uudempi tai rinnakkainen muokkaus lähetetään, ja palvelu herättää rivin tai riidan.
+            let siivottavat = r.yksikot.values.filter { y in
+                guard palvelin[y.id] == nil, !y.riidassa, let kivi = lista.siivotut?[y.id] else { return false }
+                let s = LrLaskenta.vertaa(y.versio, kivi)
+                return s == .sama || s == .vanhempi
+            }
+            if !siivottavat.isEmpty {
+                for y in siivottavat { r.yksikot[y.id] = nil }
+                rekisterit[polku] = r
+                muuttuneet.insert(polku)
+            }
             for y in r.yksikot.values {
                 guard let p = palvelin[y.id] else { lahetettavat.append(siirtoon(y)); continue }
                 let s = LrLaskenta.vertaa(y.versio, p.versio)
