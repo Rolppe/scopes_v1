@@ -129,6 +129,13 @@ samalla tunnuksella, poistunut hautakiven, uusi avaimen naapuriensa väliin; git
 hautakiven. Testit 5/5. Oikea ajo 3d6d569e → 58cc59b2: 77 muuttumatonta, 1 muuttunut rekisteri
 (13 sama / 3 muuttunut / 1 uusi / 1 poistettu), edestakaisin 78/78, toinen ajo muuttumaton.
 
+Paritus (LOCALREGISTER-PARITUS-RIITA 14.10.2026): osumattoman välin vanha ja uusi yksikkö ovat sama yksikkö
+vain samankaltaisina — taulukkorivillä sama ensimmäinen solu, otsikolla, tilanteella ja SEURAAVA-rivillä sama
+laji, muilla jatkettu teksti tai merkkiparien Dice ≥ 0,5; muuten vanha poistuu ja uusi saa oman tunnuksen.
+Git-muutos ei ole riita, kun muun laitteen versio on palauttanut gitin edellisen sisällön (ei poistoa, ei
+avointa riitaa): versio on molempien yhdiste + tämä laite. Tuotannon 005655-riita (89b20028) syntyi, kun
+poistettu "Rivinvaihto taulukkorivissä" ja uusi "Puhelimen kopion yhtenevyys" paritettiin järjestyksessä.
+
 ## 10. Tila: protokolla palvelimella (LOCALREGISTER-PROTOKOLLA 14.10.2026)
 
 Palvelinpää `scopes/localregister/palvelu.mjs` Scopes-palvelun `/api/lr/`-poluilla (ajopaikan perustelu

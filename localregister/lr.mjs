@@ -164,10 +164,40 @@ export function tuoRekisteri(juuri, laite, polku, teksti, lahde, nyt = new Date(
   return osat.length;
 }
 
+const yhdista = (a, b) => {
+  const v = { ...a };
+  for (const [k, n] of Object.entries(b)) v[k] = Math.max(v[k] ?? 0, n);
+  return v;
+};
+
+// Onko gitin uusi osa saman yksikön muokkaus: taulukkorivillä sama ensimmäinen solu (rivin avain), kertaosilla
+// (otsikko, tilanne, seuraava) sama laji, muilla jatkettu teksti (lyhyempi on pidemmän alku) tai merkkiparien
+// Dice-kerroin ≥ 0,5, kirjainkoosta ja välistöstä välittämättä.
+const KERTAOSA = new Set(['otsikko', 'tilanne', 'seuraava']);
+const ekaSolu = (s) => (s.startsWith('|') ? s.split('|')[1].trim() : null);
+const tiivis = (s) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+const merkkiparit = (t) => {
+  const m = new Map();
+  for (let k = 0; k + 1 < t.length; k++) m.set(t.slice(k, k + 2), (m.get(t.slice(k, k + 2)) ?? 0) + 1);
+  return [m, Math.max(t.length - 1, 0)];
+};
+function samankaltainen(vanha, uusi) {
+  const a = ekaSolu(vanha.lahdeSisalto), b = ekaSolu(uusi.sisalto);
+  if (a !== null || b !== null) return a === b;
+  if (vanha.laji === uusi.laji && KERTAOSA.has(uusi.laji)) return true;
+  const ta = tiivis(vanha.lahdeSisalto), tb = tiivis(uusi.sisalto);
+  const [lyh, pit] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
+  if (lyh === pit || (lyh.length >= 5 && pit.startsWith(lyh))) return true;
+  const [ma, na] = merkkiparit(ta), [mb, nb] = merkkiparit(tb);
+  let yht = 0;
+  for (const [g, c] of ma) yht += Math.min(c, mb.get(g) ?? 0);
+  return (2 * yht) / (na + nb) >= 0.5;
+}
+
 // Uudelleentuonti (LOCALREGISTER-UUDELLEENTUONTI, MUOTO §7 kohta 3): git-puolen muutos on tämän laitteen
 // muutos. Gitin edellinen ja uusi sisältö kohdistetaan pisimmällä yhteisellä osajonolla `lahdeSisalto`-
 // kentän mukaan (muiden laitteiden luomat yksiköt eivät ole gitissä eivätkä osallistu): osuma pitää
-// tunnuksensa, osumattomien välien vanhat ja uudet paritetaan järjestyksessä (muokattu rivi = sama tunnus),
+// tunnuksensa, osumattomien välien samankaltaiset vanhat ja uudet paritetaan järjestyksessä (muokattu rivi = sama tunnus),
 // ylijääneet vanhat poistuvat ja uudet saavat avaimen naapuriensa väliin. Jos muu laite on muuttanut
 // yksikköä, gitin muutos tallentuu rinnakkaiseksi versioksi ja ristiriita kysytään käyttäjältä (K4).
 export function uudelleentuo(juuri, laite, polku, teksti, lahde, nyt = new Date().toISOString()) {
@@ -179,10 +209,14 @@ export function uudelleentuo(juuri, laite, polku, teksti, lahde, nyt = new Date(
   const vanhat = jarjestyksessa(lueYksikot(juuri, polku).filter((y) => y.lahdeSisalto != null));
   const uudet = pilko(teksti);
   const tallenna = (y) => kirjoitaJson(join(hak, `${y.id}.json`), y);
-  // Gitin muutos yksikköön y: suoraan, jos kukaan muu ei ole koskenut siihen; muuten rinnakkaiseksi.
+  // Gitin muutos yksikköön y: suoraan, jos kukaan muu ei ole koskenut siihen tai muiden muutos on palauttanut
+  // gitin edellisen sisällön (esim. riita ratkaistu lähteen versiolla); muuten rinnakkaiseksi.
   const gitMuutos = (y, muutos) => {
-    const versio = { ...y.lahdeVersio, [laite.nimi]: laite.seuraava() };
-    if (vertaa(y.versio, y.lahdeVersio) === 'sama') {
+    const koskematon = vertaa(y.versio, y.lahdeVersio) === 'sama';
+    const palautettu = !koskematon && !y.poistettu && !y.rinnakkaiset?.length && y.sisalto === y.lahdeSisalto;
+    const pohja = palautettu ? yhdista(y.versio, y.lahdeVersio) : y.lahdeVersio;
+    const versio = { ...pohja, [laite.nimi]: laite.seuraava() };
+    if (koskematon || palautettu) {
       Object.assign(y, muutos, { versio, muutettu: nyt, muuttaja: laite.nimi });
     } else {
       const sisar = { sisalto: muutos.sisalto ?? y.sisalto, poistettu: muutos.poistettu ?? false, versio, muutettu: nyt, muuttaja: laite.nimi };
@@ -207,11 +241,20 @@ export function uudelleentuo(juuri, laite, polku, teksti, lahde, nyt = new Date(
   const parit = []; // [vanha-indeksi | null, uusi-indeksi | null]
   for (let k = 0; k < a; k++) parit.push([k, k]);
   let i = 0, j = 0, ov = [], ou = [];
+  // Osumattoman välin vanhat ja uudet paritetaan järjestyksessä vain samankaltaisina (LOCALREGISTER-PARITUS-RIITA):
+  // eri rivit eivät ole saman rivin muokkaus, vaan poisto ja lisäys.
   const tyhjenna = () => {
-    const k = Math.min(ov.length, ou.length);
-    for (let t = 0; t < k; t++) parit.push([ov[t], ou[t]]);
-    for (const v of ov.slice(k)) parit.push([v, null]);
-    for (const u of ou.slice(k)) parit.push([null, u]);
+    const P = ov.length, Q = ou.length;
+    const lik = Array.from({ length: P }, (_, p) => ou.map((u) => samankaltainen(vanhat[ov[p]], uudet[u])));
+    const S = Array.from({ length: P + 1 }, () => new Int32Array(Q + 1));
+    for (let p = P - 1; p >= 0; p--) for (let q = Q - 1; q >= 0; q--)
+      S[p][q] = Math.max(lik[p][q] ? S[p + 1][q + 1] + 1 : 0, S[p + 1][q], S[p][q + 1]);
+    let p = 0, q = 0;
+    while (p < P || q < Q) {
+      if (p < P && q < Q && lik[p][q] && S[p][q] === S[p + 1][q + 1] + 1) parit.push([ov[p++], ou[q++]]);
+      else if (q >= Q || (p < P && S[p + 1][q] >= S[p][q + 1])) parit.push([ov[p++], null]);
+      else parit.push([null, ou[q++]]);
+    }
     ov = []; ou = [];
   };
   while (i < N || j < M) {
