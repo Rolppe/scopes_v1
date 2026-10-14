@@ -143,6 +143,9 @@ export function transkriptissa(transkripti, teksti) {
 
 export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimintoloki } = {}) {
   let chatKaynnissa = false;
+  // Käynnissä olevan chat-vastauksen pysäytin (CHAT-STOP 14.10.2026): stop-nappi katkaisee ajon, ja osittainen
+  // vastaus palaa valmiina, keskeytetty: true.
+  let chatPysaytin = null;
   const kirjaa = (rivi) => {
     if (!loki) return;
     try { mkdirSync(dirname(loki), { recursive: true }); appendFileSync(loki, JSON.stringify({ aika: new Date().toISOString(), ...rivi }) + '\n'); } catch { /* loki ei estä lähetystä */ }
@@ -200,7 +203,7 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
   const paikallisetDir = () => join(asetukset.chatDir, 'paikalliset');
   const luePaikallinen = (id) => { try { return JSON.parse(readFileSync(join(paikallisetDir(), `${id}.json`), 'utf8')); } catch { return null; } };
 
-  async function paikallinenChat(valittu, viesti, jatko, { pala, alku, signal }) {
+  async function paikallinenChat(valittu, viesti, jatko, { pala, alku, signal, pysaytetty }) {
     const k = jatko ? luePaikallinen(jatko) : { agentti: valittu.nimi, viestit: [] };
     if (!k) throw new Hylatty(404, 'tuntematon keskustelu');
     if (k.agentti !== valittu.nimi) throw new Hylatty(409, 'keskustelu kuuluu toiselle mallille');
@@ -209,7 +212,7 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
       messages: k.viestit.map((v) => ({ role: v.rooli === 'kayttaja' ? 'user' : 'assistant', content: v.teksti })) });
     alku?.();
     const lataus = await aja('ssh', [...SSH, lmsLataa(valittu.nimi.slice(PAIKALLINEN.length))], { aikaraja: 240_000, signal });
-    if (lataus.koodi !== 0) {
+    if (lataus.koodi !== 0 && !pysaytetty()) {
       paikalliset.aika = 0;
       const rivi = (lataus.stderr + lataus.stdout).trim().split('\n').filter(Boolean).pop() ?? `ssh exit ${lataus.koodi}`;
       throw new Hylatty(502, `mallin lataus epäonnistui: ${rivi.slice(0, 300)}`);
@@ -224,16 +227,17 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
       const d = e.choices?.[0]?.delta?.content;
       if (d) { vastaus += d; pala?.(d); }
     };
-    const t = await aja('ssh', [...SSH, LMS_CHAT], { syote: runko, aikaraja: 300_000, riville, signal, puskuri: 32 << 20 });
-    if (t.koodi !== 0 || !vastaus) {
+    const t = pysaytetty() ? null : await aja('ssh', [...SSH, LMS_CHAT], { syote: runko, aikaraja: 300_000, riville, signal, puskuri: 32 << 20 });
+    // Pysäytetty: käyttäjän viesti ja osittainen vastaus jäävät historiaan, kuten claude-transkriptiin.
+    if (!pysaytetty() && (t.koodi !== 0 || !vastaus)) {
       throw new Hylatty(502, `malli ei vastannut: ${(syy ?? t.stderr.trim().split('\n').filter(Boolean).pop() ?? `ssh exit ${t.koodi}`).slice(0, 300)}`);
     }
     vastaus = vastaus.trim();
-    k.viestit.push({ rooli: 'agentti', teksti: vastaus, aika: new Date().toISOString() });
+    if (vastaus) k.viestit.push({ rooli: 'agentti', teksti: vastaus, aika: new Date().toISOString() });
     const id = jatko ?? randomUUID();
     mkdirSync(paikallisetDir(), { recursive: true });
     writeFileSync(join(paikallisetDir(), `${id}.json`), JSON.stringify(k));
-    return { vastaus, keskustelu: id, agentti: valittu.nimi, kustannus: 0 };
+    return { vastaus, keskustelu: id, agentti: valittu.nimi, kustannus: 0, ...(pysaytetty() ? { keskeytetty: true } : {}) };
   }
 
   const malliTranskriptista = (rivit) => {
@@ -296,37 +300,61 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
       if (jatko != null && !(typeof jatko === 'string' && ISTUNTO_ID.test(jatko))) throw new Hylatty(400, 'keskustelun tunnus ei kelpaa');
       if (chatKaynnissa) throw new Hylatty(429, 'edellinen chat-vastaus on vielä kesken');
       chatKaynnissa = true;
+      const pysaytin = chatPysaytin = new AbortController();
+      const pysaytetty = () => pysaytin.signal.aborted;
+      signal = signal ? AbortSignal.any([signal, pysaytin.signal]) : pysaytin.signal;
       try {
-        if (valittu.tyyppi === 'paikallinen') return await paikallinenChat(valittu, viesti, jatko, { pala, alku, signal });
+        if (valittu.tyyppi === 'paikallinen') return await paikallinenChat(valittu, viesti, jatko, { pala, alku, signal, pysaytetty });
         mkdirSync(asetukset.chatDir, { recursive: true });
         const argumentit = ['-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--tools', '',
           '--model', valittu.nimi,
           ...(jatko ? ['--resume', jatko] : [])];
         alku?.();
         let lohkoja = 0;
+        // Pysäytyksen varalle: istunnon id init-rivistä ja tähän asti kirjoitettu teksti (result-riviä ei tule).
+        let istunto = null;
+        let osittain = '';
+        const kirjoita = (t) => { osittain += t; pala?.(t); };
         const riville = (r) => {
           let e;
           try { e = JSON.parse(r); } catch { return; }
-          if (e.type !== 'stream_event' || !pala) return;
+          if (e.type === 'system' && ISTUNTO_ID.test(e.session_id ?? '')) istunto = e.session_id;
+          if (e.type !== 'stream_event') return;
           // Uusi tekstilohko saman vastauksen sisällä erotetaan tyhjällä rivillä, kuten result-kenttä.
-          if (e.event?.type === 'content_block_start' && e.event.content_block?.type === 'text' && lohkoja++) pala('\n\n');
-          if (e.event?.type === 'content_block_delta' && e.event.delta?.type === 'text_delta' && e.event.delta.text) pala(e.event.delta.text);
+          if (e.event?.type === 'content_block_start' && e.event.content_block?.type === 'text' && lohkoja++) kirjoita('\n\n');
+          if (e.event?.type === 'content_block_delta' && e.event.delta?.type === 'text_delta' && e.event.delta.text) kirjoita(e.event.delta.text);
+        };
+        const muistaAgentti = (id) => {
+          if (!ISTUNTO_ID.test(id ?? '')) return;
+          const nimet = lueAgentit();
+          if (nimet[id] !== valittu.nimi) writeFileSync(agenttiTiedosto(), JSON.stringify({ ...nimet, [id]: valittu.nimi }));
         };
         const t = await aja('claude', argumentit, { syote: viesti, cwd: asetukset.chatDir, aikaraja: 300_000, riville, signal, puskuri: 32 << 20 });
+        if (pysaytetty()) {
+          const id = istunto ?? jatko ?? null;
+          muistaAgentti(id);
+          return { vastaus: osittain.trim(), keskustelu: id, agentti: valittu.nimi, kustannus: null, keskeytetty: true };
+        }
         let j = null;
         for (const r of t.stdout.split('\n')) { try { const e = JSON.parse(r); if (e.type === 'result') j = e; } catch { /* ohita */ } }
         if (t.koodi !== 0 || !j || j.is_error) {
           const syy = (j?.result ?? t.stderr.trim().split('\n').filter(Boolean).pop() ?? `claude exit ${t.koodi}`).slice(0, 300);
           throw new Hylatty(502, `agentti ei vastannut: ${syy}`);
         }
-        if (ISTUNTO_ID.test(j.session_id ?? '')) {
-          const nimet = lueAgentit();
-          if (nimet[j.session_id] !== valittu.nimi) writeFileSync(agenttiTiedosto(), JSON.stringify({ ...nimet, [j.session_id]: valittu.nimi }));
-        }
+        muistaAgentti(j.session_id);
         return { vastaus: j.result ?? '', keskustelu: j.session_id, agentti: valittu.nimi, kustannus: j.total_cost_usd ?? null };
       } finally {
         chatKaynnissa = false;
+        if (chatPysaytin === pysaytin) chatPysaytin = null;
       }
+    },
+
+    // Stop-nappi (CHAT-STOP): keskeyttää käynnissä olevan vastauksen heti; chat() palaa osittaisella vastauksella.
+    pysaytaChat() {
+      if (!chatPysaytin) throw new Hylatty(409, 'ei käynnissä olevaa vastausta');
+      chatPysaytin.abort();
+      kirjaa({ toiminto: 'chat-stop' });
+      return { ok: true };
     },
 
     // Skoopin istunnon viestit, uusin pakkaamaton istunto. Ei sellaista → { auki: false }, jolloin äppi tarjoaa purun;
@@ -378,6 +406,17 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
         throw new Hylatty(504, 'viesti ei näkynyt istunnossa — se voi odottaa istunnon syöttökentässä; tarkista ennen uudelleenlähetystä');
       }
       kirjaa({ ...kirjaus, tulos: 'ok' });
+      return { ok: true, istunto: i.id };
+    },
+
+    // Skoopin stop-nappi (CHAT-STOP): Escape keskeyttää työskentelevän istunnon kuten Claude Coden näppäimistöllä.
+    // Vain työn aikana: vapaassa istunnossa Escape tyhjentäisi kirjoitetun syötteen, kysymyksessä sulkisi kortin.
+    async pysaytaSkooppi(nimi) {
+      const i = await tmuxIstunto(nimi);
+      if (i.tila !== 'busy' && i.tila !== 'shell') throw new Hylatty(409, 'istunto ei ole työssä');
+      const t = await aja('tmux', ['send-keys', '-t', i.ruutu, 'Escape']);
+      if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
+      kirjaa({ toiminto: 'stop', nimi, istunto: i.id });
       return { ok: true, istunto: i.id };
     },
 

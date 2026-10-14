@@ -156,6 +156,10 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         if (polku === '/api/uusi') return vastaa(200, await suorita('uusi', (await runko(req)).nimi));
         if (polku === '/api/chat') return vastaa(200, await viestit.chat(await runko(req, 32_768)));
         if (polku === '/api/chat/virta') return await virtaa(res, await runko(req, 32_768));
+        // Stop-nappi (CHAT-STOP): chat-vastaus katkeaa ja valmis-rivi tuo osittaisen vastauksen; skoopin istunto saa Escapen.
+        if (polku === '/api/chat/stop') return vastaa(200, viestit.pysaytaChat());
+        const st = polku.match(/^\/api\/skoopit\/([^/]+)\/stop$/);
+        if (st) return vastaa(200, await viestit.pysaytaSkooppi(decodeURIComponent(st[1])));
         const v = polku.match(/^\/api\/skoopit\/([^/]+)\/viesti$/);
         if (v) return vastaa(200, await viestit.lahetaSkooppiin(decodeURIComponent(v[1]), (await runko(req, 32_768)).teksti));
         const l = polku.match(/^\/api\/skoopit\/([^/]+)\/liite$/);

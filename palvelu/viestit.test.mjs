@@ -214,7 +214,9 @@ test('chat: suoratoisto — palat sitä mukaa, ajattelu pois, tekstilohkot erote
   assert.deepEqual(palat, ['h', 'ei']);
   assert.equal(alkoi, 1);
   assert.equal(tulos.vastaus, 'hei');
-  assert.equal(kutsut[0].signal, ohjain.signal);
+  assert.equal(kutsut[0].signal.aborted, false);
+  ohjain.abort();
+  assert.equal(kutsut[0].signal.aborted, true);
   const kaksi = [lohko('text'), delta('a'), lohko('text'), delta('b'), rivi({ type: 'result', result: 'a\n\nb', session_id: ID })].join('\n');
   const palat2 = [];
   await luoViestit(a, { aja: vaarennos({ koodi: 0, stdout: kaksi, stderr: '' }).aja }).chat({ agentti: 'claude-haiku-5-5', viesti: 'x' }, { pala: (t) => palat2.push(t) });
@@ -323,6 +325,52 @@ test('transkriptissa: käyttäjän viesti, jonoon mennyt komento ja yhdistetyt v
   assert.equal(transkriptissa(rivi({ type: 'user', message: { content: 'eka\nJatkaJatka' } }), 'Jatka'), true);
   assert.equal(transkriptissa(rivi({ type: 'user', isSidechain: true, message: { content: 'Jatka' } }), 'Jatka'), false);
   assert.equal(transkriptissa(rivi({ type: 'assistant', message: { content: [{ type: 'text', text: 'Jatka' }] } }), 'Jatka'), false);
+});
+
+// Ajo, joka kirjoittaa init-rivin ja ensimmäisen palan ja jää odottamaan, kunnes signal katkaisee sen.
+function pysahtyva(alkurivit) {
+  const kutsut = [];
+  const aja = (komento, argumentit, valinnat = {}) => new Promise((ok) => {
+    kutsut.push({ komento, argumentit, ...valinnat });
+    if (komento === 'ssh' && argumentit.at(-1).includes('.lmstudio')) return ok({ koodi: 0, stdout: '', stderr: '' });
+    for (const r of alkurivit) valinnat.riville?.(r);
+    valinnat.signal.addEventListener('abort', () => ok({ koodi: -1, stdout: alkurivit.join('\n'), stderr: '' }));
+  });
+  return { aja, kutsut };
+}
+
+test('pysaytaChat: osittainen vastaus palaa keskeytettynä, jatko samaan keskusteluun; ilman ajoa 409', async () => {
+  const a = ymparisto();
+  const { aja } = pysahtyva([rivi({ type: 'system', subtype: 'init', session_id: ID }), lohko('text'), delta('puoli')]);
+  const v = luoViestit(a, { aja });
+  assert.throws(() => v.pysaytaChat(), (e) => e instanceof Hylatty && e.koodi === 409);
+  const palat = [];
+  const kesken = v.chat({ agentti: 'claude-haiku-5-5', viesti: 'x' }, { pala: (t) => palat.push(t) });
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(v.pysaytaChat(), { ok: true });
+  assert.deepEqual(await kesken, { vastaus: 'puoli', keskustelu: ID, agentti: 'claude-haiku-5-5', kustannus: null, keskeytetty: true });
+  assert.deepEqual(palat, ['puoli']);
+  assert.equal(JSON.parse(readFileSync(join(a.chatDir, 'agentit.json'), 'utf8'))[ID], 'claude-haiku-5-5');
+  assert.throws(() => v.pysaytaChat(), (e) => e instanceof Hylatty && e.koodi === 409);
+  // Paikallinen malli: käyttäjän viesti ja osittainen vastaus historiaan.
+  const lms = pysahtyva([sse({ content: 'puo' })]);
+  const p = luoViestit(a, { aja: async (k, ar, va) => (ar.at(-1).includes('/v1/models') ? { koodi: 0, stdout: LMS_LISTA, stderr: '' } : lms.aja(k, ar, va)) });
+  const pk = p.chat({ agentti: PAIKALLINEN, viesti: 'kysy' });
+  while (!lms.kutsut.some((k) => k.argumentit.at(-1).includes('chat/completions'))) await new Promise((r) => setImmediate(r));
+  p.pysaytaChat();
+  const pt = await pk;
+  assert.equal(pt.vastaus, 'puo');
+  assert.equal(pt.keskeytetty, true);
+  assert.deepEqual(p.keskustelunViestit(pt.keskustelu).viestit.map((x) => x.teksti), ['kysy', 'puo']);
+});
+
+test('pysaytaSkooppi: työskentelevä istunto saa Escapen; vapaa 409', async () => {
+  const a = ymparisto();
+  const { aja, kutsut } = vaarennos();
+  assert.deepEqual(await luoViestit(a, { aja }).pysaytaSkooppi('a'), { ok: true, istunto: 's1' });
+  assert.deepEqual(kutsut.slice(1).map((k) => k.argumentit), [['send-keys', '-t', '%5', 'Escape']]);
+  writeFileSync(join(a.istunnotDir, `${process.pid}.json`), JSON.stringify({ pid: process.pid, sessionId: 's1', cwd: '/x', name: 'a', status: 'idle', tmux: 'siirto-a-1:@1.%5' }));
+  await hylkaa(luoViestit(a, { aja: vaarennos().aja }).pysaytaSkooppi('a'), 409);
 });
 
 test('suljeKysymys: auki oleva monivalinta suljetaan pelkällä Escapella; muuten 409', async () => {
