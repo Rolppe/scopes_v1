@@ -21,6 +21,9 @@
 //   GET /api/chat/kaynnissa           liittyy käynnissä olevaan (tai juuri valmistuneeseen) vastaukseen uudelleen
 //   GET /api/chat/keskustelut         aiemmat chat-keskustelut uusin ensin (DEMO-SCOPES-PARANNUKSET)
 //   GET /api/chat/keskustelut/<id>    yhden chat-keskustelun viestit ja agentti
+//   GET /api/rekisterit               kaikkien skooppien kontekstitiedostot kerran: { polku, laji, skoopit, tavut, raja, tokenit }
+//            (SCOPES-INFRA-REKISTERIT 14.10.2026; tavut ja raja kuten check-rekisteri.mjs)
+//   GET /api/rekisterit/<polku>       yhden kontekstitiedoston osat { polku, osat }; muu polku 404
 //   GET /api/skoopit/<nimi>/viestit   skoopin istunnon viestit; { auki: false }, jos istuntoa ei ole
 //   POST /api/skoopit/<nimi>/viesti {"teksti"}   viesti skoopin tmux-istuntoon (viestit.mjs)
 //   POST /api/skoopit/<nimi>/liite?nimi=<tiedosto>   runko = tiedoston tavut (enintään 25 Mt) → { polku, koko };
@@ -47,7 +50,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { luoDiagnostiikka } from './diagnostiikka.mjs';
 import { luoKayttoraja } from './kayttoraja.mjs';
-import { lista, lueSkoopit, yksi } from './lahteet.mjs';
+import { lista, lueSkoopit, rekisterinOsat, rekisterit, yksi } from './lahteet.mjs';
 import { luoLiitteet } from './liitteet.mjs';
 import { luoAsetukset, OLETUS_HAKEMISTO } from './toiminnot-asetukset.mjs';
 import { Hylatty, luoToiminnot } from './toiminnot.mjs';
@@ -186,6 +189,12 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
       if (polku === '/api/chat/keskustelut') return vastaa(200, viestit.keskustelut());
       const kk = polku.match(/^\/api\/chat\/keskustelut\/([^/]+)$/);
       if (kk) return vastaa(200, viestit.keskustelunViestit(decodeURIComponent(kk[1])));
+      if (polku === '/api/rekisterit') return vastaa(200, rekisterit(asetukset));
+      const rk = polku.match(/^\/api\/rekisterit\/(.+)$/);
+      if (rk) {
+        const r = rekisterinOsat(decodeURIComponent(rk[1]), asetukset);
+        return r ? vastaa(200, r) : vastaa(404, { virhe: 'tuntematon kontekstitiedosto' });
+      }
       const vv = polku.match(/^\/api\/skoopit\/([^/]+)\/viestit$/);
       if (vv) return vastaa(200, viestit.skoopinViestit(decodeURIComponent(vv[1])));
       const m = polku.match(/^\/api\/skoopit\/(.+)$/);

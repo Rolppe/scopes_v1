@@ -313,6 +313,35 @@ final class SkoopitUITests: XCTestCase {
         osa.tap()
         XCTAssertTrue(app.staticTexts["konteksti-teksti"].waitForExistence(timeout: 5), "osan teksti ei näy")
         kuva("konteksti-teksti")
+        // Takaisin kontekstinäkymään: paluunapin nimi on edellisen näkymän otsikko (skoopin nimi).
+        app.navigationBars.buttons["scopes"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["konteksti-jarjestys"].waitForExistence(timeout: 5), "järjestysvalikko puuttuu")
+        app.buttons["konteksti-jarjestys"].tap()
+        app.buttons["Koko"].tap()
+        app.swipeDown()
+        kuva("konteksti-koko")
+    }
+
+    // Kaikkien skooppien rekisterit katon täyttöasteen mukaan (SCOPES-INFRA-REKISTERIT 14.10.2026): Infra › Rekisterit,
+    // järjestyksen vaihto ja tiedoston osat. Vaatii palvelun, joka tuntee /api/rekisterit (SCOPES_OSOITE koeinstanssiin).
+    func testRekisterit() throws {
+        let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        let app = kaynnista(avain: avain)
+        nayta(app, "sivupalkki-infra")
+        let rivi = app.buttons["infra-rekisterit"]
+        XCTAssertTrue(rivi.waitForExistence(timeout: 15), "Infrassa ei ole Rekisterit-riviä")
+        kuva("infra-rekisterit")
+        rivi.tap()
+        let ensimmainen = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'rekisteri-'")).firstMatch
+        XCTAssertTrue(ensimmainen.waitForExistence(timeout: 10), "rekisterilista on tyhjä")
+        kuva("rekisterit-aste")
+        app.buttons["rekisterit-jarjestys"].tap()
+        app.buttons["Koko"].tap()
+        kuva("rekisterit-koko")
+        ensimmainen.tap()
+        XCTAssertTrue(app.buttons["rekisteri-osat-jarjestys"].waitForExistence(timeout: 5), "osanäkymä ei auennut")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS '%'")).firstMatch.waitForExistence(timeout: 10), "osat eivät latautuneet")
+        kuva("rekisterin-osat")
     }
 
     // Monivalinta korttina (DEMO-SCOPES-LISTA). Vastattu kortti piilotetaan, joten kortti näkyy vain, kun skoopin

@@ -455,22 +455,31 @@ func profiilinVanheneminen(_ bundle: Bundle = .main) -> Date? {
 
 // Skoopin konteksti (SCOPES-INFRA-KONTEKSTI 13.10.2026): tiedostot, jotka skoopin purku ja työ lataavat, otsikoittain
 // tokeniosuuksineen; napautus näyttää osan tekstin. Elävien istuntojen mitattu konteksti osa-alueittain. Jaa-painike
-// antaa koko kontekstin yhtenä markdownina.
+// antaa koko kontekstin yhtenä markdownina. Järjestys-valikko lajittelee tiedostot ja niiden osat koon mukaan
+// (SCOPES-INFRA-REKISTERIT 14.10.2026); värit seuraavat näkyvää järjestystä, jotta palkki ja rivit täsmäävät.
 struct KontekstiView: View {
     let nimi: String
     let konteksti: SkoopinKonteksti
+    @AppStorage("kontekstiKoonMukaan") private var koonMukaan = false
+
+    // (alkuperäinen indeksi, alkio): tunnisteet pysyvät samoina järjestyksestä riippumatta.
+    private func jarjestetty<T>(_ alkiot: [T], _ koko: (T) -> Int) -> [(n: Int, x: T)] {
+        let r = alkiot.enumerated().map { (n: $0.offset, x: $0.element) }
+        return koonMukaan ? r.sorted { koko($0.x) > koko($1.x) } : r
+    }
 
     var body: some View {
+        let ryhmat = jarjestetty(konteksti.ryhmat, \.tokenit)
         List {
             Section {
-                OsuusPalkki(osat: konteksti.ryhmat.map(\.tokenit))
-                ForEach(Array(konteksti.ryhmat.enumerated()), id: \.element.id) { n, r in
-                    OsuusRivi(nimi: r.nimi, alaotsikko: r.polku, maara: r.tokenit, kaikki: konteksti.tokenit, vari: osuusVari(n))
+                OsuusPalkki(osat: ryhmat.map(\.x.tokenit))
+                ForEach(Array(ryhmat.enumerated()), id: \.element.x.id) { v, r in
+                    OsuusRivi(nimi: r.x.nimi, alaotsikko: kattoRivi(r.x.polku, r.x.tavut, r.x.raja), maara: r.x.tokenit, kaikki: konteksti.tokenit, vari: osuusVari(v))
                 }
             } header: {
                 Text("Tiedostot ≈ \(tokenit(konteksti.tokenit))")
             } footer: {
-                Text("Luvut ovat tokeneita. ≈ = arvioitu merkkimäärästä (≈ 1,8 merkkiä/token); \(Image(systemName: "brain")) = istunnon mitattu konteksti.")
+                Text("Luvut ovat tokeneita. ≈ = arvioitu merkkimäärästä (≈ 1,8 merkkiä/token); \(Image(systemName: "brain")) = istunnon mitattu konteksti. Katon prosentti on sama mitta kuin pakkauksen rekisteritarkistuksessa.")
             }
             ForEach(konteksti.istunnot) { i in
                 let kaikki = i.mitattu ?? i.osat.reduce(0) { $0 + $1.tokenit }
@@ -486,27 +495,51 @@ struct KontekstiView: View {
                 }
                 .accessibilityIdentifier("konteksti-istunto")
             }
-            ForEach(Array(konteksti.ryhmat.enumerated()), id: \.element.id) { n, r in
+            ForEach(Array(ryhmat.enumerated()), id: \.element.x.id) { v, r in
                 Section {
-                    ForEach(Array(r.osat.enumerated()), id: \.offset) { m, o in
+                    ForEach(jarjestetty(r.x.osat, \.tokenit), id: \.n) { m, o in
                         NavigationLink {
                             KontekstiTeksti(otsikko: o.otsikko, teksti: o.teksti)
                         } label: {
-                            OsuusRivi(nimi: o.otsikko, maara: o.tokenit, kaikki: r.tokenit, vari: osuusVari(n))
+                            OsuusRivi(nimi: o.otsikko, maara: o.tokenit, kaikki: r.x.tokenit, vari: osuusVari(v))
                         }
-                        .accessibilityIdentifier("konteksti-osa-\(n)-\(m)")
+                        .accessibilityIdentifier("konteksti-osa-\(r.n)-\(m)")
                     }
                 } header: {
-                    Text("\(r.nimi) · \(r.polku)")
+                    Text("\(r.x.nimi) · \(r.x.polku)")
                 }
             }
         }
         .navigationTitle(nimi)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            JarjestysValikko(valinta: $koonMukaan, vaihtoehdot: [(false, "Latausjärjestys"), (true, "Koko")])
+                .accessibilityIdentifier("konteksti-jarjestys")
             ShareLink(item: konteksti.markdown(nimi)) { Image(systemName: "square.and.arrow.up") }
                 .accessibilityIdentifier("konteksti-jaa")
         }
+    }
+}
+
+// "polku · 74 % katosta (29 k / 40 k t)"; ilman kattoa pelkkä polku.
+func kattoRivi(_ polku: String, _ tavut: Int?, _ raja: Int?) -> String {
+    guard let aste = tayttoaste(tavut, raja), let tavut, let raja else { return polku }
+    return "\(polku) · \(aste) % katosta (\(tavut / 1000) k / \(raja / 1000) k t)"
+}
+
+// Järjestysvalikko työkalupalkkiin: valittu vaihtoehto näkyy valintamerkillä.
+struct JarjestysValikko<T: Hashable>: View {
+    @Binding var valinta: T
+    let vaihtoehdot: [(T, String)]
+    var body: some View {
+        Menu {
+            Picker("Järjestys", selection: $valinta) {
+                ForEach(vaihtoehdot, id: \.0) { Text($0.1).tag($0.0) }
+            }
+        } label: {
+            Image(systemName: "arrow.up.arrow.down")
+        }
+        .accessibilityLabel("Järjestys")
     }
 }
 

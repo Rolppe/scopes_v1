@@ -381,12 +381,65 @@ export function kontekstinOsat(transkripti, mitattu) {
   return [...osat, { nimi: 'Työkalumääritykset ja ajattelu (jäännös)', tokenit: Math.max(0, mitattu - summa) }];
 }
 
+// Rekisterikatto (SCOPES-INFRA-REKISTERIT 14.10.2026) samalla mitalla kuin claude/siirto/tools/check-rekisteri.mjs,
+// jotta äpin täyttöaste ja pakkauksen portti täsmäävät: tavut ilman pakollisia lukuja (state/rekisteri-pakolliset.json,
+// otsikko tai otsikko + tarkenne); raja rekisterille 40 000 tai suurempi lähtötaso (state/rekisteri-katto.json), muulle
+// tiedostolle vain kirjattu lähtötaso, muuten null. Työkalu on skripti eikä kirjasto, joten mitta toistetaan tässä.
+const KATTO = 40000;
+const STATE = 'claude/siirto/state';
+const lueJson = (juuri, polku) => { try { return JSON.parse(readFileSync(join(juuri, polku), 'utf8')); } catch { return {}; } };
+export function katonTavut(teksti, pakolliset = []) {
+  const rivit = teksti.split('\n');
+  const otsikot = rivit.flatMap((r, i) => (/^## /.test(r) ? [{ otsikko: r.trim(), alku: i }] : []));
+  let pois = 0;
+  otsikot.forEach(({ otsikko, alku }, n) => {
+    if (!pakolliset.some((p) => otsikko === p.trim() || otsikko.startsWith(`${p.trim()} `))) return;
+    pois += Buffer.byteLength(rivit.slice(alku, otsikot[n + 1]?.alku ?? rivit.length).join('\n') + '\n');
+  });
+  return Buffer.byteLength(teksti) - pois;
+}
+function katto(juuri) {
+  const tasot = lueJson(juuri, `${STATE}/rekisteri-katto.json`);
+  const pakolliset = lueJson(juuri, `${STATE}/rekisteri-pakolliset.json`);
+  return (laji, polku, teksti) => {
+    const taso = Number(tasot[polku]);
+    const raja = laji === 'rekisteri' ? Math.max(KATTO, Number.isFinite(taso) ? taso : 0) : Number.isFinite(taso) ? taso : null;
+    return { tavut: katonTavut(teksti, Object.keys(pakolliset[polku] ?? {})), raja };
+  };
+}
+const lueTeksti = (juuri, polku) => { try { return readFileSync(join(juuri, polku), 'utf8'); } catch { return ''; } };
+
+// Kaikkien skooppien kontekstitiedostot kerran (SCOPES-INFRA-REKISTERIT): polku, laji, skoopit, jotka sen lataavat,
+// katon tavut ja raja sekä tokenit. Osat haetaan erikseen (rekisterinOsat), koska kaikki tekstit yhdessä ovat megatavuja.
+function kaikkiTiedostot(juuri) {
+  const tiedostot = new Map();
+  for (const [nimi, rs] of Object.entries(lueSkoopit(juuri))) {
+    for (const { laji, polku } of kontekstiTiedostot(nimi, rs, juuri)) {
+      if (tiedostot.has(polku)) tiedostot.get(polku).skoopit.push(nimi);
+      else tiedostot.set(polku, { polku, laji, skoopit: [nimi] });
+    }
+  }
+  return tiedostot;
+}
+export function rekisterit(asetukset) {
+  const mitta = katto(asetukset.juuri);
+  return [...kaikkiTiedostot(asetukset.juuri).values()].map((t) => {
+    const teksti = lueTeksti(asetukset.juuri, t.polku);
+    return { ...t, ...mitta(t.laji, t.polku, teksti), tokenit: osiin(teksti).reduce((s, o) => s + o.tokenit, 0) };
+  });
+}
+// Yhden tiedoston osat; vain kontekstitiedostot, ei mielivaltaista polkua → null.
+export function rekisterinOsat(polku, asetukset) {
+  if (!kaikkiTiedostot(asetukset.juuri).has(polku)) return null;
+  return { polku, osat: osiin(lueTeksti(asetukset.juuri, polku)) };
+}
+
 export function skoopinKonteksti(nimi, { juuri, rekisterit, istunnot: skoopinIstunnot }) {
+  const mitta = katto(juuri);
   const ryhmat = kontekstiTiedostot(nimi, rekisterit, juuri).map(({ laji, polku }) => {
-    let teksti = '';
-    try { teksti = readFileSync(join(juuri, polku), 'utf8'); } catch { /* poistui kesken */ }
+    const teksti = lueTeksti(juuri, polku);
     const osat = osiin(teksti);
-    return { laji, polku, tokenit: osat.reduce((s, o) => s + o.tokenit, 0), osat };
+    return { laji, polku, tokenit: osat.reduce((s, o) => s + o.tokenit, 0), ...mitta(laji, polku, teksti), osat };
   });
   return {
     tokenit: ryhmat.reduce((s, r) => s + r.tokenit, 0),
