@@ -40,17 +40,17 @@ struct Asiakas {
     func chatVirta(agentti: String, viesti: String, keskustelu: String?) async throws -> AsyncThrowingStream<ChatTapahtuma, Error> {
         var runko = ["agentti": agentti, "viesti": viesti]
         if let keskustelu { runko["keskustelu"] = keskustelu }
-        return try await virta(try pyynto("/api/chat/virta", metodi: "POST", runko: try JSONEncoder().encode(runko), aikaraja: 300))
+        return try await virta(try await pyynto("/api/chat/virta", metodi: "POST", runko: try JSONEncoder().encode(runko), aikaraja: 300))
     }
 
     // Uudelleenliittyminen katkenneeseen vastaukseen: ensin tähän asti kirjoitettu teksti yhtenä palana, sitten loput.
     // 404, kun palvelulla ei ole käynnissä olevaa tai juuri valmistunutta vastausta.
     func kaynnissa() async throws -> AsyncThrowingStream<ChatTapahtuma, Error> {
-        try await virta(try pyynto("/api/chat/kaynnissa", metodi: "GET", runko: nil, aikaraja: 300))
+        try await virta(try await pyynto("/api/chat/kaynnissa", metodi: "GET", runko: nil, aikaraja: 300))
     }
 
     private func virta(_ pyynto: URLRequest) async throws -> AsyncThrowingStream<ChatTapahtuma, Error> {
-        let (tavut, vastaus) = try await URLSession.shared.bytes(for: pyynto)
+        let (tavut, vastaus) = try await reititetty { try await URLSession.shared.bytes(for: pyynto) }
         let koodi = (vastaus as? HTTPURLResponse)?.statusCode ?? 0
         guard koodi == 200 else {
             var data = Data()
@@ -98,7 +98,16 @@ struct Asiakas {
         nimi.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/&"))) ?? nimi
     }
 
-    private func pyynto(_ polku: String, metodi: String, runko: Data?, aikaraja: TimeInterval) throws -> URLRequest {
+    // Katkos unohtaa reitin: seuraava pyyntö kokeilee kotiverkkoa ja tunnelia uudelleen (Reitti.swift).
+    private func reititetty<T>(_ tee: () async throws -> T) async throws -> T {
+        do { return try await tee() } catch {
+            if Self.yhteysKatkesi(error) { await Reitti.jaettu.unohda() }
+            throw error
+        }
+    }
+
+    private func pyynto(_ polku: String, metodi: String, runko: Data?, aikaraja: TimeInterval) async throws -> URLRequest {
+        let osoite = await Reitti.jaettu.osoite(self.osoite, avain: avain)
         guard let url = URL(string: osoite.trimmingCharacters(in: CharacterSet(charactersIn: "/ ")) + polku) else { throw Virhe.osoite }
         var pyynto = URLRequest(url: url, timeoutInterval: aikaraja)
         pyynto.httpMethod = metodi
@@ -113,7 +122,8 @@ struct Asiakas {
     }
 
     private func hae<T: Decodable>(_ polku: String, metodi: String = "GET", runko: Data? = nil, aikaraja: TimeInterval = 10) async throws -> T {
-        let (data, vastaus) = try await URLSession.shared.data(for: try pyynto(polku, metodi: metodi, runko: runko, aikaraja: aikaraja))
+        let p = try await pyynto(polku, metodi: metodi, runko: runko, aikaraja: aikaraja)
+        let (data, vastaus) = try await reititetty { try await URLSession.shared.data(for: p) }
         let koodi = (vastaus as? HTTPURLResponse)?.statusCode ?? 0
         guard koodi == 200 else { throw virhe(koodi, data) }
         return try JSONDecoder().decode(T.self, from: data)

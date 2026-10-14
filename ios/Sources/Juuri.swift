@@ -9,8 +9,10 @@ import SwiftUI
 struct SkoopitApp: App {
     @StateObject private var asetukset = Asetukset()
     @StateObject private var navigaatio = Navigaatio()
+    @Environment(\.scenePhase) private var vaihe
     var body: some Scene {
         WindowGroup { JuuriView().environmentObject(asetukset).environmentObject(navigaatio) }
+            .onChange(of: vaihe) { if vaihe == .active { Task { await Reitti.jaettu.heraa() } } }
     }
 }
 

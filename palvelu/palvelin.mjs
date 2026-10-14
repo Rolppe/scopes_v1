@@ -22,10 +22,13 @@
 //   GET /api/skoopit/<nimi>/viestit   skoopin istunnon viestit; { auki: false }, jos istuntoa ei ole
 //   POST /api/skoopit/<nimi>/viesti {"teksti"}   viesti skoopin tmux-istuntoon (viestit.mjs)
 //   POST /api/skoopit/<nimi>/kysymys-pois         auki olevan monivalinnan sulku Escapella (kortin X)
+//   GET /api/wg-asetus                äpin oman WireGuard-tunnelin asetus { asetus } (SCOPES-ETAYHTEYS 14.10.2026);
+//            äppi hakee sen kotiverkossa ja käyttää sitä kodin ulkopuolella. 404, jos tiedostoa ei ole.
 //
 // Ympäristö: SCOPES_JUURI (projektijuuri; oletus kaksi hakemistoa tämän tiedoston yläpuolella),
 // SCOPES_OSOITE (oletus 127.0.0.1), SCOPES_PORTTI (oletus 8787), CLAUDE_ISTUNNOT_DIR, CLAUDE_PROJEKTIT_DIR,
-// SCOPES_CHAT_DIR (chatin työhakemisto), SCOPES_AVAIN_TIEDOSTO (oletus ~/.config/scopes/avain; ei repossa), SCOPES_TOIMINTOLOKI (oletus
+// SCOPES_CHAT_DIR (chatin työhakemisto), SCOPES_AVAIN_TIEDOSTO (oletus ~/.config/scopes/avain; ei repossa),
+// SCOPES_WG_TIEDOSTO (oletus ~/.config/scopes/wg.conf, wg-quick-muoto; ei repossa), SCOPES_TOIMINTOLOKI (oletus
 // ~/.local/state/scopes-toiminnot.loki). Ilman avainta palvelu ei käynnisty.
 
 import { timingSafeEqual } from 'node:crypto';
@@ -47,6 +50,7 @@ export function asetuksetYmparistosta(env = process.env) {
     istunnotDir: env.CLAUDE_ISTUNNOT_DIR ?? join(homedir(), '.claude/sessions'),
     projektitDir: env.CLAUDE_PROJEKTIT_DIR ?? join(homedir(), '.claude/projects'),
     avainTiedosto: env.SCOPES_AVAIN_TIEDOSTO ?? join(homedir(), '.config/scopes/avain'),
+    wgTiedosto: env.SCOPES_WG_TIEDOSTO ?? join(homedir(), '.config/scopes/wg.conf'),
     toimintoloki: env.SCOPES_TOIMINTOLOKI ?? join(homedir(), '.local/state/scopes-toiminnot.loki'),
     chatDir: env.SCOPES_CHAT_DIR ?? join(homedir(), '.local/state/scopes-chat'),
   };
@@ -143,6 +147,10 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
       if (polku === '/api/skoopit') return vastaa(200, lista(asetukset));
       if (polku === '/api/agentit') return vastaa(200, await viestit.agentit());
       if (polku === '/api/kayttoraja') return vastaa(200, await kayttoraja());
+      // Luetaan joka pyynnöllä: avaimen vaihto ei vaadi palvelun uudelleenkäynnistystä.
+      if (polku === '/api/wg-asetus') {
+        try { return vastaa(200, { asetus: readFileSync(asetukset.wgTiedosto, 'utf8') }); } catch { return vastaa(404, { virhe: 'tunnelin asetusta ei ole' }); }
+      }
       if (polku === '/api/chat/kaynnissa') return liity(res);
       if (polku === '/api/chat/keskustelut') return vastaa(200, viestit.keskustelut());
       const kk = polku.match(/^\/api\/chat\/keskustelut\/([^/]+)$/);

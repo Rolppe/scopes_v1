@@ -13,6 +13,10 @@ targets:
     platform: iOS
     deploymentTarget: "18.0"
     sources: [Sources, Resources]
+    # Äpin oma WireGuard-tunneli (SCOPES-ETAYHTEYS): tunneli/rakenna.sh kääntää Macissa ennen xcodegeniä.
+    dependencies:
+      - framework: tunneli/Tunneli.xcframework
+        embed: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.skoopit
