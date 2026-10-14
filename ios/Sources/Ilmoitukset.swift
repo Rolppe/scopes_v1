@@ -28,6 +28,24 @@ func ilmoitusRaja(_ d: UserDefaults = .standard) -> Int {
 
 func tallennaIlmoitusRaja(_ r: Int, _ d: UserDefaults = .standard) { d.set(r, forKey: "ilmoitusRaja") }
 
+// Lajikohtainen kytkin (NOTIFICATIONS-ASETUKSET 14.10.2026): oletus päällä; UserDefaults-avain "ilmoitus-<laji>".
+extension IlmoitusLaji: CaseIterable {
+    var nimi: String {
+        switch self {
+        case .odottaa: return "Istunto odottaa sinua"
+        case .valmis: return "Paketti valmis tai pakattu"
+        case .konteksti: return "Konteksti lähellä rajaa"
+        case .vika: return "Uusi avoin vika"
+        }
+    }
+}
+
+func ilmoitusPaalla(_ l: IlmoitusLaji, _ d: UserDefaults = .standard) -> Bool {
+    d.object(forKey: "ilmoitus-\(l.rawValue)") as? Bool ?? true
+}
+
+func tallennaIlmoitusPaalla(_ l: IlmoitusLaji, _ p: Bool, _ d: UserDefaults = .standard) { d.set(p, forKey: "ilmoitus-\(l.rawValue)") }
+
 // Käyttäjää odottava skooppi: kysymys tai lupa (odottaa) tai valmis vuoro. V-300 erottaa valmiin vuoron omaksi tilakseen,
 // joten kaikki muu kuin käsittely ja pakattu lasketaan odottavaksi.
 func odottaa(_ s: SkooppiYhteenveto) -> Bool { !["kasittely", "pakattu"].contains(s.tilaNyt) }
@@ -118,7 +136,16 @@ final class Ilmoittaja: NSObject, UNUserNotificationCenterDelegate {
               let uusi = try? await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).skoopit() else { return }
         defer { edellinen = uusi }
         guard let vanha = edellinen else { return }
-        for i in ilmoitukset(edellinen: vanha, uusi: uusi, raja: ilmoitusRaja()) { laheta(i) }
+        for i in ilmoitukset(edellinen: vanha, uusi: uusi, raja: ilmoitusRaja()) where ilmoitusPaalla(i.laji) { laheta(i) }
+    }
+
+    // Asetusten koeilmoitus: kysyy luvan, jos sitä ei ole vielä kysytty; napautus avaa juuriskoopin "scopes".
+    func koe() async -> Bool {
+        let keskus = UNUserNotificationCenter.current()
+        keskus.delegate = self
+        guard (try? await keskus.requestAuthorization(options: [.alert, .sound, .badge])) == true else { return false }
+        laheta(Ilmoitus(skooppi: "scopes", laji: .odottaa, teksti: "Koeilmoitus"))
+        return true
     }
 
     private func laheta(_ i: Ilmoitus) {
@@ -144,16 +171,65 @@ final class Ilmoittaja: NSObject, UNUserNotificationCenterDelegate {
     }
 }
 
-// Asetusten osio; arvo tallennetaan Tallenna-painikkeella kuten muut asetukset.
-struct IlmoitusRajaOsio: View {
+// Asetusten Ilmoitukset-alavalikko (NOTIFICATIONS-ASETUKSET 14.10.2026). Kytkimet ja raja tallennetaan
+// juurinäkymän Tallenna-painikkeella kuten muut asetukset, jotta Peru toimii.
+struct IlmoitusAsetukset: View {
     @Binding var raja: Int
+    @Binding var paalla: [IlmoitusLaji: Bool]
+    @Environment(\.scenePhase) private var vaihe
+    @State private var lupa = UNAuthorizationStatus.notDetermined
+    @State private var koeTulos: String?
 
     var body: some View {
-        Section {
-            Stepper("Konteksti ≥ \(tokenit(raja))", value: $raja, in: ilmoitusRajaAlue, step: 25_000)
-                .accessibilityIdentifier("ilmoitusraja")
-        } header: { Text("Ilmoitukset") } footer: {
-            Text("Ilmoitus, kun skoopin istunnon konteksti ylittää rajan. Oletus \(tokenit(oletusIlmoitusRaja)).")
+        Form {
+            Section {
+                Text(lupaTeksti).accessibilityIdentifier("ilmoituslupa")
+                if lupa == .denied {
+                    Button("Avaa iOS-asetukset") {
+                        if let url = URL(string: UIApplication.openNotificationSettingsURLString) { UIApplication.shared.open(url) }
+                    }
+                }
+            } header: { Text("Lupa") } footer: {
+                Text("Ilmoitus syntyy, kun äppi on auki tai enintään noin 30 s taustalla.")
+            }
+            Section("Ilmoita") {
+                ForEach(IlmoitusLaji.allCases, id: \.self) { l in
+                    Toggle(l.nimi, isOn: Binding(get: { paalla[l] ?? true }, set: { paalla[l] = $0 }))
+                        .accessibilityIdentifier("ilmoitus-\(l.rawValue)")
+                }
+            }
+            Section {
+                Stepper("Konteksti ≥ \(tokenit(raja))", value: $raja, in: ilmoitusRajaAlue, step: 25_000)
+                    .accessibilityIdentifier("ilmoitusraja")
+                    .disabled(paalla[.konteksti] == false)
+            } header: { Text("Kontekstiraja") } footer: {
+                Text("Ilmoitus, kun skoopin istunnon konteksti ylittää rajan. Oletus \(tokenit(oletusIlmoitusRaja)).")
+            }
+            Section {
+                Button("Lähetä koeilmoitus") {
+                    Task {
+                        koeTulos = await Ilmoittaja.jaettu.koe() ? "Lähetetty" : "Ei lupaa ilmoituksiin"
+                        await paivitaLupa()
+                    }
+                }
+                .accessibilityIdentifier("koeilmoitus")
+                if let koeTulos { Text(koeTulos).accessibilityIdentifier("koeilmoitus-tulos") }
+            } footer: { Text("Napautus avaa skoopin scopes.") }
+        }
+        .navigationTitle("Ilmoitukset")
+        .task { await paivitaLupa() }
+        .onChange(of: vaihe) { _, v in if v == .active { Task { await paivitaLupa() } } }
+    }
+
+    private func paivitaLupa() async {
+        lupa = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+    }
+
+    private var lupaTeksti: String {
+        switch lupa {
+        case .authorized, .provisional, .ephemeral: return "Sallittu"
+        case .denied: return "Estetty iOS-asetuksissa"
+        default: return "Ei vielä kysytty"
         }
     }
 }
