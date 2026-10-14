@@ -244,6 +244,11 @@ struct LahetysVastaus: Decodable {
     let istunto: String
 }
 
+// Chatin stop-napin kuittaus (CHAT-STOP).
+struct PysaytysVastaus: Decodable {
+    let ok: Bool
+}
+
 // Palvelimelle tallennetun liitteen polku, jonka äppi lisää viestiin (CHAT-MEDIA-SKOOPPI).
 struct LiiteVastaus: Decodable {
     let polku: String

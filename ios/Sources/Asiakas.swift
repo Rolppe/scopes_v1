@@ -130,6 +130,14 @@ struct Asiakas {
         try await hae(Diagnostiikka.polku, metodi: "POST", runko: runko, aikaraja: 20)
     }
 
+    // Stop-nappi (CHAT-STOP): palvelu katkaisee chatin vastauksen, jolloin virta päättyy osittaiseen vastaukseen.
+    func pysaytaChat() async throws -> PysaytysVastaus { try await hae("/api/chat/stop", metodi: "POST", runko: nil) }
+
+    // Skoopin stop-nappi: palvelu keskeyttää työskentelevän istunnon Escapella.
+    func pysayta(_ nimi: String) async throws -> LahetysVastaus {
+        try await hae("/api/skoopit/\(koodattu(nimi))/stop", metodi: "POST", runko: nil)
+    }
+
     // Kortin X: palvelu sulkee auki olevan monivalinnan Escapella.
     func suljeKysymys(_ nimi: String) async throws -> LahetysVastaus {
         try await hae("/api/skoopit/\(koodattu(nimi))/kysymys-pois", metodi: "POST", runko: nil)
