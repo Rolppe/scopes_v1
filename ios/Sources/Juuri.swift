@@ -13,8 +13,8 @@ struct SkoopitApp: App {
     var body: some Scene {
         WindowGroup {
             JuuriView().environmentObject(asetukset).environmentObject(navigaatio)
-                .tint(Teema.korostus)
                 .task {
+                    Ulkoasu.jaettu.kayta()
                     Ilmoittaja.jaettu.avaa = { navigaatio.avaaSkooppi($0) }
                     Ilmoittaja.jaettu.kaynnista(asetukset)
                     Diagnostiikka.jaettu.kaynnista(asetukset)
@@ -130,6 +130,9 @@ struct JuuriView: View {
         }
         .sheet(isPresented: $navigaatio.asetuksetAuki) { AsetuksetView() }
         .sheet(isPresented: $navigaatio.uusiSkooppiAuki) { UusiSkooppiView() }
+        // Korostusväri näkymän bodyssä eikä Scenessä: Observation seuraa lukua tässä, joten valinnan vaihto
+        // (Asetukset → Ulkoasu) vaihtaa järjestelmän napit ja arkit heti (DESIGN-ULKOASU).
+        .tint(Teema.korostus)
     }
 
     // Mittarin itseajo (SCOPES_MITTARI=itse, SCOPES-LISTA-SUMEUS 13.10.2026): äppi vetää palkin itse auki ja kiinni
