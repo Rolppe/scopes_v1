@@ -643,6 +643,47 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertFalse(virhe.exists, virhe.exists ? virhe.label : "")
         XCTAssertTrue(auki.exists, "pura ei avannut viestejä 240 s:ssa")
     }
+
+    // Kirjoittava koe (CHAT-KYTKIN-SIMULAATTORI): auki olevan koeskoopin viesti, muistikytkimen tila ja käännös.
+    // SCOPES_KOE_KYTKIN = skooppi; _VIESTI lähetetään; _ODOTA = kytkimen odotettu arvo 0/1; _ASETA = käännetään tähän.
+    // Muistin säilyminen luetaan palvelimella transkriptin cache_read-tokeneista, ei täältä.
+    func testMuistiKytkin() throws {
+        let ymp = ProcessInfo.processInfo.environment
+        guard let koe = ymp["SCOPES_KOE_KYTKIN"], !koe.isEmpty else { throw XCTSkip("SCOPES_KOE_KYTKIN puuttuu") }
+        let avain = try XCTUnwrap(ymp["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        let app = kaynnista(avain: avain)
+        etsi(app, koe)
+        let rivi = app.buttons["skooppi-\(koe)"]
+        XCTAssertTrue(rivi.waitForExistence(timeout: 15))
+        rivi.tap()
+        XCTAssertTrue(app.staticTexts["viestit-istunto"].waitForExistence(timeout: 15), "\(koe) ei ole auki")
+        if let viesti = ymp["SCOPES_KOE_KYTKIN_VIESTI"], !viesti.isEmpty {
+            let kentta = app.textFields["viestit-kentta"].exists ? app.textFields["viestit-kentta"] : app.textViews["viestit-kentta"]
+            XCTAssertTrue(kentta.waitForExistence(timeout: 10), "syöttökenttä puuttuu (kortti auki?)")
+            kentta.tap()
+            kentta.typeText(viesti)
+            app.buttons["viestit-laheta"].tap()
+            XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", viesti)).firstMatch.waitForExistence(timeout: 30), "viesti ei näkynyt")
+            kuva("kytkin-viesti")
+        }
+        guard ymp["SCOPES_KOE_KYTKIN_ODOTA"] != nil || ymp["SCOPES_KOE_KYTKIN_ASETA"] != nil else { return }
+        if app.keyboards.firstMatch.exists { app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap() }
+        app.buttons["tiedot"].tap()
+        let kytkin = app.switches["toiminto-hereilla"]
+        XCTAssertTrue(kytkin.waitForExistence(timeout: 15), "herätyskytkin puuttuu")
+        XCTAssertTrue(kytkin.isEnabled, "kytkin lukossa: istunto ei ole auki")
+        if let odota = ymp["SCOPES_KOE_KYTKIN_ODOTA"] { XCTAssertEqual(kytkin.value as? String, odota, "kytkimen tila") }
+        kuva("kytkin-ennen")
+        guard let aseta = ymp["SCOPES_KOE_KYTKIN_ASETA"], kytkin.value as? String != aseta else { return }
+        if kytkin.switches.firstMatch.exists { kytkin.switches.firstMatch.tap() } else { kytkin.tap() }
+        let jonossa = app.staticTexts["toiminto-jonossa"].waitForExistence(timeout: 5)
+        kuva(jonossa ? "kytkin-jonossa" : "kytkin-lahetetty")
+        XCTAssertFalse(app.staticTexts["toiminto-virhe"].exists, app.staticTexts["toiminto-virhe"].exists ? app.staticTexts["toiminto-virhe"].label : "")
+        let loppu = Date().addingTimeInterval(180)
+        while kytkin.value as? String != aseta && Date() < loppu { sleep(3) }
+        kuva("kytkin-jalkeen")
+        XCTAssertEqual(kytkin.value as? String, aseta, "kytkin ei kääntynyt 180 s:ssa")
+    }
 }
 
 private extension XCUIElement {
