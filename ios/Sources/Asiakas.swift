@@ -73,8 +73,14 @@ struct Asiakas {
     }
 
     private func virta(_ pyynto: URLRequest) async throws -> AsyncThrowingStream<ChatTapahtuma, Error> {
-        let (tavut, vastaus) = try await reititetty { try await URLSession.shared.bytes(for: pyynto) }
+        let id = Diagnostiikka.jaettu.alkoi(pyynto.url?.path ?? "")
+        let tavut: URLSession.AsyncBytes, vastaus: URLResponse
+        do { (tavut, vastaus) = try await reititetty { try await URLSession.shared.bytes(for: pyynto) } } catch {
+            Diagnostiikka.jaettu.paattyi(id, virhe: error)
+            throw error
+        }
         let koodi = (vastaus as? HTTPURLResponse)?.statusCode ?? 0
+        Diagnostiikka.jaettu.paattyi(id, koodi: koodi)
         guard koodi == 200 else {
             var data = Data()
             for try await tavu in tavut { data.append(tavu) }
@@ -110,6 +116,11 @@ struct Asiakas {
         let tiedosto = liite.nimi.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "liite"
         return try await hae("/api/skoopit/\(koodattu(nimi))/liite?nimi=\(tiedosto)", metodi: "POST", runko: liite.data,
                              tyyppi: "application/octet-stream", aikaraja: 120)
+    }
+
+    // Jumi- ja pyyntötapahtumat palvelun äppilokiin (Diagnostiikka.swift).
+    func diagnostiikka(_ runko: Data) async throws -> DiagnostiikkaVastaus {
+        try await hae(Diagnostiikka.polku, metodi: "POST", runko: runko, aikaraja: 20)
     }
 
     // Kortin X: palvelu sulkee auki olevan monivalinnan Escapella.
@@ -154,8 +165,14 @@ struct Asiakas {
     private func hae<T: Decodable>(_ polku: String, metodi: String = "GET", runko: Data? = nil, tyyppi: String = "application/json",
                                    aikaraja: TimeInterval = 10) async throws -> T {
         let p = try await pyynto(polku, metodi: metodi, runko: runko, tyyppi: tyyppi, aikaraja: aikaraja)
-        let (data, vastaus) = try await reititetty { try await URLSession.shared.data(for: p) }
+        let id = Diagnostiikka.jaettu.alkoi(polku)
+        let data: Data, vastaus: URLResponse
+        do { (data, vastaus) = try await reititetty { try await URLSession.shared.data(for: p) } } catch {
+            Diagnostiikka.jaettu.paattyi(id, virhe: error)
+            throw error
+        }
         let koodi = (vastaus as? HTTPURLResponse)?.statusCode ?? 0
+        Diagnostiikka.jaettu.paattyi(id, koodi: koodi)
         guard koodi == 200 else { throw virhe(koodi, data) }
         return try JSONDecoder().decode(T.self, from: data)
     }

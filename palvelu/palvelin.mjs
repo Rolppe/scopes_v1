@@ -24,6 +24,8 @@
 //   POST /api/skoopit/<nimi>/liite?nimi=<tiedosto>   runko = tiedoston tavut (enintään 25 Mt) → { polku, koko };
 //            äppi lisää polun viestiin, ja istunto lukee liitteen itse (liitteet.mjs, CHAT-MEDIA-SKOOPPI)
 //   POST /api/skoopit/<nimi>/kysymys-pois         auki olevan monivalinnan sulku Escapella (kortin X)
+//   POST /api/diagnostiikka {"laite"?, "tapahtumat": [...]}   äpin jumi- ja pyyntötapahtumat äppilokiin → { kirjattu };
+//            jokainen pyyntö ja tapahtumasilmukan tukos kirjataan pyyntölokiin (diagnostiikka.mjs, SCOPES-JAATYMINEN)
 //   GET /api/wg-asetus                äpin oman WireGuard-tunnelin asetus { asetus } (SCOPES-ETAYHTEYS 14.10.2026);
 //            äppi hakee sen kotiverkossa ja käyttää sitä kodin ulkopuolella. 404, jos tiedostoa ei ole.
 //
@@ -31,7 +33,8 @@
 // SCOPES_OSOITE (oletus 127.0.0.1), SCOPES_PORTTI (oletus 8787), CLAUDE_ISTUNNOT_DIR, CLAUDE_PROJEKTIT_DIR,
 // SCOPES_CHAT_DIR (chatin työhakemisto), SCOPES_LIITTEET_DIR (oletus ~/.local/state/scopes-liitteet), SCOPES_AVAIN_TIEDOSTO (oletus ~/.config/scopes/avain; ei repossa),
 // SCOPES_WG_TIEDOSTO (oletus ~/.config/scopes/wg.conf, wg-quick-muoto; ei repossa), SCOPES_TOIMINTOLOKI (oletus
-// ~/.local/state/scopes-toiminnot.loki). Ilman avainta palvelu ei käynnisty.
+// ~/.local/state/scopes-toiminnot.loki), SCOPES_PYYNTOLOKI (oletus ~/.local/state/scopes-pyynnot.loki), SCOPES_APPILOKI
+// (oletus ~/.local/state/scopes-app.loki). Ilman avainta palvelu ei käynnisty.
 
 import { timingSafeEqual } from 'node:crypto';
 import { readFileSync, realpathSync } from 'node:fs';
@@ -39,6 +42,7 @@ import { createServer } from 'node:http';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { luoDiagnostiikka } from './diagnostiikka.mjs';
 import { luoKayttoraja } from './kayttoraja.mjs';
 import { lista, lueSkoopit, yksi } from './lahteet.mjs';
 import { luoLiitteet } from './liitteet.mjs';
@@ -57,6 +61,8 @@ export function asetuksetYmparistosta(env = process.env) {
     toimintoloki: env.SCOPES_TOIMINTOLOKI ?? join(homedir(), '.local/state/scopes-toiminnot.loki'),
     chatDir: env.SCOPES_CHAT_DIR ?? join(homedir(), '.local/state/scopes-chat'),
     liitteetDir: env.SCOPES_LIITTEET_DIR ?? join(homedir(), '.local/state/scopes-liitteet'),
+    pyyntoloki: env.SCOPES_PYYNTOLOKI ?? join(homedir(), '.local/state/scopes-pyynnot.loki'),
+    appiloki: env.SCOPES_APPILOKI ?? join(homedir(), '.local/state/scopes-app.loki'),
   };
 }
 
@@ -83,7 +89,7 @@ function runko(req, raja = 1024) {
   });
 }
 
-export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset)) {
+export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset)) {
   // Chat suoratoistona (DEMO-SCOPES-SUORATOISTO): NDJSON-rivit {tyyppi: 'pala', teksti} …, lopuksi
   // {tyyppi: 'valmis', vastaus, keskustelu, …} tai {tyyppi: 'virhe', virhe}. Hylkäys ennen agentin käynnistystä
   // palaa tavallisena virhekoodina. Yhteyden katketessa (puhelimen näyttölukko, äpin vaihto) agentti jatkaa, ja
@@ -138,6 +144,7 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
       if (polku === '/api/terveys') return vastaa(200, { ok: true });
       if (!avainKelpaa(req.headers.authorization, asetukset.avain)) return vastaa(401, { virhe: 'avain puuttuu tai väärä' });
       if (req.method === 'POST') {
+        if (polku === '/api/diagnostiikka') return vastaa(200, await diagnostiikka.vastaanota(req));
         if (polku === '/api/uusi') return vastaa(200, await suorita('uusi', (await runko(req)).nimi));
         if (polku === '/api/chat') return vastaa(200, await viestit.chat(await runko(req, 32_768)));
         if (polku === '/api/chat/virta') return await virtaa(res, await runko(req, 32_768));
@@ -191,6 +198,8 @@ if (paaohjelma) {
     console.error(`scopes-palvelu: avain puuttuu tai on alle 32 merkkiä: ${asetukset.avainTiedosto}`);
     process.exit(2);
   }
-  createServer(kasittelija(asetukset)).listen(portti, osoite, () =>
+  const diagnostiikka = luoDiagnostiikka(asetukset);
+  diagnostiikka.silmukka();
+  createServer(diagnostiikka.kaari(kasittelija(asetukset, undefined, undefined, undefined, undefined, diagnostiikka))).listen(portti, osoite, () =>
     console.log(`scopes-palvelu: http://${osoite}:${portti}/api/skoopit`));
 }

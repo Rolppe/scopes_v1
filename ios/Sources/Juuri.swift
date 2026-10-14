@@ -17,6 +17,7 @@ struct SkoopitApp: App {
                 .task {
                     Ilmoittaja.jaettu.avaa = { navigaatio.avaaSkooppi($0) }
                     Ilmoittaja.jaettu.kaynnista(asetukset)
+                    Diagnostiikka.jaettu.kaynnista(asetukset)
                 }
         }
         .onChange(of: vaihe) {
