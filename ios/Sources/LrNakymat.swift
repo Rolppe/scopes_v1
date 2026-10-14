@@ -127,8 +127,9 @@ struct LrRekisteriView: View {
     @ObservedObject private var lr = Lr.jaettu
     @State private var muokattava: LrKohde?
 
-    // Rivi ja tila: muokkaus tai uusi rivi sen alle. Lisäys pyyhkäisyllä, koska muokkausnäkymän alapalkki jää
-    // näppäimistön alle (UI-koe 14.10.2026).
+    // Rivi ja tila: muokkaus tai uusi rivi sen alle. Lisäys rivin pitkän painalluksen valikosta: muokkausnäkymän
+    // alapalkki jäi näppäimistön alle, ja pyyhkäisytoiminto ei avaudu, koska sivuttaisveto missä tahansa avaa
+    // sivupalkin (Juuri.swift SivuttaisVeto; UI-koe 14.10.2026).
     struct LrKohde: Identifiable {
         let yksikko: LrYksikko
         let lisays: Bool
@@ -149,10 +150,9 @@ struct LrRekisteriView: View {
                 }
             }
             .accessibilityIdentifier("lr-yksikko-\(y.id)")
-            .swipeActions(edge: .leading) {
+            .contextMenu {
                 if !y.riidassa && !y.poistettu {
-                    Button("Lisää alle") { muokattava = LrKohde(yksikko: y, lisays: true) }
-                        .tint(.green)
+                    Button("Lisää alle", systemImage: "plus") { muokattava = LrKohde(yksikko: y, lisays: true) }
                         .accessibilityIdentifier("lr-lisaa-\(y.id)")
                 }
             }
@@ -174,7 +174,7 @@ struct LrRekisteriView: View {
 struct LrMuokkausView: View {
     let yksikko: LrYksikko
     let alku: String
-    // Uusi rivi `yksikko`n alle (LOCALREGISTER-RIVIN-LISAYS); avataan rivin Lisää alle -pyyhkäisytoiminnolla.
+    // Uusi rivi `yksikko`n alle (LOCALREGISTER-RIVIN-LISAYS); avataan rivin pitkän painalluksen Lisää alle -valinnalla.
     var lisays = false
     @Environment(\.dismiss) private var sulje
     @State private var teksti = ""
