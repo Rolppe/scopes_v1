@@ -127,6 +127,9 @@ struct JuuriView: View {
                     .accessibilityHidden(!navigaatio.sivupalkkiAuki)
                 if Mittari.paalla { MittariTulos() }
             }
+            // Kääntö palkin ollessa auki venytti pystykuvan vaakaan (käyttäjä 14.10.2026). Uutta ei voi ottaa, koska
+            // ikkunassa on jo palkki: tausta jää pelkäksi himmennykseksi, ja seuraava avaus ottaa kuvan uudesta asennosta.
+            .onChange(of: g.size) { sumea = nil }
         }
         // Käynnistys (käyttäjä 13.10.2026): kun mikään keskustelu ei ole kesken, äppi aukeaa listaan eikä tyhjään chattiin.
         // Juurinäkymä ilmestyy kerran käynnistyksessä, joten paluu taustalta ei avaa palkkia.
