@@ -15,6 +15,11 @@
 //   POST /api/lr/laheta {metat, yksikot}   { otettu, ohitettu, ristiriidat }
 //   GET  /api/lr/ristiriidat           { ristiriidat: [yksikkö, jossa rinnakkaiset] }
 //   GET  /api/lr/teksti/<polku>        { teksti } yhteinen nykytila markdownina
+//
+// Vienti LR → git (LOCALREGISTER-VIENTI, MUOTO §11; käyttäjä 14.10.2026 "Palvelu heti", push seuraavassa pakkauksessa):
+// kun `vientiEtuliite` on annettu (palvelin: SCOPES_LR_VIENTI), etuliitteen rekisteriin osuva lähetys ja 10 min
+// ajastin ajavat `lr.mjs vie`:n lapsiprosessissa samassa jonossa tuonnin kanssa. Oletus pois, koska koeinstanssi
+// käyttää samaa repojuurta ja committaisi muuten koedataa.
 import { execFile } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,12 +32,14 @@ export const VALI_MIN = 10;
 
 export class LrVirhe extends Error { constructor(koodi, viesti) { super(viesti); this.koodi = koodi; } }
 
-export function luoLr({ repoJuuri, lrJuuri = OLETUSJUURI, laite = 'oneplus', tuo = null, head = null } = {}) {
+export function luoLr({ repoJuuri, lrJuuri = OLETUSJUURI, laite = 'oneplus', tuo = null, head = null, vientiEtuliite = null, vienti = null } = {}) {
   const valimuisti = new Map();
   let viimeHead = null;
   let kaynnissa = null;
   const lueHead = head ?? (async () => (await ajaa('git', ['rev-parse', 'HEAD'], { cwd: repoJuuri })).stdout.trim());
   const ajaTuonti = tuo ?? (() => ajaa(process.execPath, [LR, 'tuo', '--juuri', lrJuuri, '--laite', laite], { cwd: repoJuuri, timeout: 120_000 }));
+  const ajaVienti = vienti ?? (() => ajaa(process.execPath, [LR, 'vie', '--etuliite', vientiEtuliite, '--juuri', lrJuuri, '--laite', laite], { cwd: repoJuuri, timeout: 120_000 }));
+  let vientiJonossa = null;
 
   // Yksi tuonti kerrallaan; samanaikaiset kutsujat odottavat samaa.
   function tuoJosMuuttunut() {
@@ -48,6 +55,28 @@ export function luoLr({ repoJuuri, lrJuuri = OLETUSJUURI, laite = 'oneplus', tuo
       } finally { kaynnissa = null; }
     })();
     return kaynnissa;
+  }
+
+  // Vienti käynnissä olevan tuonnin tai viennin jälkeen; jonossa enintään yksi. Vienti tuo itse, mutta viimeHead
+  // jää ennalleen: oma commit muuttaa HEADin, ja seuraava tiivistekysely tuo sen (tiedostot ohittuvat tiivisteellä).
+  function vie() {
+    if (!vientiEtuliite) return Promise.resolve(null);
+    if (vientiJonossa) return vientiJonossa;
+    vientiJonossa = (async () => {
+      await null; // nollaus alla vasta, kun vientiJonossa on asetettu (muuten jono jäisi pysyvästi täyteen)
+      while (kaynnissa) await kaynnissa.catch(() => {});
+      vientiJonossa = null;
+      kaynnissa = (async () => {
+        try {
+          const { stdout = '' } = (await ajaVienti()) ?? {};
+          valimuisti.clear();
+          if (/^(VIETY|OHITETTU):/m.test(stdout)) console.log(`lr: ${stdout.trim().split('\n').join('; ')}`);
+          return stdout;
+        } finally { kaynnissa = null; }
+      })();
+      return kaynnissa;
+    })();
+    return vientiJonossa;
   }
 
   async function kasittele(metodi, polku, lueRunko) {
@@ -74,6 +103,7 @@ export function luoLr({ repoJuuri, lrJuuri = OLETUSJUURI, laite = 'oneplus', tuo
         if (kaynnissa) await kaynnissa.catch(() => {});
         const v = vastaanota(lrJuuri, { metat: runko.metat ?? [], yksikot: runko.yksikot ?? [] });
         for (const p of v.muuttuneet) valimuisti.delete(p);
+        if (vientiEtuliite && [...v.muuttuneet].some((p) => p.startsWith(vientiEtuliite))) vie().catch((e) => console.error(`lr: vienti: ${e.message}`));
         return { otettu: v.otettu, ohitettu: v.ohitettu, ristiriidat: v.ristiriidat };
       }
     } catch (e) {
@@ -87,6 +117,7 @@ export function luoLr({ repoJuuri, lrJuuri = OLETUSJUURI, laite = 'oneplus', tuo
   return {
     kasittele,
     tuoJosMuuttunut,
-    ajasta() { return setInterval(() => tuoJosMuuttunut().catch((e) => console.error(`lr: ${e.message}`)), VALI_MIN * 60_000).unref(); },
+    vie,
+    ajasta() { return setInterval(() => tuoJosMuuttunut().then(() => vie()).catch((e) => console.error(`lr: ${e.message}`)), VALI_MIN * 60_000).unref(); },
   };
 }

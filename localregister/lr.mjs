@@ -10,11 +10,13 @@
 //   node scopes/localregister/lr.mjs tiiviste [--juuri DIR]
 //   node scopes/localregister/lr.mjs tulosta <rekisteripolku> [--juuri DIR]
 //   node scopes/localregister/lr.mjs siivoa [--juuri DIR]   (hautakivet tiiviiksi, MUOTO §4)
+//   node scopes/localregister/lr.mjs vie --etuliite scopes/ [--juuri DIR] [--laite oneplus]   (LR → git, MUOTO §11)
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { perusHakemisto, tiedostoLukko } from '../../claude/siirto/tools/lukot.mjs';
 
 export const OLETUSJUURI = join(homedir(), '.local/share/localregister');
 export const REKISTERITIEDOSTO = /(^|\/)(REKISTERI|HISTORIA|ARKISTO)\.md$/;
@@ -204,7 +206,7 @@ function samankaltainen(vanha, uusi) {
 export function uudelleentuo(juuri, laite, polku, teksti, lahde, nyt = new Date().toISOString()) {
   const hak = rekisterihakemisto(juuri, polku);
   const meta = lueJson(join(hak, '_meta.json'));
-  const tulos = { sama: 0, muuttunut: 0, uusi: 0, poistettu: 0, ristiriita: 0 };
+  const tulos = { sama: 0, muuttunut: 0, uusi: 0, poistettu: 0, ristiriita: 0, viety: 0 };
   const shaUusi = createHash('sha256').update(teksti).digest('hex');
   if (meta.lahde?.sha256 === shaUusi && !meta.poistettu) { tulos.sama = -1; return tulos; }
   const vanhat = jarjestyksessa(lueYksikot(juuri, polku).filter((y) => y.lahdeSisalto != null));
@@ -212,7 +214,17 @@ export function uudelleentuo(juuri, laite, polku, teksti, lahde, nyt = new Date(
   const tallenna = (y) => kirjoitaJson(join(hak, `${y.id}.json`), y);
   // Gitin muutos yksikköön y: suoraan, jos kukaan muu ei ole koskenut siihen tai muiden muutos on palauttanut
   // gitin edellisen sisällön (esim. riita ratkaistu lähteen versiolla); muuten rinnakkaiseksi.
+  // Vienti (LOCALREGISTER-VIENTI, MUOTO §11): git sisältää jo yksikön nykyisen sisällön, koska se vietiin LR:stä.
+  // Silloin vain gitin puoli päivittyy, eikä versio kasva: muuten oma vienti palaisi riitana.
   const gitMuutos = (y, muutos) => {
+    const viety = !y.rinnakkaiset?.length && (muutos.poistettu ? y.poistettu : !y.poistettu && muutos.sisalto === y.sisalto);
+    if (viety) {
+      if (muutos.laji) Object.assign(y, { laji: muutos.laji, osio: muutos.osio });
+      y.lahdeSisalto = muutos.poistettu ? null : muutos.sisalto;
+      y.lahdeVersio = y.versio;
+      tallenna(y);
+      return true;
+    }
     const koskematon = vertaa(y.versio, y.lahdeVersio) === 'sama';
     const palautettu = !koskematon && !y.poistettu && !y.rinnakkaiset?.length && y.sisalto === y.lahdeSisalto;
     const pohja = palautettu ? yhdista(y.versio, y.lahdeVersio) : y.lahdeVersio;
@@ -227,7 +239,10 @@ export function uudelleentuo(juuri, laite, polku, teksti, lahde, nyt = new Date(
     y.lahdeSisalto = muutos.poistettu ? null : (muutos.sisalto ?? y.lahdeSisalto);
     y.lahdeVersio = versio;
     tallenna(y);
+    return false;
   };
+  // Muiden laitteiden luomat yksiköt (ei gitissä): viety rivi tunnistetaan sisällöstä, jottei se kahdennu.
+  const omat = lueYksikot(juuri, polku).filter((y) => y.lahdeSisalto == null && !y.poistettu && !y.rinnakkaiset?.length);
   // LCS gitin edellisen sisällön mukaan; yhteinen alku ja loppu ensin, jotta taulukko pysyy pienenä.
   const n = vanhat.length, m = uudet.length;
   const sama = (i, j) => vanhat[i].lahdeSisalto === uudet[j].sisalto;
@@ -268,13 +283,22 @@ export function uudelleentuo(juuri, laite, polku, teksti, lahde, nyt = new Date(
   // Avaimet: säilyneiden järjestys on ennallaan; uudet saavat avaimen edellisen ja seuraavan säilyneen väliin.
   let edellinen = '';
   parit.forEach(([v, u], k) => {
-    if (v !== null && u === null) { gitMuutos(vanhat[v], { poistettu: true }); tulos.poistettu++; return; }
+    if (v !== null && u === null) { tulos[gitMuutos(vanhat[v], { poistettu: true }) ? 'viety' : 'poistettu']++; return; }
     if (v !== null) {
       const y = vanhat[v], o = uudet[u];
-      if (y.lahdeSisalto !== o.sisalto) { gitMuutos(y, { sisalto: o.sisalto, laji: o.laji, osio: o.osio }); tulos.muuttunut++; }
+      if (y.lahdeSisalto !== o.sisalto) tulos[gitMuutos(y, { sisalto: o.sisalto, laji: o.laji, osio: o.osio }) ? 'viety' : 'muuttunut']++;
       else if (y.laji !== o.laji || y.osio !== o.osio) { Object.assign(y, { laji: o.laji, osio: o.osio }); tallenna(y); tulos.sama++; }
       else tulos.sama++;
       edellinen = y.jarjestys;
+      return;
+    }
+    const oma = omat.find((y) => y.sisalto === uudet[u].sisalto);
+    if (oma) {
+      omat.splice(omat.indexOf(oma), 1);
+      Object.assign(oma, { laji: uudet[u].laji, osio: uudet[u].osio, lahdeSisalto: oma.sisalto, lahdeVersio: oma.versio });
+      tallenna(oma);
+      if (oma.jarjestys > edellinen) edellinen = oma.jarjestys;
+      tulos.viety++;
       return;
     }
     const seur = parit.slice(k + 1).find(([sv, su]) => sv !== null && su !== null);
@@ -457,33 +481,97 @@ export function hae(juuri, polku, idt) {
 
 const git = (...a) => execFileSync('git', a, { encoding: 'utf8', maxBuffer: 64 << 20 });
 
+// Gitin HEADin rekisteritiedostot kaksoiskappaleeseen (tuo-komento; vie ajaa saman ennen ja jälkeen viennin).
+function tuoHead(juuri, laiteNimi) {
+  const laite = luoLaite(juuri, laiteNimi);
+  const commit = git('rev-parse', 'HEAD').trim();
+  const polut = git('ls-tree', '-r', '--name-only', commit).split('\n').filter((p) => REKISTERITIEDOSTO.test(p));
+  const olemassa = new Set(rekisterit(juuri));
+  const s = { uusiaRek: 0, yksikoita: 0, sama: 0, muuttunut: 0, uusi: 0, poistettu: 0, ristiriita: 0, viety: 0, muuttumattomia: 0, poistettujaRek: 0, siivottu: 0 };
+  try {
+    for (const p of polut) {
+      const teksti = git('show', `${commit}:${p}`);
+      if (!olemassa.has(p)) { s.yksikoita += tuoRekisteri(juuri, laite, p, teksti, { commit }); s.uusiaRek++; continue; }
+      const t = uudelleentuo(juuri, laite, p, teksti, { commit });
+      if (t.sama === -1) { s.muuttumattomia++; continue; }
+      for (const k of ['sama', 'muuttunut', 'uusi', 'poistettu', 'ristiriita', 'viety']) s[k] += t[k];
+    }
+    const gitissa = new Set(polut);
+    for (const p of olemassa) if (!gitissa.has(p) && poistaRekisteri(juuri, laite, p)) s.poistettujaRek++;
+    // Siivous tuonnin lopussa (LOCALREGISTER-SIIVOUS-TUOTANTO): palvelu tyhjentää tiivistevälimuistinsa tuonnin
+    // jälkeen, joten tiivisteet eivät jää vanhoiksi kuten käsiajossa käynnissä olevaa palvelua vastaan.
+    for (const p of rekisterit(juuri)) s.siivottu += siivoa(juuri, p);
+  } finally { laite.tallenna(); }
+  return { commit, s };
+}
+
+// Pakkauslukko (claude/siirto/tools/lukot.mjs + pack-lock.mjs): hakemisto <lukko>/lock on olemassa, kun joku pakkaa.
+const lukittu = (lukkoHak) => existsSync(join(lukkoHak, 'lock'));
+
+// LR → git (LOCALREGISTER-VIENTI, MUOTO §11; käyttäjä 14.10.2026: scopes-perhe live-rekisteriksi, palvelu vie heti,
+// push seuraavassa pakkauksessa). Ensin tuonti, jotta gitin muutokset yhdistyvät LR:ssä kolmitiesäännöllä; sitten
+// jokainen etuliitteen rekisteri, jonka LR-teksti eroaa HEADista, kirjoitetaan ja committataan yksinään. Ohitus:
+// avoin riita (K4), pakkauslukko, istunnon muokkaama tiedosto. Ohitettu viedään myöhemmin, kun este on poissa.
+export function vie(juuri, laiteNimi, etuliite, { stateDir } = {}) {
+  const tulos = { viety: [], ohitettu: [], syy: null };
+  const kesken = ['MERGE_HEAD', 'rebase-merge', 'rebase-apply', 'CHERRY_PICK_HEAD', 'REVERT_HEAD']
+    .find((n) => existsSync(git('rev-parse', '--git-path', n).trim()));
+  if (kesken) { tulos.syy = `git-toiminto kesken (${kesken})`; return tulos; }
+  try { git('symbolic-ref', '-q', 'HEAD'); } catch { tulos.syy = 'irrotettu HEAD'; return tulos; }
+  const repoLukko = perusHakemisto(stateDir);
+  if (lukittu(repoLukko)) { tulos.syy = 'juurirepon pakkauslukko'; return tulos; }
+  tuoHead(juuri, laiteNimi);
+  const omaLukko = join(repoLukko, 'lock');
+  mkdirSync(repoLukko, { recursive: true });
+  try { mkdirSync(omaLukko); } catch { tulos.syy = 'juurirepon pakkauslukko'; return tulos; }
+  try {
+    writeFileSync(join(omaLukko, 'holder'), JSON.stringify({ pid: process.pid, session: 'lr-vienti', started: new Date().toISOString() }));
+    for (const p of rekisterit(juuri).filter((r) => r.startsWith(etuliite))) {
+      const meta = lueMeta(juuri, p);
+      if (meta.poistettu || !meta.lahde) continue;
+      let head;
+      try { head = git('show', `HEAD:${p}`); } catch { continue; }
+      const teksti = tulosta(juuri, p);
+      if (teksti === head) continue;
+      if (lueYksikot(juuri, p).some((y) => y.rinnakkaiset?.length)) { tulos.ohitettu.push([p, 'avoin riita (K4)']); continue; }
+      if (lukittu(tiedostoLukko(p, stateDir)) || lukittu(tiedostoLukko(join(dirname(p), 'REKISTERI.md'), stateDir))) {
+        tulos.ohitettu.push([p, 'pakkauslukko']); continue;
+      }
+      if (git('status', '--porcelain', '--', p).trim()) { tulos.ohitettu.push([p, 'tiedostoa muokattu työpuussa']); continue; }
+      writeFileSync(p, teksti);
+      try {
+        git('commit', '-q', '-m', `chore(lr): vienti ${p} äpistä (localregister)`, '--', p);
+      } catch (e) {
+        // Epäonnistunut commit ei saa jättää tiedostoa likaiseksi: muuten se ohittuisi joka kerta "muokattuna".
+        git('checkout', '-q', 'HEAD', '--', p);
+        tulos.ohitettu.push([p, `commit epäonnistui: ${String(e.stderr || e.message).trim().split('\n').pop()}`]);
+        continue;
+      }
+      tulos.viety.push([p, git('rev-parse', 'HEAD').trim()]);
+    }
+  } finally { rmSync(omaLukko, { recursive: true, force: true }); }
+  if (tulos.viety.length) tuoHead(juuri, laiteNimi);
+  return tulos;
+}
+
 function main(argv) {
   const [komento, ...loput] = argv;
   const lippu = (n, oletus) => { const k = loput.indexOf(n); return k >= 0 ? loput[k + 1] : oletus; };
   const juuri = lippu('--juuri', OLETUSJUURI);
   if (komento === 'tuo') {
-    const laite = luoLaite(juuri, lippu('--laite', 'oneplus'));
-    const commit = git('rev-parse', 'HEAD').trim();
-    const polut = git('ls-tree', '-r', '--name-only', commit).split('\n').filter((p) => REKISTERITIEDOSTO.test(p));
-    const olemassa = new Set(rekisterit(juuri));
-    const s = { uusiaRek: 0, yksikoita: 0, sama: 0, muuttunut: 0, uusi: 0, poistettu: 0, ristiriita: 0, muuttumattomia: 0, poistettujaRek: 0, siivottu: 0 };
-    try {
-      for (const p of polut) {
-        const teksti = git('show', `${commit}:${p}`);
-        if (!olemassa.has(p)) { s.yksikoita += tuoRekisteri(juuri, laite, p, teksti, { commit }); s.uusiaRek++; continue; }
-        const t = uudelleentuo(juuri, laite, p, teksti, { commit });
-        if (t.sama === -1) { s.muuttumattomia++; continue; }
-        for (const k of ['sama', 'muuttunut', 'uusi', 'poistettu', 'ristiriita']) s[k] += t[k];
-      }
-      const gitissa = new Set(polut);
-      for (const p of olemassa) if (!gitissa.has(p) && poistaRekisteri(juuri, laite, p)) s.poistettujaRek++;
-      // Siivous tuonnin lopussa (LOCALREGISTER-SIIVOUS-TUOTANTO): palvelu tyhjentää tiivistevälimuistinsa tuonnin
-      // jälkeen, joten tiivisteet eivät jää vanhoiksi kuten käsiajossa käynnissä olevaa palvelua vastaan.
-      for (const p of rekisterit(juuri)) s.siivottu += siivoa(juuri, p);
-    } finally { laite.tallenna(); }
+    const { commit, s } = tuoHead(juuri, lippu('--laite', 'oneplus'));
     console.log(`TUOTU: commit ${commit.slice(0, 8)} → ${juuri}: uusia rekistereitä ${s.uusiaRek} (${s.yksikoita} yksikköä), `
       + `muuttumattomia ${s.muuttumattomia}, muuttuneissa yksiköitä sama ${s.sama} / muuttunut ${s.muuttunut} / uusi ${s.uusi} / `
-      + `poistettu ${s.poistettu} / ristiriita ${s.ristiriita}; poistettuja rekistereitä ${s.poistettujaRek}; siivottuja hautakiviä ${s.siivottu}`);
+      + `poistettu ${s.poistettu} / ristiriita ${s.ristiriita} / viety ${s.viety}; poistettuja rekistereitä ${s.poistettujaRek}; siivottuja hautakiviä ${s.siivottu}`);
+    return 0;
+  }
+  if (komento === 'vie') {
+    const etuliite = lippu('--etuliite', null);
+    if (!etuliite) { console.error('vie: --etuliite puuttuu (esim. scopes/)'); return 2; }
+    const v = vie(juuri, lippu('--laite', 'oneplus'), etuliite);
+    for (const [p, sha] of v.viety) console.log(`VIETY: ${p} (${sha.slice(0, 8)})`);
+    for (const [p, syy] of v.ohitettu) console.log(`OHITETTU: ${p} — ${syy}`);
+    console.log(`VIENTI: ${v.viety.length} viety, ${v.ohitettu.length} ohitettu${v.syy ? ` — ${v.syy}` : ''}`);
     return 0;
   }
   if (komento === 'testaa') {
@@ -513,7 +601,7 @@ function main(argv) {
     return 0;
   }
   if (komento === 'tulosta') { process.stdout.write(tulosta(juuri, loput[0])); return 0; }
-  console.error('käyttö: lr.mjs tuo|testaa|tiiviste|siivoa|tulosta <polku> [--juuri DIR] [--laite NIMI]');
+  console.error('käyttö: lr.mjs tuo|vie --etuliite P|testaa|tiiviste|siivoa|tulosta <polku> [--juuri DIR] [--laite NIMI]');
   return 2;
 }
 

@@ -154,3 +154,25 @@ ensimmäinen tiiviste 2,0 s (tuonti), välimuistista 74 ms; ilman avainta 401.
 
 Käyttöön tulo vaatii Scopes-palvelun uudelleenkäynnistyksen. Seuraavaksi äppi: paikallinen kopio,
 synkka laukaisijoineen (§5) ja ristiriitojen ratkaisunäkymä.
+
+## 11. Vienti LR → git: scopes-perhe live-rekisteriksi (LOCALREGISTER-VIENTI 14.10.2026)
+
+Käyttäjä 14.10.2026: `scopes`-skoopin ja alaskooppien rekisterit live-rekisteriksi; vienti "Palvelu heti",
+push "Seuraava pakkaus pushaa". LR on näille totuus ja git-tiedosto sen vienti; muut 37 tiedostoa jäävät
+pelkiksi tuonneiksi.
+
+- `lr.mjs vie --etuliite scopes/`: tuonti ensin (gitin muutokset yhdistyvät LR:ssä kolmitiesäännöllä), sitten
+  jokainen etuliitteen rekisteri, jonka `tulosta`-teksti eroaa HEADista, kirjoitetaan ja committataan yksinään
+  (`chore(lr): vienti <polku> äpistä`), juurirepon pakkauslukon (`<state>/lock`) alla.
+- Ohitus (viedään myöhemmin): avoin riita (K4, ratkaistaan äpissä), tiedoston tai skoopin REKISTERI.md:n
+  pakkauslukko, istunnon muokkaama tiedosto, git-toiminto kesken tai irrotettu HEAD, epäonnistunut commit
+  (tiedosto palautetaan HEADiin).
+- Paluu: uudelleentuonti tunnistaa viennin. Git-muutos, joka on jo yksikön sisältö, päivittää vain gitin
+  puolen, eikä versio kasva; äpin luoma rivi tunnistetaan sisällöstä eikä kahdennu.
+- Palvelu (`SCOPES_LR_VIENTI`, kaynnista.sh oletus `scopes/`; tyhjä = pois): etuliitteeseen osuva lähetys ja
+  10 min ajastin ajavat viennin lapsiprosessissa samassa jonossa tuonnin kanssa. Koeinstanssi ilman
+  muuttujaa ei vie, koska sen repojuuri on tuotannon.
+- Testit: lr 16/16 + palvelu 4/4 (`node --test scopes/localregister/lr.test.mjs scopes/localregister/palvelu.test.mjs`),
+  Scopes-palvelu 76/76. Harjoitus 14.10.2026 tuotannon LR:n kopiolla ja repon kloonilla koeinstanssissa 8799:
+  kaksi peräkkäistä vientiä, istunnon likainen tiedosto ohitettiin ja vietiin pakkauksen jälkeen yhdistettynä,
+  riitoja 0, edestakaisin 80/80.

@@ -16,5 +16,7 @@ if [ ! -s "$avain" ]; then
   (umask 077 && head -c 48 /dev/urandom | base64 | tr -d '=+/\n' > "$avain")
 fi
 mkdir -p "$(dirname "$loki")"
-SCOPES_OSOITE=${SCOPES_OSOITE:-0.0.0.0} SCOPES_PORTTI=$portti SCOPES_AVAIN_TIEDOSTO=$avain \
+# Localregisterin vienti LR → git scopes-perheelle (LOCALREGISTER-VIENTI, käyttäjä 14.10.2026: live-rekisteri);
+# tyhjä SCOPES_LR_VIENTI= kytkee pois (koeinstanssi, jonka repojuuri on tuotannon).
+SCOPES_LR_VIENTI=${SCOPES_LR_VIENTI-scopes/} SCOPES_OSOITE=${SCOPES_OSOITE:-0.0.0.0} SCOPES_PORTTI=$portti SCOPES_AVAIN_TIEDOSTO=$avain \
   nohup "${NODE:-node}" "$tama/palvelin.mjs" >>"$loki" 2>&1 &

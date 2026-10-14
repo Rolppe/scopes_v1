@@ -2,10 +2,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { tiedostoLukko } from '../../claude/siirto/tools/lukot.mjs';
 import { avaimet, hae, lista, lueSiivotut, lueYksikot, luoLaite, pilko, poistaRekisteri, ristiriidat, siivoa, tiivisteet, tuoRekisteri, tulosta, uudelleentuo, valiin, vastaanota, vertaa } from './lr.mjs';
 
 const LR = join(dirname(fileURLToPath(import.meta.url)), 'lr.mjs');
@@ -85,7 +86,7 @@ test('uudelleentuonti: muokattu pitää tunnuksen, poistettu saa hautakiven, uus
   const ennen = Object.fromEntries(lueYksikot(juuri, P).map((y) => [y.sisalto, y]));
   const uusi = REK.replace('| a | b |', '| a | valmis |').replace('- kaksi\n', '- kolme\n- kaksi\n').replace('| c | d |\n', '');
   const t = uudelleentuo(juuri, laite, P, uusi, { commit: 'b' });
-  assert.deepEqual(t, { sama: 10, muuttunut: 1, uusi: 1, poistettu: 1, ristiriita: 0 });
+  assert.deepEqual(t, { sama: 10, muuttunut: 1, uusi: 1, poistettu: 1, ristiriita: 0, viety: 0 });
   assert.equal(tulosta(juuri, P), uusi);
   const jalkeen = lueYksikot(juuri, P);
   const muokattu = jalkeen.find((y) => y.sisalto === '| a | valmis |\n\n');
@@ -318,4 +319,83 @@ test('tuo-komento siivoaa lopuksi hautakivet (LOCALREGISTER-SIIVOUS-TUOTANTO)', 
   assert.match(tuo(), /poistettu 1 .*siivottuja hautakiviä 1$/m);
   assert.equal(Object.keys(lueSiivotut(juuri, 'x/REKISTERI.md')).length, 1);
   assert.equal(lueYksikot(juuri, 'x/REKISTERI.md').some((y) => y.poistettu), false);
+});
+
+test('vienti LR → git: äpin muutokset commitiksi, paluu ei ole riita eikä kahdenna, muut etuliitteet ennallaan (LOCALREGISTER-VIENTI)', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'lr-repo-'));
+  const juuri = mkdtempSync(join(tmpdir(), 'lr-'));
+  const tila = mkdtempSync(join(tmpdir(), 'lr-tila-'));
+  const git = (...a) => execFileSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { encoding: 'utf8' });
+  const env = { ...process.env, SIIRTO_STATE_DIR: tila, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' };
+  const aja = (...a) => execFileSync(process.execPath, [LR, ...a, '--juuri', juuri], { cwd: repo, encoding: 'utf8', env });
+  const S = 'scopes/x/REKISTERI.md', M = 'muu/REKISTERI.md';
+  git('init', '-q');
+  for (const p of [S, M]) { mkdirSync(join(repo, dirname(p)), { recursive: true }); writeFileSync(join(repo, p), REK); }
+  git('add', '.'); git('commit', '-qm', 'a');
+  aja('tuo');
+  const rivi = (P, s) => lueYksikot(juuri, P).find((y) => y.sisalto === s);
+  // Äppi: muokkaa, lisää ja poistaa scopes-rekisterissä; muokkaa muu-rekisteriä.
+  appiKoskee(juuri, S, rivi(S, '- kaksi\n\n'), '- kaksi äpistä\n\n');
+  const ys = lueYksikot(juuri, S).sort((a, b) => (a.jarjestys < b.jarjestys ? -1 : 1));
+  const k = ys.findIndex((y) => y.sisalto === '| a | b |\n');
+  const uusi = { id: 'iphone-000009', rekisteri: S, laji: 'avoin', osio: 'Avoimet asiat', jarjestys: valiin(ys[k].jarjestys, ys[k + 1].jarjestys), sisalto: '| u | v |\n', versio: { iphone: 9 }, poistettu: false };
+  const pois = { ...rivi(S, 'vapaa kappale\ntoinen rivi'), poistettu: true, versio: { ...rivi(S, 'vapaa kappale\ntoinen rivi').versio, iphone: 10 }, muuttaja: 'iphone' };
+  delete pois.lahdeSisalto; delete pois.lahdeVersio;
+  assert.equal(vastaanota(juuri, { yksikot: [uusi, pois] }).otettu, 2);
+  appiKoskee(juuri, M, rivi(M, '- kaksi\n\n'), '- muu äpistä\n\n');
+  const odotettu = REK.replace('- kaksi', '- kaksi äpistä').replace('| a | b |\n', '| a | b |\n| u | v |\n').replace('vapaa kappale\ntoinen rivi', '');
+  assert.equal(tulosta(juuri, S), odotettu);
+  const elavat = () => lueYksikot(juuri, S).filter((y) => !y.poistettu).length;
+  const maara = elavat();
+
+  assert.match(aja('vie', '--etuliite', 'scopes/'), /^VIETY: scopes\/x\/REKISTERI\.md .*\nVIENTI: 1 viety, 0 ohitettu$/m);
+  assert.equal(readFileSync(join(repo, S), 'utf8'), odotettu);
+  assert.equal(git('show', `HEAD:${S}`), odotettu);
+  assert.equal(git('show', `HEAD:${M}`), REK);
+  assert.equal(git('status', '--porcelain'), '');
+  assert.match(git('log', '-1', '--format=%s'), /^chore\(lr\): vienti scopes\/x\/REKISTERI\.md äpistä/);
+  // Paluu: ei riitaa, ei uusia yksiköitä, gitin puoli = HEAD, ja uusi vienti on tyhjä.
+  assert.equal(elavat(), maara);
+  assert.equal(Object.keys(lueSiivotut(juuri, S)).length, 1);
+  assert.deepEqual(ristiriidat(juuri), []);
+  assert.equal(tulosta(juuri, S, { lahde: true }), odotettu);
+  assert.equal(lueYksikot(juuri, S).filter((y) => !y.poistettu).every((y) => y.lahdeSisalto === y.sisalto), true);
+  assert.match(aja('vie', '--etuliite', 'scopes/'), /^VIENTI: 0 viety, 0 ohitettu$/m);
+
+  // Pakkaus muuttaa gittiä ja äppi eri riviä: LR yhdistää, vienti tuo molemmat.
+  writeFileSync(join(repo, S), odotettu.replace('- **Käyttäjä:** yksi', '- **Käyttäjä:** yksi gitistä'));
+  git('commit', '-qam', 'pakkaus');
+  aja('tuo');
+  appiKoskee(juuri, S, rivi(S, '| c | d |\n\n'), '| c | e |\n\n');
+  assert.match(aja('vie', '--etuliite', 'scopes/'), /VIENTI: 1 viety/);
+  assert.equal(git('show', `HEAD:${S}`), odotettu.replace('- **Käyttäjä:** yksi', '- **Käyttäjä:** yksi gitistä').replace('| c | d |', '| c | e |'));
+  assert.deepEqual(ristiriidat(juuri), []);
+
+  // Esteet: istunnon muokkaama tiedosto, tiedoston pakkauslukko, juurirepon lukko, avoin riita.
+  const taas = { ...rivi(S, '- kaksi äpistä\n\n'), sisalto: '- kaksi taas\n\n', muuttaja: 'iphone' };
+  taas.versio = { ...taas.versio, iphone: 11 };
+  delete taas.lahdeSisalto; delete taas.lahdeVersio;
+  assert.equal(vastaanota(juuri, { yksikot: [taas] }).otettu, 1);
+  writeFileSync(join(repo, S), readFileSync(join(repo, S), 'utf8') + 'istunto\n');
+  assert.match(aja('vie', '--etuliite', 'scopes/'), /OHITETTU: scopes\/x\/REKISTERI\.md — tiedostoa muokattu työpuussa/);
+  git('checkout', '--', S);
+  mkdirSync(join(tiedostoLukko(S, tila), 'lock'), { recursive: true });
+  assert.match(aja('vie', '--etuliite', 'scopes/'), /OHITETTU: scopes\/x\/REKISTERI\.md — pakkauslukko/);
+  rmSync(tiedostoLukko(S, tila), { recursive: true });
+  mkdirSync(join(tila, 'lock'));
+  assert.match(aja('vie', '--etuliite', 'scopes/'), /^VIENTI: 0 viety, 0 ohitettu — juurirepon pakkauslukko$/m);
+  rmSync(join(tila, 'lock'), { recursive: true });
+  writeFileSync(join(repo, S), readFileSync(join(repo, S), 'utf8').replace('- kaksi äpistä', '- kaksi gitistä'));
+  git('commit', '-qam', 'riita');
+  assert.match(aja('vie', '--etuliite', 'scopes/'), /OHITETTU: scopes\/x\/REKISTERI\.md — avoin riita \(K4\)/);
+  assert.equal(git('show', `HEAD:${S}`).includes('- kaksi gitistä'), true);
+
+  // Epäonnistunut commit (pre-commit-hook hylkää): tiedosto palautuu, eikä työpuu jää likaiseksi.
+  const R = 'scopes/y/REKISTERI.md';
+  mkdirSync(join(repo, 'scopes/y')); writeFileSync(join(repo, R), REK); git('add', R); git('commit', '-qm', 'y');
+  aja('tuo');
+  appiKoskee(juuri, R, rivi(R, '- kaksi\n\n'), '- kaksi y\n\n');
+  writeFileSync(join(repo, '.git/hooks/pre-commit'), '#!/bin/sh\necho hylätty >&2\nexit 1\n', { mode: 0o755 });
+  assert.match(aja('vie', '--etuliite', 'scopes/y/'), /OHITETTU: scopes\/y\/REKISTERI\.md — commit epäonnistui: hylätty/);
+  assert.equal(git('status', '--porcelain'), '');
 });
