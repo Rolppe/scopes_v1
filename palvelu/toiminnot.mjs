@@ -3,7 +3,8 @@
 // lippua tai vapaata tekstiä mihinkään komentoriviin.
 //   pura   — olemassa olevalle skoopille uusi Remote Control -istunto tmuxiin, ensimmäinen viesti `/pura <skooppi>`;
 //            skoopin pakatut tmux-istunnot suljetaan ensin `/exit`illä (pakkaamaton istunto estää purun)
-//   pakkaa — skoopin ainoaan vapaaseen tmux-istuntoon kirjoitetaan `/pakkaa`
+//   pakkaa — skoopin ainoaan vapaaseen tmux-istuntoon kirjoitetaan `/pakkaa`; jos istunto odottaa vastausta auki
+//            olevaan kysymykseen, Escape sulkee sen ensin (käyttäjä 14.10.2026: Pakkaa sai 409:n juuri silloin)
 //   automaattisiirto, herata, herata-pois — samoin `/automaattisiirto` (pakkaus ja sessionvaihto), `/sa` ja `/sa pois`
 //            (välimuistin herätys päälle ja pois; käyttäjä 13.10.2026: nappi ja kytkin pakkausnapin alle). Varatulle
 //            istunnolle nämä menevät jonoon ja lähtevät, kun istunto on vapaa (käyttäjä 13.10.2026, V-294: autojatko
@@ -13,10 +14,11 @@
 // argumenttitaulukkona ilman kuorta. Yksi toiminto kerrallaan; jokainen yritys kirjataan lokiin, myös hylätty.
 
 import { execFile } from 'node:child_process';
-import { appendFileSync, mkdirSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { istunnot, lueSkoopit } from './lahteet.mjs';
+import { keskustelu } from './viestit.mjs';
 
 // 1–12 sanaa (SIIRTO-SYVAT-ALASKOOPIT 13.10.2026: alaskoopit vähintään 10 sanan syvyyteen).
 export const UUSI_NIMI = /^[a-z0-9][a-z0-9-]{0,23}( [a-z0-9][a-z0-9-]{0,23}){0,11}$/;
@@ -93,6 +95,14 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
     return { osoite };
   }
 
+  // Istunnon viimeinen viesti on vastaamaton monivalinta (AskUserQuestion).
+  function kysymysAuki(i) {
+    let transkripti = '';
+    try { transkripti = readFileSync(i.polku, 'utf8'); } catch { return false; }
+    const viimeinen = keskustelu(transkripti, 1)[0];
+    return viimeinen?.rooli === 'kysymys' && !viimeinen.vastattu;
+  }
+
   // Valmis komento skoopin ainoaan vapaaseen tmux-istuntoon, kun sen vuoro on valmis; jonotettava komento odottaa
   // varatun istunnon vapautumista.
   async function istuntoon(nimi, komento, toiminto) {
@@ -103,6 +113,16 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
     const [i] = omat;
     const ryhma = JONO_RYHMA[komento];
     if (ryhma) jono.delete(`${nimi}\n${ryhma}`);
+    if (i.tila === 'waiting' && komento === '/pakkaa' && kysymysAuki(i)) {
+      // Kuten viestin lähetys (viestit.mjs): Enter valitsisi korostetun vaihtoehdon, joten Escape ensin ja tauko,
+      // ettei Escape + kirjain tulkitu Alt-näppäimeksi.
+      await tarkistaRuutu(i);
+      const t = await aja('tmux', ['send-keys', '-t', i.ruutu, 'Escape']);
+      if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
+      await new Promise((r) => setTimeout(r, asetukset.escapeTauko ?? 800));
+      await kirjoita(i, komento);
+      return { istunto: i.id, komento, kysymysSuljettiin: true };
+    }
     if (i.tila !== 'idle') {
       if (!ryhma) throw new Hylatty(409, `istunto on varattu (${i.tila ?? 'tila tuntematon'}); yritä vuoron jälkeen`);
       jono.set(`${nimi}\n${ryhma}`, { nimi, istunto: i.id, komento, toiminto, aika: Date.now() });
