@@ -82,7 +82,7 @@ struct Sivupalkki: View, Equatable {
                     ForEach(kohteet) { k in
                         Button { valitse(k) } label: { rivi(k).contentShape(Rectangle()) }
                             .buttonStyle(.plain)
-                            .listRowBackground(valittu(k) ? Color.accentColor.opacity(0.15) : nil)
+                            .listRowBackground(valittu(k) ? Teema.korostusTausta : nil)
                             .accessibilityIdentifier(k.id)
                     }
                 }
@@ -132,8 +132,8 @@ struct Sivupalkki: View, Equatable {
             ForEach(Suodatin.allCases, id: \.self) { s in
                 Button { suodatin = s } label: {
                     Text(s.rawValue).font(.body.weight(.semibold)).padding(.horizontal, 20).padding(.vertical, 8)
-                        .foregroundStyle(suodatin == s ? Color.white : Color.primary)
-                        .background(suodatin == s ? Color.claude : Color(.systemGray5), in: Capsule())
+                        .foregroundStyle(suodatin == s ? Teema.korostusPaalla : Color.primary)
+                        .background(suodatin == s ? Teema.korostus : Teema.passiivinen, in: Capsule())
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -198,13 +198,13 @@ private struct KansioIkoni: View {
     var body: some View {
         switch tila {
         case "kasittely":
-            Image(systemName: "folder.fill").foregroundStyle(Color.claude)
+            Image(systemName: "folder.fill").foregroundStyle(Teema.kansio)
                 .phaseAnimator([false, true]) { ikoni, hehku in
-                    ikoni.shadow(color: Color.claude.opacity(hehku ? 0.95 : 0.25), radius: hehku ? 7 : 2)
+                    ikoni.shadow(color: Teema.kansio.opacity(hehku ? 0.95 : 0.25), radius: hehku ? 7 : 2)
                 } animation: { _ in .easeInOut(duration: 0.9) }
                 .accessibilityLabel("käsittelyssä")
         case "odottaa":
-            Image(systemName: "folder.fill").foregroundStyle(.yellow).accessibilityLabel("odottaa vastausta")
+            Image(systemName: "folder.fill").foregroundStyle(Teema.odottaa).accessibilityLabel("odottaa vastausta")
         default:
             Image(systemName: "folder").foregroundStyle(Color(.systemGray)).accessibilityLabel("pakattu")
         }

@@ -24,8 +24,10 @@ enum Teema {
     static let pinta = Color(.secondarySystemBackground)
     /// Valitsematon pilleri, estetty nappi.
     static let passiivinen = Color(.systemGray5)
-    /// Skoopin kansio. Auki oleva skooppi merkitään hehkulla, ei eri värillä.
+    /// Käsittelyssä olevan skoopin kansio (hehkuu); pakattu on harmaa ääriviiva.
     static let kansio = korostus
+    /// Skoopin istunto odottaa käyttäjän vastausta.
+    static let odottaa = Color.yellow
 
     // MARK: Välistys — 4 pt:n askel.
 

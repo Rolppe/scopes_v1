@@ -64,7 +64,7 @@ struct InfraRivi: View {
                         Text("\(lapset.count)").font(.caption2.monospacedDigit())
                     }
                     .frame(width: 36, height: 44)
-                    .background(Color.accentColor.opacity(auki ? 0.22 : 0.12), in: RoundedRectangle(cornerRadius: 8))
+                    .background(Teema.korostus.opacity(auki ? 0.22 : 0.12), in: RoundedRectangle(cornerRadius: Teema.Kulma.pieni))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)

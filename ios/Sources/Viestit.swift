@@ -35,8 +35,8 @@ struct Viestikupla: View {
             Text(LocalizedStringKey(viesti.teksti))
                 .textSelection(.enabled)
                 .padding(10)
-                .background(viesti.omaViesti ? Color.accentColor.opacity(0.18) : Color(.secondarySystemBackground),
-                            in: RoundedRectangle(cornerRadius: 14))
+                .background(viesti.omaViesti ? Teema.korostusTausta : Teema.pinta,
+                            in: RoundedRectangle(cornerRadius: Teema.Kulma.kortti))
             if !viesti.omaViesti { Spacer(minLength: 40) }
         }
     }
@@ -147,7 +147,7 @@ struct KysymysKortti: View {
             // Monivalinnan rivillä tyhjä ympyrä kertoo, että valintoja voi olla useita.
             if valittu || k.monivalinta {
                 Image(systemName: valittu ? "checkmark.circle.fill" : "circle").font(.title3)
-                    .foregroundStyle(valittu ? Color.claude : Color.secondary)
+                    .foregroundStyle(valittu ? Teema.korostus : Teema.toissijainen)
             }
         }
         .padding(.vertical, 18)
@@ -274,9 +274,9 @@ struct Syottorivi<Vasen: View>: View {
                 Button(action: laheta) {
                     Image(systemName: "arrow.up")
                         .font(.body.weight(.semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(estetty || tyhja ? Color.white : Teema.korostusPaalla)
                         .frame(width: 32, height: 32)
-                        .background(Circle().fill(estetty || tyhja ? Color(.systemGray3) : Color.claude))
+                        .background(Circle().fill(estetty || tyhja ? Color(.systemGray3) : Teema.korostus))
                 }
                 .disabled(estetty || tyhja)
                 .accessibilityIdentifier("\(tunnus)-laheta")
@@ -295,10 +295,6 @@ extension Syottorivi where Vasen == EmptyView {
     init(teksti: Binding<String>, estetty: Bool, tunnus: String, laheta: @escaping () -> Void) {
         self.init(teksti: teksti, estetty: estetty, tunnus: tunnus, laheta: laheta) { EmptyView() }
     }
-}
-
-extension Color {
-    static let claude = Color(red: 0.85, green: 0.47, blue: 0.34)
 }
 
 struct ChatView: View {
