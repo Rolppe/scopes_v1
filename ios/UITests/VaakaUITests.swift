@@ -14,10 +14,17 @@ final class VaakaUITests: XCTestCase {
         app.launchEnvironment["SCOPES_OSOITE"] = ymp["SCOPES_OSOITE"] ?? "http://192.0.2.11:8787"
         app.launchEnvironment["SCOPES_AVAIN"] = try XCTUnwrap(ymp["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
         app.launch()
-        XCUIDevice.shared.orientation = .landscapeLeft
+        // Lista avataan pystyssä ja käännetään auki ollessaan (käyttäjä 14.10.2026: sumea tausta venyi vääristyneeksi).
         let kaikki = app.buttons["suodatin-all"]
         XCTAssertTrue(kaikki.waitForExistence(timeout: 15), "lista ei auennut käynnistyksessä")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        XCTAssertTrue(app.buttons["chat-uusi"].waitForExistence(timeout: 5), "chat ei näkynyt")
         sleep(1)
+        app.buttons["sivupalkki"].firstMatch.tap()
+        sleep(1)
+        kuva("pysty-lista")
+        XCUIDevice.shared.orientation = .landscapeLeft
+        sleep(2)
         XCTAssertGreaterThan(app.windows.firstMatch.frame.width, app.windows.firstMatch.frame.height, "äppi ei kääntynyt vaakaan")
         kuva("vaaka-lista")
 
