@@ -268,6 +268,12 @@ struct ToimintoTulos: View {
                         .buttonStyle(.borderless).accessibilityIdentifier("toiminto-avaa-chat")
                 }
                 Link("Avaa istunto Claudessa", destination: url).buttonStyle(.borderless)
+            } else if tulos.tmux != nil {
+                Text("Istunto avattu paikallisella mallilla. Se näkyy vain tämän äpin chatissa.").accessibilityIdentifier("toiminto-tulos")
+                if let skooppi {
+                    Button("Avaa chat") { avattu(); navigaatio.avaaSkooppi(skooppi) }
+                        .buttonStyle(.borderless).accessibilityIdentifier("toiminto-avaa-chat")
+                }
             } else if let i = tulos.istunto, tulos.jonossa == true {
                 Text("Istunto \(i.prefix(8)) on varattu: \(tulos.komento ?? "komento") lähtee, kun se vapautuu.").accessibilityIdentifier("toiminto-tulos")
             } else if let i = tulos.istunto {

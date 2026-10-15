@@ -905,6 +905,12 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS 'siirtaja-sonnet'")).firstMatch.waitForExistence(timeout: 5), "agentti puuttuu purkajista")
         kuva("pura-purkajat")
         app.navigationBars.buttons.firstMatch.tap()
+        // Istunnon mallit: Claude aina, paikalliset (palvelin) ryhmänä, kun palvelu tavoittaa LM Studion (15.10.2026).
+        XCTAssertTrue(malli.waitForExistence(timeout: 5), "mallin valinta puuttuu paluun jälkeen")
+        malli.tap()
+        XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS 'Opus 5.5'")).firstMatch.waitForExistence(timeout: 5), "Claude-malli puuttuu istunnon malleista")
+        kuva("pura-mallit")
+        app.navigationBars.buttons.firstMatch.tap()
         app.buttons["pura-peru"].tap()
         XCTAssertTrue(app.staticTexts["pura-valinta-seuraus"].waitForNonExistence(timeout: 5), "peru ei sulkenut vahvistusta")
         XCTAssertFalse(app.staticTexts["toiminto-tulos"].exists, "peruutus ei saa avata istuntoa")

@@ -31,6 +31,9 @@ test('lista: oletus, Claude, agentti, agy ja paikalliset; agy välimuistissa', a
     'claude-cli:claude-haiku-5-5', 'claude-agent:siirtaja-sonnet', 'agy:gemini-3.8-flash-medium', 'agy:gpt-oss-120b-medium', 'paikallinen:qwen/qwen3.6-35b-a3b']);
   assert.equal(l.purkajat[0].kuvaus, 'Oletus (claude-cli claude-haiku-5-5)');
   assert.equal(l.oletusMalli, 'claude-opus-5-5');
+  // Paikalliset mallit myös istunnon malleiksi (15.10.2026: "Paikalliset mallit pitää saada myös keskustelun ajoon").
+  assert.deepEqual(l.mallit.map((m) => `${m.ryhma}:${m.nimi}`), ['Claude:claude-fable-5-1', 'Claude:claude-opus-5-5', 'Claude:claude-sonnet-5-5',
+    'Claude:claude-haiku-5-5', 'Paikalliset:palvelin/qwen/qwen3.6-35b-a3b']);
   await p.lista();
   assert.equal(kutsut.length, 1);
 });
@@ -47,6 +50,8 @@ test('tarkista: vain listan jäsenet, tyhjä = oletus', async () => {
   const hylkaa = (r) => assert.rejects(p.tarkista(r), (e) => e instanceof Hylatty && e.koodi === 400);
   await hylkaa({ purkaja: 'agy:gemini --rm' });
   await hylkaa({ purkaja: 'paikallinen:muu' });
+  assert.deepEqual(await p.tarkista({ malli: 'palvelin/qwen/qwen3.6-35b-a3b' }), { ajaja: null, malli: 'palvelin/qwen/qwen3.6-35b-a3b' });
+  await hylkaa({ malli: 'palvelin/muu' });
   await hylkaa({ malli: 'gpt-4' });
   await hylkaa({ malli: 5 });
 });
