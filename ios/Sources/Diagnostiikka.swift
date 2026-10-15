@@ -106,7 +106,8 @@ final class Diagnostiikka: NSObject, MXMetricManagerSubscriber {
             // Näkymän vaihto peruu pyynnön (URLError -999): ei vika eikä jumi.
             if virhe is CancellationError || (virhe as? URLError)?.code == .cancelled { return }
             let kesto = loppu - p.alku
-            guard kesto >= Self.HIDAS_S || virhe != nil || (koodi ?? 200) != 200 else { return }
+            // Uusinta kirjataan aina, jotta myös nopea onnistunut uusinta näkyy lokissa (V-487).
+            guard p.uusinta || kesto >= Self.HIDAS_S || virhe != nil || (koodi ?? 200) != 200 else { return }
             var t: [String: Any] = ["tyyppi": "pyynto", "polku": p.polku, "ms": Int(kesto * 1000)]
             if let koodi { t["koodi"] = koodi }
             if let reitti = p.reitti { t["reitti"] = reitti }
