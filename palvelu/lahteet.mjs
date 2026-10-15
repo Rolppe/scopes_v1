@@ -7,6 +7,7 @@
 //   projektit/<cwd, jossa / _ . → ->/<id>.jsonl   istunnon transkripti (konteksti ja /pura-argumentti)
 //   juuri/<rekisterit, HISTORIA, ARKISTO>, juuri/Infra/skills/keskustelun-siirto/references, juuri/claude/TYOTAVAT.md
 //                                             skoopin kontekstitiedostot (skoopinKonteksti)
+//   transkriptin liitteet ja viestit            istunnon ladatut osat tekstinä (istunnonLadatut, V-400)
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -381,6 +382,84 @@ export function kontekstinOsat(transkripti, mitattu) {
   return [...osat, { nimi: 'Työkalumääritykset ja ajattelu (jäännös)', tokenit: Math.max(0, mitattu - summa) }];
 }
 
+// Istunnon ladatut osat tekstinä (SCOPES-KONTEKSTI-LADATUT V-400, 15.10.2026, käyttäjä: "kaikki mitä skoopissa
+// ladataan muistiin pitää näkyä konteksti välilehdellä"): samat transkriptin lähteet kuin kontekstinOsat, mutta
+// ryhminä, joiden osat avautuvat tekstinä kuten tiedostojen osat. Muistutukset jaetaan alkuun (ennen agentin
+// ensimmäistä vastausta) ja kertyneisiin; osa per liitelaji. Purun runko on /pura-taidon teksti ja siirtäjän raportti
+// (aja-siirtaja.sh pura tai Agent-reitin "pura …"-ali-agentti). Tyhjät ryhmät jätetään pois.
+const LISTAN_NIMI = { skill_listing: 'Taitolista', agent_listing_delta: 'Agenttilista', deferred_tools_delta: 'Viivästetyt työkalut', mcp_instructions_delta: 'MCP-ohjeet' };
+const liitteenTeksti = (a) => (typeof a.text === 'string' ? a.text : typeof a.content === 'string' ? a.content
+  : typeof a.turnReminder === 'string' ? a.turnReminder : typeof a.style?.prompt === 'string' ? a.style.prompt : JSON.stringify(a, null, 1));
+const tekstina = (x) => (typeof x === 'string' ? x : Array.isArray(x) ? x.map(tekstina).filter(Boolean).join('\n\n') : '');
+const sisaltoTekstina = (c) => (typeof c === 'string' ? c : Array.isArray(c) ? c.map((o) => (o?.type === 'text' ? o.text : o?.type === 'image' ? '[kuva]' : '')).join('\n') : '');
+const purunKutsu = (o) => (o.name === 'Bash' && /(^|&&|;)\s*bash\s+\S*aja-siirtaja\.sh\s+pura\b/.test(o.input?.command ?? ''))
+  || (o.name === 'Agent' && /^pura\s/.test(o.input?.description ?? ''));
+
+export function istunnonLadatut(transkripti) {
+  const rivit = transkripti.split('\n');
+  const alku = rivit.findLastIndex((r) => r.includes('"compact_boundary"')) + 1;
+  let kehote = [];
+  let ohjeet = [];
+  const listat = [];
+  const taidot = [];
+  const muistutukset = { alku: new Map(), kertynyt: new Map() };
+  const purunKutsut = new Set();
+  let vastattu = false;
+  const muista = (lohko, otsikko, teksti) => {
+    if (!teksti) return;
+    const m = muistutukset[lohko];
+    m.set(otsikko, [...(m.get(otsikko) ?? []), teksti]);
+  };
+  rivit.forEach((rivi, n) => {
+    let j;
+    try { j = JSON.parse(rivi); } catch { return; }
+    if (j.isSidechain) return;
+    if (j.attachment?.type === 'prompt_snapshot') {
+      kehote = (Array.isArray(j.attachment.systemPrompt) ? j.attachment.systemPrompt : [j.attachment.systemPrompt])
+        .map(tekstina).filter((t) => t && !/^__[A-Z_]+__$/.test(t.trim()));
+      return;
+    }
+    if (n < alku) return;
+    const lohko = vastattu ? 'kertynyt' : 'alku';
+    const c = j.message?.content;
+    if (j.type === 'attachment') {
+      const a = j.attachment ?? {};
+      if (a.type === 'instructions') ohjeet = (a.files ?? []).map((f) => ({ otsikko: f.path ?? f.type ?? 'ohje', teksti: tekstina(f.content) }));
+      else if (LISTAT[a.type]) listat.push({ otsikko: LISTAN_NIMI[a.type], teksti: tekstina(LISTAT[a.type](a)) });
+      else if (!EI_MALLILLE.has(a.type)) muista(lohko, a.type, liitteenTeksti(a));
+    } else if (j.type === 'user') {
+      for (const o of typeof c === 'string' ? [{ type: 'text', text: c }] : Array.isArray(c) ? c : []) {
+        if (o?.type === 'tool_result' && purunKutsut.has(o.tool_use_id)) taidot.push({ otsikko: 'Purun raportti', teksti: sisaltoTekstina(o.content) });
+        if (o?.type !== 'text') continue;
+        const taito = j.isMeta && o.text.match(/^Base directory for this skill: \S*?([^/\s]+)\s/);
+        if (taito) taidot.push({ otsikko: `Taito ${taito[1]}`, teksti: o.text });
+        else if (/^\s*<command-(message|name)>/.test(o.text)) taidot.push({ otsikko: 'Komento', teksti: o.text });
+        else if (j.isCompactSummary) muista(lohko, 'Tiivistelmä', o.text);
+        else if (j.isMeta || JARJESTELMAN.test(o.text)) muista(lohko, 'Järjestelmäviestit', o.text);
+      }
+    } else if (j.type === 'assistant' && Array.isArray(c)) {
+      vastattu = true;
+      for (const o of c) if (o?.type === 'tool_use' && purunKutsu(o)) purunKutsut.add(o.id);
+    }
+  });
+  const ryhma = (laji, osat) => {
+    const o = osat.filter((x) => x.teksti).map((x) => ({ ...x, tokenit: tokeneiksi(x.teksti.length) }));
+    return o.length ? { laji, osat: o, tokenit: o.reduce((s, x) => s + x.tokenit, 0) } : null;
+  };
+  const muistutusOsat = (m) => [...m].map(([laji, tekstit]) => ({ otsikko: tekstit.length > 1 ? `${laji} ×${tekstit.length}` : laji, teksti: tekstit.join('\n\n') }));
+  const otsikoitu = (t) => t.trim().split('\n')[0].replace(/^#+\s*/, '').slice(0, 60);
+  return {
+    alku: [
+      ryhma('kehote', kehote.map((t) => ({ otsikko: otsikoitu(t), teksti: t }))),
+      ryhma('ohjeet', ohjeet),
+      ryhma('listat', listat),
+      ryhma('muistutukset-alku', muistutusOsat(muistutukset.alku)),
+      ryhma('purku', taidot),
+    ].filter(Boolean),
+    kertynyt: [ryhma('muistutukset-kertynyt', muistutusOsat(muistutukset.kertynyt))].filter(Boolean),
+  };
+}
+
 // Rekisterikatto (SCOPES-INFRA-REKISTERIT 14.10.2026) samalla mitalla kuin claude/siirto/tools/check-rekisteri.mjs,
 // jotta äpin täyttöaste ja pakkauksen portti täsmäävät: tavut ilman pakollisia lukuja (state/rekisteri-pakolliset.json,
 // otsikko tai otsikko + tarkenne); raja rekisterille 40 000 tai suurempi lähtötaso (state/rekisteri-katto.json), muulle
@@ -439,19 +518,28 @@ export function rekisterinOsat(polku, asetukset) {
 const EI_LADATA = new Set(['historia', 'arkisto']);
 export function skoopinKonteksti(nimi, { juuri, rekisterit, istunnot: skoopinIstunnot }) {
   const mitta = katto(juuri);
-  const ryhmat = kontekstiTiedostot(nimi, rekisterit, juuri).filter(({ laji }) => !EI_LADATA.has(laji)).map(({ laji, polku }) => {
+  const tiedostot = kontekstiTiedostot(nimi, rekisterit, juuri).filter(({ laji }) => !EI_LADATA.has(laji)).map(({ laji, polku }) => {
     const teksti = lueTeksti(juuri, polku);
     const osat = osiin(teksti);
     return { laji, polku, tokenit: osat.reduce((s, o) => s + o.tokenit, 0), ...mitta(laji, polku, teksti), osat };
   });
+  const transkriptit = skoopinIstunnot.map((i) => {
+    try { return readFileSync(i.polku, 'utf8'); } catch { return ''; /* uusi istunto ilman transkriptia */ }
+  });
+  // Ladatut osat (V-400) uusimmasta istunnosta latausjärjestyksessä: kehote, ohjeet, listat, alun muistutukset ja
+  // purku ennen tiedostoja, kertyneet muistutukset niiden jälkeen. Ilman elävää istuntoa vain tiedostot.
+  const uusin = skoopinIstunnot.reduce((p, i, n) => (p < 0 || (i.alkoi ?? 0) > (skoopinIstunnot[p].alkoi ?? 0) ? n : p), -1);
+  const ladatut = uusin < 0 ? { alku: [], kertynyt: [] } : istunnonLadatut(transkriptit[uusin]);
+  const lahde = uusin < 0 ? '' : `istunto ${skoopinIstunnot[uusin].nimi ?? skoopinIstunnot[uusin].id.slice(0, 8)}`;
+  // polku on äpissä ryhmän tunniste, joten laji mukaan: "istunto x/kehote".
+  const istunnosta = (r) => ({ ...r, polku: `${lahde}/${r.laji}` });
+  const ryhmat = [...ladatut.alku.map(istunnosta), ...tiedostot, ...ladatut.kertynyt.map(istunnosta)];
   return {
     tokenit: ryhmat.reduce((s, r) => s + r.tokenit, 0),
     ryhmat,
-    istunnot: skoopinIstunnot.map((i) => {
-      let transkripti = '';
-      try { transkripti = readFileSync(i.polku, 'utf8'); } catch { /* uusi istunto ilman transkriptia */ }
+    istunnot: skoopinIstunnot.map((i, n) => {
       const mitattu = i.konteksti?.tokenit ?? null;
-      return { id: i.id, nimi: i.nimi, mitattu, osat: kontekstinOsat(transkripti, mitattu) };
+      return { id: i.id, nimi: i.nimi, mitattu, osat: kontekstinOsat(transkriptit[n], mitattu) };
     }),
   };
 }

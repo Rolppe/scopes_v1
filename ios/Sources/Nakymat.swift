@@ -57,7 +57,7 @@ struct SkooppiNakymaView: View {
                         } label: {
                             VStack(alignment: .leading, spacing: Teema.Vali.s) {
                                 MerkkiRivi {
-                                    Text("Tiedostot ≈ \(tokenit(k.tokenit))").monospacedDigit()
+                                    Text("Ladattu ≈ \(tokenit(k.tokenit))").monospacedDigit()
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                     if let m = k.istunnot.compactMap(\.mitattu).max() { KontekstiMerkki(maara: m).foregroundStyle(.secondary) }
                                 }
@@ -470,8 +470,8 @@ func profiilinVanheneminen(_ bundle: Bundle = .main) -> Date? {
     return plist["ExpirationDate"] as? Date
 }
 
-// Skoopin konteksti (SCOPES-INFRA-KONTEKSTI 13.10.2026): tiedostot, jotka skoopin purku ja työ lataavat, otsikoittain
-// tokeniosuuksineen; napautus näyttää osan tekstin. Elävien istuntojen mitattu konteksti osa-alueittain. Jaa-painike
+// Skoopin konteksti (SCOPES-INFRA-KONTEKSTI 13.10.2026): tiedostot, jotka skoopin purku ja työ lataavat, ja uusimman
+// istunnon ladatut osat (V-400) otsikoittain tokeniosuuksineen; napautus näyttää osan tekstin. Elävien istuntojen mitattu konteksti osa-alueittain. Jaa-painike
 // antaa koko kontekstin yhtenä markdownina. Järjestys-valikko lajittelee tiedostot ja niiden osat koon mukaan
 // (SCOPES-INFRA-REKISTERIT 14.10.2026); värit seuraavat näkyvää järjestystä, jotta palkki ja rivit täsmäävät.
 struct KontekstiView: View {
@@ -494,9 +494,9 @@ struct KontekstiView: View {
                     OsuusRivi(nimi: r.x.nimi, alaotsikko: kattoRivi(r.x.polku, r.x.tavut, r.x.raja), maara: r.x.tokenit, kaikki: konteksti.tokenit, vari: osuusVari(v))
                 }
             } header: {
-                Text("Tiedostot ≈ \(tokenit(konteksti.tokenit))")
+                Text("Ladattu ≈ \(tokenit(konteksti.tokenit))")
             } footer: {
-                Text("Luvut ovat tokeneita. ≈ = arvioitu merkkimäärästä (≈ 1,8 merkkiä/token); \(Image(systemName: "brain")) = istunnon mitattu konteksti. Katon prosentti on sama mitta kuin pakkauksen rekisteritarkistuksessa.")
+                Text("Tiedostojen lisäksi uusimman istunnon ladatut osat latausjärjestyksessä (kehote, ohjeet, listat, muistutukset, purun runko). Luvut ovat tokeneita. ≈ = arvioitu merkkimäärästä (≈ 1,8 merkkiä/token); \(Image(systemName: "brain")) = istunnon mitattu konteksti. Katon prosentti on sama mitta kuin pakkauksen rekisteritarkistuksessa.")
             }
             ForEach(konteksti.istunnot) { i in
                 let kaikki = i.mitattu ?? i.osat.reduce(0) { $0 + $1.tokenit }
@@ -629,7 +629,7 @@ private let osuusVarit: [Color] = [.blue, .orange, .green, .purple, .pink, .teal
 func osuusVari(_ n: Int) -> Color { osuusVarit[n % osuusVarit.count] }
 
 // Kontekstin yksi sanasto (DESIGN-SKOOPPINAKYMA U9): istunnon mitattu konteksti on aina aivokuvake ja "N k" ilman
-// ≈-merkkiä; tiedostojen arvio on aina "Tiedostot ≈ N k". Sana "tokenia" vain selitteessä.
+// ≈-merkkiä; ladatun arvio (tiedostot ja istunnon ladatut osat, V-400) on aina "Ladattu ≈ N k". Sana "tokenia" vain selitteessä.
 struct KontekstiMerkki: View {
     let maara: Int
     var body: some View {

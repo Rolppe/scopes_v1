@@ -69,7 +69,8 @@ struct Jonorivi: Decodable, Hashable {
 }
 
 // Skoopin konteksti (SCOPES-INFRA-KONTEKSTI 13.10.2026, lahteet.mjs skoopinKonteksti): tiedostot otsikoittain
-// tokeniarvioineen ja elävien istuntojen konteksti osa-alueittain. Tiedostojen tokenit ovat arvioita merkkimäärästä;
+// tokeniarvioineen ja elävien istuntojen konteksti osa-alueittain. Ryhmiin kuuluvat myös uusimman istunnon ladatut
+// osat tekstinä (V-400: kehote, ohjeet, listat, muistutukset, purun runko); niiden polku on "istunto <nimi>/<laji>". Tiedostojen tokenit ovat arvioita merkkimäärästä;
 // istunnon `mitattu` on viimeisimmän vastauksen todellinen kontekstikoko.
 struct KontekstiOsa: Decodable, Hashable {
     let otsikko: String
@@ -96,6 +97,13 @@ func kontekstiLaji(_ laji: String) -> String {
     case "arkisto": "Arkisto"
     case "viite": "Siirron viitetiedosto"
     case "yhteinen": "Yhteiset ohjeet"
+    // Istunnon ladatut osat (SCOPES-KONTEKSTI-LADATUT V-400): lahteet.mjs istunnonLadatut.
+    case "kehote": "Järjestelmäkehote"
+    case "ohjeet": "CLAUDE.md ja muisti"
+    case "listat": "Taito-, agentti- ja työkalulistat"
+    case "muistutukset-alku": "Muistutukset alussa"
+    case "purku": "Purun runko"
+    case "muistutukset-kertynyt": "Muistutukset kertynyt"
     default: laji
     }
 }
@@ -143,7 +151,7 @@ struct SkoopinKonteksti: Decodable, Hashable {
 
     // Koko konteksti yhtenä markdownina jaettavaksi: ensin osuudet, sitten tiedostot kokonaan.
     func markdown(_ skooppi: String) -> String {
-        var r = ["# Skoopin \(skooppi) konteksti", "", "Tiedostot yhteensä ≈ \(tokenit) tokenia (arvio merkkimäärästä).", ""]
+        var r = ["# Skoopin \(skooppi) konteksti", "", "Ladattu yhteensä ≈ \(tokenit) tokenia (arvio merkkimäärästä).", ""]
         for g in ryhmat { r.append("- \(g.nimi) `\(g.polku)`: ≈ \(g.tokenit) tokenia (\(prosentti(g.tokenit, tokenit)))") }
         for i in istunnot {
             r += ["", "## Istunto \(i.nimi ?? String(i.id.prefix(8)))" + (i.mitattu.map { " — mitattu \($0) tokenia" } ?? ""), ""]

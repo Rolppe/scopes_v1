@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request } from 'node:http';
 import { createServer } from 'node:http';
-import { istunnonSkooppi, istunnot, jasennaSeuraava, katonTavut, konteksti, kontekstinOsat, kontekstiTiedostot, hereilla, lista, osiin, pakattu, projektiNimi, pysahdys, rekisterinOsat, rekisterit, seuraavaRivi, skooppiTila, taulukko, tokeneiksi, yksi } from './lahteet.mjs';
+import { istunnonSkooppi, istunnot, jasennaSeuraava, katonTavut, konteksti, kontekstinOsat, kontekstiTiedostot, hereilla, istunnonLadatut, lista, osiin, pakattu, projektiNimi, pysahdys, rekisterinOsat, rekisterit, seuraavaRivi, skooppiTila, taulukko, tokeneiksi, yksi } from './lahteet.mjs';
 import { avainKelpaa, kasittelija } from './palvelin.mjs';
 
 const REK = `# R
@@ -285,6 +285,36 @@ test('kontekstinOsat: osa-alueet tiivistyksestä alkaen, jäännös ja skaalaus 
   const pieni = kontekstinOsat(t, 50);
   assert.equal(pieni.at(-1).tokenit, 0);
   assert.ok(pieni.reduce((s, o) => s + o.tokenit, 0) <= 52);
+});
+
+test('istunnonLadatut: kehote, ohjeet, listat, purku ja muistutukset alussa/kertynyt tekstinä', () => {
+  const r = (o) => JSON.stringify(o);
+  const t = [
+    r({ type: 'attachment', attachment: { type: 'prompt_snapshot', systemPrompt: ['# Alku\nkehote', '__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__', 'toinen'] } }),
+    r({ type: 'user', message: { content: '<command-name>/pura</command-name>' } }),
+    r({ type: 'user', isMeta: true, message: { content: [{ type: 'text', text: 'Base directory for this skill: /h/.claude/skills/pura\n\nrunko' }] } }),
+    r({ type: 'attachment', attachment: { type: 'instructions', files: [{ path: '/p/CLAUDE.md', content: 'ohje' }, { path: '/m/MEMORY.md', content: 'muisti' }] } }),
+    r({ type: 'attachment', attachment: { type: 'skill_listing', content: 'taidot' } }),
+    r({ type: 'attachment', attachment: { type: 'date', date: '2026-10-15' } }),
+    r({ type: 'attachment', attachment: { type: 'credential_org', organizationUuid: 'x' } }),
+    r({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'u1', name: 'Bash', input: { command: 'bash claude/siirto/tools/aja-siirtaja.sh pura "a"' } }, { type: 'tool_use', id: 'u2', name: 'Bash', input: { command: "cat <<'E'\\nbash x/aja-siirtaja.sh pura a\\nE" } }] } }),
+    r({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'u1', content: 'SKOOPPI: a' }, { type: 'tool_result', tool_use_id: 'u2', content: 'x' }] } }),
+    r({ type: 'attachment', attachment: { type: 'total_tokens_reminder', text: '<total_tokens>1</total_tokens>' } }),
+    r({ type: 'attachment', attachment: { type: 'total_tokens_reminder', text: '<total_tokens>2</total_tokens>' } }),
+    r({ type: 'assistant', isSidechain: true, message: { content: [{ type: 'tool_use', id: 'u3', name: 'Agent', input: { description: 'pura a' } }] } }),
+  ].join('\n');
+  const l = istunnonLadatut(t);
+  const nakyma = (g) => g.map((x) => [x.laji, x.osat.map((o) => [o.otsikko, o.teksti])]);
+  assert.deepEqual(nakyma(l.alku), [
+    ['kehote', [['Alku', '# Alku\nkehote'], ['toinen', 'toinen']]],
+    ['ohjeet', [['/p/CLAUDE.md', 'ohje'], ['/m/MEMORY.md', 'muisti']]],
+    ['listat', [['Taitolista', 'taidot']]],
+    ['muistutukset-alku', [['date', JSON.stringify({ type: 'date', date: '2026-10-15' }, null, 1)]]],
+    ['purku', [['Komento', '<command-name>/pura</command-name>'], ['Taito pura', 'Base directory for this skill: /h/.claude/skills/pura\n\nrunko'], ['Purun raportti', 'SKOOPPI: a']]],
+  ]);
+  assert.deepEqual(nakyma(l.kertynyt), [['muistutukset-kertynyt', [['total_tokens_reminder ×2', '<total_tokens>1</total_tokens>\n\n<total_tokens>2</total_tokens>']]]]);
+  assert.equal(l.alku[0].tokenit, tokeneiksi(14) + tokeneiksi(6));
+  assert.deepEqual(istunnonLadatut(''), { alku: [], kertynyt: [] });
 });
 
 test('yksi: konteksti ryhmittäin ja istunnoittain', () => {
