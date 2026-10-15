@@ -7,6 +7,7 @@ import SwiftUI
 
 @main
 struct SkoopitApp: App {
+    @UIApplicationDelegateAdaptor(IlmoitusKaynnistys.self) private var kaynnistys
     @StateObject private var asetukset = Asetukset()
     @StateObject private var navigaatio = Navigaatio()
     @Environment(\.scenePhase) private var vaihe

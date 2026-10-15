@@ -114,8 +114,12 @@ final class Ilmoittaja: NSObject, UNUserNotificationCenterDelegate {
     // Info.plistin BGTaskSchedulerPermittedIdentifiers (project.yml).
     static let taustatunnus = "com.example.skoopit.paivitys"
 
-    // Napautetun ilmoituksen skooppi; App kytkee tämän navigaatioon.
-    var avaa: ((String) -> Void)?
+    // Napautetun ilmoituksen skooppi; App kytkee tämän navigaatioon. Kylmäkäynnistyksessä napautus tulee ennen
+    // juurinäkymän .taskia, joten skooppi odottaa kytkentää.
+    var avaa: ((String) -> Void)? {
+        didSet { if let avaa, let n = odottava { odottava = nil; avaa(n) } }
+    }
+    private var odottava: String?
     private var edellinen: [SkooppiYhteenveto]?
     private var silmukka: Task<Void, Never>?
     private var tausta = UIBackgroundTaskIdentifier.invalid
@@ -234,9 +238,22 @@ final class Ilmoittaja: NSObject, UNUserNotificationCenterDelegate {
                                             withCompletionHandler valmis: @escaping () -> Void) {
         let nimi = response.notification.request.content.userInfo["skooppi"] as? String
         DispatchQueue.main.async {
-            MainActor.assumeIsolated { if let nimi { self.avaa?(nimi) } }
+            MainActor.assumeIsolated {
+                guard let nimi else { return }
+                if let avaa = self.avaa { avaa(nimi) } else { self.odottava = nimi }
+            }
             valmis()
         }
+    }
+}
+
+// Delegaatti ennen käynnistyksen loppua: iOS toimittaa kylmäkäynnistävän napautuksen vain silloin asetetulle
+// delegaatille, ja juurinäkymän .task ajetaan vasta ensimmäisen piirron jälkeen.
+final class IlmoitusKaynnistys: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        UNUserNotificationCenter.current().delegate = Ilmoittaja.jaettu
+        return true
     }
 }
 
