@@ -1,8 +1,11 @@
 package tunneli
 
 import (
+	"fmt"
+	"net"
 	"strings"
 	"testing"
+	"time"
 )
 
 const avain = "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=" // 32 × 'a'
@@ -45,5 +48,50 @@ func TestJasennaPuuttuva(t *testing.T) {
 func TestRatkaiseIP(t *testing.T) {
 	if o, err := ratkaise("192.0.2.1:51820"); err != nil || o != "192.0.2.1:51820" {
 		t.Fatalf("%q %v", o, err)
+	}
+}
+
+// V-487: iOS ottaa jäädytetyn äpin kuuntelevan pistokkeen takaisin. Kaynnista ja Paivita avaavat portin uudelleen.
+func TestKuollutPorttiAvataanUudelleen(t *testing.T) {
+	asetus := "[Interface]\nPrivateKey = " + avain + "\nAddress = 192.0.2.30/32\n[Peer]\nPublicKey = " + avain +
+		"\nEndpoint = 192.0.2.1:51820\nAllowedIPs = 192.0.2.31/32\n"
+	defer Pysayta()
+	vastaa := func(portti int) bool {
+		c, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", portti), time.Second)
+		if err == nil {
+			c.Close()
+		}
+		return err == nil
+	}
+	tapa := func() {
+		lukko.Lock()
+		k := nyt.kuuntelija
+		lukko.Unlock()
+		k.Close()
+		for i := 0; i < 100 && !nyt.kuollut.Load(); i++ {
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	p1, err := Kaynnista(asetus, "192.0.2.31:8787")
+	if err != nil || !vastaa(p1) {
+		t.Fatalf("käynnistys: %d %v", p1, err)
+	}
+	tapa()
+	if vastaa(p1) {
+		t.Fatal("suljettu portti vastasi yhä")
+	}
+	p2, err := Kaynnista(asetus, "192.0.2.31:8787")
+	if err != nil || !vastaa(p2) {
+		t.Fatalf("Kaynnista ei avannut kuollutta porttia: %d %v", p2, err)
+	}
+	if p2 != p1 {
+		t.Errorf("portti vaihtui %d → %d", p1, p2)
+	}
+	tapa()
+	if err := Paivita(); err != nil {
+		t.Fatal(err)
+	}
+	if !vastaa(p2) {
+		t.Fatal("Paivita ei avannut kuollutta porttia")
 	}
 }
