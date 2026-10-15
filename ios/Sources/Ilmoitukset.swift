@@ -228,9 +228,15 @@ final class Ilmoittaja: NSObject, UNUserNotificationCenterDelegate {
         [.banner, .list, .sound]
     }
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        guard let nimi = response.notification.request.content.userInfo["skooppi"] as? String else { return }
-        await MainActor.run { avaa?(nimi) }
+    // Paluukäsittelijä kutsutaan pääsäikeellä: async-muodossa iOS kutsui sen yhteistyösäikeeltä, ja UIKitin
+    // tilannekuvan päivitys kaatoi äpin napautukseen (SIGABRT NSAssertionHandler, käyttäjän testi 15.10.2026).
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                            withCompletionHandler valmis: @escaping () -> Void) {
+        let nimi = response.notification.request.content.userInfo["skooppi"] as? String
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated { if let nimi { self.avaa?(nimi) } }
+            valmis()
+        }
     }
 }
 
