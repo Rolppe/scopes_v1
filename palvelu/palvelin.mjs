@@ -16,7 +16,8 @@
 //            varatulle istunnolle jonoon → { istunto, komento, jonossa: true }; GET-näkymän jonossa: [{ komento, aika }]
 //   GET /api/asetukset                Automaattijatko- ja Autopack-kytkimet { automaattijatko, autopack } (toiminnot-asetukset.mjs)
 //   POST /api/asetukset/<automaattijatko|autopack>/<paalle|pois>   kytkimen asetus → samat kaksi arvoa (käyttäjä 14.10.2026)
-//   POST /api/uusi  {"nimi": "…"}     uusi istunto, ensimmäinen viesti /pura uusi <nimi> → { osoite }
+//   POST /api/uusi  {"nimi", "purkaja"?, "malli"?}   uusi istunto, ensimmäinen viesti /pura uusi <nimi> [--ajaja=…] → { osoite }
+//   POST /api/skoopit/<nimi>/arkistoi   skoopin arkistointi ja commit (arkistoi-skooppi.mjs) → { commit, polut }
 //   GET /api/kayttoraja               Clauden 5 h ja viikkoraja { viisiTuntia, viikko: { kaytto %, nollautuu } | null } (kayttoraja.mjs)
 //   GET /api/agentit                  chatin mallit: Claude ja palvelimen LM Studio (DEMO-SCOPES-UI)
 //   POST /api/chat {"agentti","viesti","keskustelu"?}   agentin vastaus → { vastaus, keskustelu }
@@ -200,7 +201,7 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         if (polku === '/api/android/liite') return vastaa(200, await android.liita((await liitteet('android', url.searchParams.get('nimi'), req)).polku, url.searchParams.get('teksti')));
         const an = polku.match(/^\/api\/android\/([a-z]+)$/);
         if (an) return vastaa(200, await android.suorita(an[1], await runko(req, 32_768)));
-        if (polku === '/api/uusi') return vastaa(200, await suorita('uusi', (await runko(req)).nimi));
+        if (polku === '/api/uusi') { const r = await runko(req); return vastaa(200, await suorita('uusi', r.nimi, await purkajat.tarkista(r))); }
         if (polku === '/api/chat') return vastaa(200, await viestit.chat(await runko(req, 32_768)));
         if (polku === '/api/chat/virta') return await virtaa(res, await runko(req, 32_768));
         // Stop-nappi (CHAT-STOP): chat-vastaus katkeaa ja valmis-rivi tuo osittaisen vastauksen; skoopin istunto saa Escapen.
@@ -220,7 +221,7 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         // Purun valinnat (SCOPES-PURA-MALLI): runko {purkaja?, malli?} tarkistetaan purkajat.mjs:n listaa vasten; tyhjä = oletus.
         const pu = polku.match(/^\/api\/skoopit\/([^/]+)\/pura$/);
         if (pu) return vastaa(200, await suorita('pura', decodeURIComponent(pu[1]), await purkajat.tarkista(await runko(req))));
-        const t = polku.match(/^\/api\/skoopit\/([^/]+)\/(pura-testi|pakkaa|automaattisiirto|herata|herata-pois)$/);
+        const t = polku.match(/^\/api\/skoopit\/([^/]+)\/(pura-testi|pakkaa|automaattisiirto|herata|herata-pois|arkistoi)$/);
         if (t) return vastaa(200, await suorita(t[2], decodeURIComponent(t[1])));
         return vastaa(404, { virhe: 'tuntematon toiminto' });
       }

@@ -294,6 +294,11 @@ struct UusiSkooppiView: View {
     @State private var virhe: String?
     // Olemassa olevat nimet tarkistetaan äpissä ennen lähetystä (DESIGN-UX-A U4); palvelu tarkistaa ne silti.
     @State private var varatut: Set<String> = []
+    // Samat valinnat kuin purussa (SCOPES-LISTA-UUSI-VALINNAT), sama muisti.
+    @State private var valinnat: PurkuValinnat?
+    @State private var latausVirhe: String?
+    @AppStorage("pura.purkaja") private var purkaja = ""
+    @AppStorage("pura.malli") private var malli = ""
 
     private var varattu: Bool { varatut.contains(nimi) }
 
@@ -312,6 +317,7 @@ struct UusiSkooppiView: View {
                         Text("1–4 sanaa: pienet kirjaimet a–z, numerot ja viivat. Palvelin avaa skoopille uuden istunnon.")
                     }
                 }
+                PurkuValitsimet(valinnat: $valinnat, latausVirhe: $latausVirhe, purkaja: $purkaja, malli: $malli)
                 Section {
                     Button("Luo skooppi") { vahvista = true }
                         .disabled(!kelpaaUudeksi(nimi) || varattu || kaynnissa)
@@ -335,7 +341,8 @@ struct UusiSkooppiView: View {
         tulos = nil
         virhe = nil
         do {
-            tulos = try await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).uusi(nimi)
+            tulos = try await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain)
+                .uusi(nimi, valinta: PuraValinta(purkaja: purkaja.isEmpty ? nil : purkaja, malli: malli.isEmpty ? nil : malli))
         } catch {
             virhe = error.localizedDescription
         }

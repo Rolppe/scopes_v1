@@ -37,12 +37,48 @@ struct PuraValintaView: View {
     let skooppi: String
     let pura: (PuraValinta) -> Void
     @Environment(\.dismiss) private var sulje
-    @EnvironmentObject private var asetukset: Asetukset
     @State private var valinnat: PurkuValinnat?
     @State private var latausVirhe: String?
     // Viimeisin valinta muistetaan (per laite); listalta kadonnut (esim. palvelin pois) palaa oletukseen.
     @AppStorage("pura.purkaja") private var purkaja = ""
     @AppStorage("pura.malli") private var malli = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text("Uusi Claude-istunto käynnistyy ja lukee skoopin tilanteen rekisteristä.")
+                        .accessibilityIdentifier("pura-valinta-seuraus")
+                }
+                PurkuValitsimet(valinnat: $valinnat, latausVirhe: $latausVirhe, purkaja: $purkaja, malli: $malli)
+            }
+            .navigationTitle("Pura: \(skooppi)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Peru") { sulje() }.accessibilityIdentifier("pura-peru")
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Pura") {
+                        pura(PuraValinta(purkaja: purkaja.isEmpty ? nil : purkaja, malli: malli.isEmpty ? nil : malli))
+                        sulje()
+                    }
+                    .disabled(valinnat == nil && latausVirhe == nil)
+                    .accessibilityIdentifier("vahvista")
+                }
+            }
+        }
+    }
+}
+
+// Purkajan ja istunnon mallin valitsimet; sama osio purun vahvistuksessa ja uudessa skoopissa (SCOPES-LISTA-UUSI-VALINNAT
+// 15.10.2026, käyttäjä: "uuden skoopin aloitus pitää antaa samat valinnat"). Lataa valinnat palvelulta itse.
+struct PurkuValitsimet: View {
+    @Binding var valinnat: PurkuValinnat?
+    @Binding var latausVirhe: String?
+    @Binding var purkaja: String
+    @Binding var malli: String
+    @EnvironmentObject private var asetukset: Asetukset
 
     private var ryhmat: [(String, [PurkajaVaihtoehto])] {
         let p = (valinnat?.purkajat ?? []).filter { $0.ryhma != "oletus" }
@@ -66,59 +102,36 @@ struct PuraValintaView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    Text("Uusi Claude-istunto käynnistyy ja lukee skoopin tilanteen rekisteristä.")
-                        .accessibilityIdentifier("pura-valinta-seuraus")
-                }
-                Section {
-                    Picker("Purkaja", selection: $purkaja) {
-                        Text(oletusPurkaja).tag("")
-                        ForEach(ryhmat, id: \.0) { r in
-                            Section(r.0) { ForEach(r.1, id: \.tunnus) { Text($0.kuvaus).tag($0.tunnus) } }
-                        }
-                    }
-                    .pickerStyle(.navigationLink)
-                    .accessibilityIdentifier("pura-purkaja")
-                } header: { Text("Purkaja") } footer: {
-                    Text(latausVirhe.map { "Valintoja ei saatu palvelulta (\($0)): käytössä oletus." }
-                         ?? "Lukee rekisterit ja kirjoittaa purkuraportin. agy ja paikalliset mallit näkyvät, kun ne ovat saatavilla.")
-                        .accessibilityIdentifier("pura-purkaja-selite")
-                }
-                Section {
-                    Picker("Istunnon malli", selection: $malli) {
-                        Text(oletusMalli).tag("")
-                        ForEach(malliRyhmat, id: \.0) { r in
-                            Section(r.0) { ForEach(r.1, id: \.nimi) { Text($0.kuvaus).tag($0.nimi) } }
-                        }
-                    }
-                    .pickerStyle(.navigationLink)
-                    .accessibilityIdentifier("pura-malli")
-                } header: { Text("Istunto") } footer: {
-                    Text(paikallinenValittu
-                         ? "Paikallinen malli ajaa Claude Code -istuntoa palvelimella. Istunto näkyy vain tämän äpin chatissa, ei Claudessa, ja vastaukset ovat hitaita."
-                         : "Malli, joka tekee työn purun jälkeen. Istunto on Claude Code; paikalliset mallit näkyvät, kun palvelin on päällä.")
-                        .accessibilityIdentifier("pura-malli-selite")
+        Section {
+            Picker("Purkaja", selection: $purkaja) {
+                Text(oletusPurkaja).tag("")
+                ForEach(ryhmat, id: \.0) { r in
+                    Section(r.0) { ForEach(r.1, id: \.tunnus) { Text($0.kuvaus).tag($0.tunnus) } }
                 }
             }
-            .navigationTitle("Pura: \(skooppi)")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Peru") { sulje() }.accessibilityIdentifier("pura-peru")
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Pura") {
-                        pura(PuraValinta(purkaja: purkaja.isEmpty ? nil : purkaja, malli: malli.isEmpty ? nil : malli))
-                        sulje()
-                    }
-                    .disabled(valinnat == nil && latausVirhe == nil)
-                    .accessibilityIdentifier("vahvista")
-                }
-            }
-            .task { await lataa() }
+            .pickerStyle(.navigationLink)
+            .accessibilityIdentifier("pura-purkaja")
+        } header: { Text("Purkaja") } footer: {
+            Text(latausVirhe.map { "Valintoja ei saatu palvelulta (\($0)): käytössä oletus." }
+                 ?? "Lukee rekisterit ja kirjoittaa purkuraportin. agy ja paikalliset mallit näkyvät, kun ne ovat saatavilla.")
+                .accessibilityIdentifier("pura-purkaja-selite")
         }
+        Section {
+            Picker("Istunnon malli", selection: $malli) {
+                Text(oletusMalli).tag("")
+                ForEach(malliRyhmat, id: \.0) { r in
+                    Section(r.0) { ForEach(r.1, id: \.nimi) { Text($0.kuvaus).tag($0.nimi) } }
+                }
+            }
+            .pickerStyle(.navigationLink)
+            .accessibilityIdentifier("pura-malli")
+        } header: { Text("Istunto") } footer: {
+            Text(paikallinenValittu
+                 ? "Paikallinen malli ajaa Claude Code -istuntoa palvelimella. Istunto näkyy vain tämän äpin chatissa, ei Claudessa, ja vastaukset ovat hitaita."
+                 : "Malli, joka tekee työn purun jälkeen. Istunto on Claude Code; paikalliset mallit näkyvät, kun palvelin on päällä.")
+                .accessibilityIdentifier("pura-malli-selite")
+        }
+        .task { if valinnat == nil && latausVirhe == nil { await lataa() } }
     }
 
     private func lataa() async {

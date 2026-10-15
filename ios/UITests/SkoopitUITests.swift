@@ -843,6 +843,50 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["uusi-varattu"].waitForExistence(timeout: 15), "varattua nimeä ei tunnistettu")
         XCTAssertFalse(app.buttons["uusi-luo"].isEnabled, "varattu nimi ei saa olla lähetettävissä")
         kuva("uusi-varattu")
+        // Samat valinnat kuin purussa (SCOPES-LISTA-UUSI-VALINNAT): purkaja ja istunnon malli.
+        XCTAssertTrue(app.buttons["pura-purkaja"].waitForExistence(timeout: 15), "purkajan valinta puuttuu uudesta skoopista")
+        XCTAssertTrue(app.buttons["pura-malli"].exists, "istunnon mallin valinta puuttuu uudesta skoopista")
+        app.buttons["pura-purkaja"].tap()
+        XCTAssertTrue(app.navigationBars["Purkaja"].waitForExistence(timeout: 5), "purkajalista ei auennut")
+        kuva("uusi-purkajat")
+    }
+
+    // Skoopin arkistointi listasta (SCOPES-LISTA-POISTO): pito + veto vasemmalle paljastaa X:n, pelkkä veto ei; kosketus
+    // muualle palauttaa rivin. Ei vahvista: testi ajaa oikeaa palvelua vastaan, eikä skooppia arkistoida.
+    func testListaArkistointiVeto() throws {
+        let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        let app = kaynnista(avain: avain)
+        palkki(app)
+        app.buttons["suodatin-scope"].tap()
+        let rivi = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'skooppi-'")).element(boundBy: 1)
+        XCTAssertTrue(rivi.waitForExistence(timeout: 15), "skoopit puuttuvat palkista")
+        let nimi = String(rivi.identifier.dropFirst("skooppi-".count))
+        let x = app.buttons["arkistoi-\(nimi)"]
+        // Pelkkä nopea veto: ei X:ää, ja palkki pysyy auki tai sulkeutuu sivupalkin eleenä.
+        rivi.swipeLeft()
+        XCTAssertFalse(x.waitForExistence(timeout: 1), "veto ilman pitoa paljasti X:n")
+        palkki(app)
+        app.buttons["suodatin-scope"].tap()
+        XCTAssertTrue(rivi.waitForExistence(timeout: 10))
+        let alku = rivi.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.5))
+        alku.press(forDuration: 0.8, thenDragTo: alku.withOffset(CGVector(dx: -160, dy: 0)))
+        XCTAssertTrue(osuttava(x, true), "pito ja veto eivät paljastaneet X:ää")
+        XCTAssertTrue(osuttava(app.buttons["suodatin-all"], true, timeout: 1), "veto sulki sivupalkin")
+        kuva("arkistointi-x")
+        // Kosketus toiseen riviin palauttaa rivin eikä avaa kosketettua.
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'skooppi-'")).element(boundBy: 2).tap()
+        XCTAssertTrue(osuttava(x, false), "kosketus muualle ei palauttanut riviä")
+        XCTAssertTrue(osuttava(app.buttons["suodatin-all"], true, timeout: 1), "palauttava kosketus avasi skoopin")
+        // X kysyy varmistuksen; peruminen jättää skoopin listaan.
+        alku.press(forDuration: 0.8, thenDragTo: alku.withOffset(CGVector(dx: -160, dy: 0)))
+        XCTAssertTrue(osuttava(x, true))
+        x.tap()
+        XCTAssertTrue(app.buttons["vahvista-arkistointi"].waitForExistence(timeout: 5), "arkistointi ei kysynyt varmistusta")
+        kuva("arkistointi-varmistus")
+        let peru = app.buttons["Peruuta"].exists ? app.buttons["Peruuta"] : app.buttons["Cancel"]
+        if peru.exists { peru.tap() } else { app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap() }
+        XCTAssertTrue(app.buttons["vahvista-arkistointi"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(rivi.exists, "peruminen poisti skoopin listasta")
     }
 
     func testPakkaaIlmanIstuntoaLukittu() throws {

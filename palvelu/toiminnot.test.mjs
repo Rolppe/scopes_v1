@@ -220,6 +220,49 @@ test('uusi: tiukka nimi, ei olemassa olevaa', async () => {
   assert.ok(UUSI_NIMI.test('scopes ios mac a b c d e f g h i'));
 });
 
+test('uusi: purkaja /pura uusi -lippuna ja istunnon malli --modelina (SCOPES-LISTA-UUSI-VALINNAT)', async () => {
+  const a = ymparisto();
+  const v = vaarennos();
+  const r = await luoToiminnot(a, { aja: v.aja })('uusi', 'koe', { ajaja: 'agy', malli: 'claude-sonnet-5-5' });
+  assert.equal(r.purkaja, 'agy');
+  assert.deepEqual(v.kutsut, [['bash', join(a.juuri, 'claude/siirto/tools/autovaihto.sh'), 'vaihda', 'koe', '--ei-sulje', '--model', 'claude-sonnet-5-5',
+    '--viesti', '/pura uusi koe --ajaja=agy']]);
+});
+
+test('arkistoi: työkalu, commit vain sen poluista, install.sh; käynnissä oleva istunto estää (SCOPES-LISTA-POISTO)', async () => {
+  const a = ymparisto();
+  const kutsut = [];
+  const aja = async (komento, argumentit) => {
+    kutsut.push([komento, ...argumentit]);
+    if (komento === 'node') return { koodi: 0, stdout: 'KIRJOITETTU: S.md\nPOISTETTU: V.md\nSIIRRETTY: b/REKISTERI.md → b/REKISTERI.arkistoitu.md\nARKISTOITU: b — …\n', stderr: '' };
+    if (komento === 'git' && argumentit[0] === 'rev-parse') return { koodi: 0, stdout: 'abc1234\n', stderr: '' };
+    return { koodi: 0, stdout: '', stderr: '' };
+  };
+  const suorita = luoToiminnot(a, { aja });
+  const r = await suorita('arkistoi', 'b');
+  assert.equal(r.commit, 'abc1234');
+  const polut = ['S.md', 'V.md', 'b/REKISTERI.md', 'b/REKISTERI.arkistoitu.md'];
+  assert.deepEqual(r.polut, polut);
+  assert.deepEqual(kutsut, [
+    ['node', join(a.juuri, 'claude/siirto/tools/arkistoi-skooppi.mjs'), 'b'],
+    ['git', 'add', '-A', '--', ...polut],
+    ['git', 'commit', '-q', '-m', 'chore(siirto): arkistoi skooppi b (Scopes-äppi)', '--', ...polut],
+    ['git', 'rev-parse', '--short', 'HEAD'],
+    ['bash', join(a.juuri, 'Infra/skills/install.sh')],
+  ]);
+  await hylkaa(suorita('arkistoi', 'a'), 409);
+  await hylkaa(suorita('arkistoi', 'ei'), 404);
+  assert.equal(kutsut.length, 5);
+});
+
+test('arkistoi: työkalun hylkäys (alaskooppeja) → 409 eikä committia', async () => {
+  const a = ymparisto();
+  const kutsut = [];
+  const aja = async (komento, argumentit) => { kutsut.push(komento); return { koodi: 1, stdout: '', stderr: 'skoopilla "b" on alaskooppeja (b x): arkistoi ne ensin\n' }; };
+  await assert.rejects(luoToiminnot(a, { aja })('arkistoi', 'b'), (e) => e.koodi === 409 && /alaskooppeja/.test(e.message));
+  assert.deepEqual(kutsut, ['node']);
+});
+
 test('yksi toiminto kerrallaan; jokainen yritys lokiin', async () => {
   const a = ymparisto();
   let vapauta;
@@ -342,7 +385,11 @@ test('palvelin: POST-reitit vaativat avaimen ja ohjautuvat toimintoihin', async 
     assert.equal((await laheta('/api/skoopit/a/pura', '', avain, 'DELETE'))[0], 405);
     assert.equal((await laheta('/api/skoopit/a/pura', '{"malli":"claude-sonnet-5-5"}'))[0], 200);
     assert.deepEqual(await laheta('/api/skoopit/a/pura', '{"malli":"gpt-4"}'), [400, { virhe: 'tuntematon istunnon malli gpt-4' }]);
-    assert.deepEqual(kutsut, [['pura', 'a b'], ['pakkaa', 'a'], ['pura-testi', 'a'], ['herata-pois', 'a'], ['uusi', 'koe'], ['pura', 'x'], ['pura', 'a']]);
-    assert.deepEqual(valinnat, [{ ajaja: null, malli: null }, { ajaja: null, malli: null }, { ajaja: null, malli: 'claude-sonnet-5-5' }]);
+    assert.equal((await laheta('/api/skoopit/a/arkistoi'))[0], 200);
+    assert.equal((await laheta('/api/uusi', '{"nimi":"koe2","malli":"claude-sonnet-5-5"}'))[0], 200);
+    assert.deepEqual(kutsut, [['pura', 'a b'], ['pakkaa', 'a'], ['pura-testi', 'a'], ['herata-pois', 'a'], ['uusi', 'koe'], ['pura', 'x'], ['pura', 'a'],
+      ['arkistoi', 'a'], ['uusi', 'koe2']]);
+    assert.deepEqual(valinnat, [{ ajaja: null, malli: null }, { ajaja: null, malli: null }, { ajaja: null, malli: null }, { ajaja: null, malli: 'claude-sonnet-5-5' },
+      { ajaja: null, malli: 'claude-sonnet-5-5' }]);
   } finally { srv.close(); }
 });
