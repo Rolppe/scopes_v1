@@ -20,16 +20,19 @@ struct SkoopitApp: App {
                     .tekstikoko()
                     .task {
                         Ulkoasu.jaettu.kayta()
-                        Ilmoittaja.jaettu.avaa = { navigaatio.avaaSkooppi($0) }
-                        Ilmoittaja.jaettu.kaynnista(asetukset)
                         Diagnostiikka.jaettu.kaynnista(asetukset)
                         Lr.jaettu.kaynnista(asetukset)
+                    }
+                    // HA-ilmoituksen napautus (NOTIFICATIONS-HA-PUSH 15.10.2026): skoopit://skooppi/<nimi> avaa skoopin.
+                    .onOpenURL { url in
+                        guard url.scheme == "skoopit", url.host == "skooppi" else { return }
+                        let nimi = String(url.path.dropFirst())
+                        if !nimi.isEmpty { navigaatio.avaaSkooppi(nimi) }
                     }
             }
         }
         .onChange(of: vaihe) {
             if vaihe == .active { Task { await Reitti.jaettu.heraa() } }
-            Ilmoittaja.jaettu.vaihe(vaihe, asetukset)
             Lr.jaettu.vaihe(vaihe)
         }
     }
