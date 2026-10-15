@@ -327,6 +327,116 @@ final class LrUITests: XCTestCase {
         odota(app, tulos: "ei muutoksia|yhtenevä", 60)
     }
 
+    // PURASCRIPT-LR-TODENNUS: äpissä lisätty rivi päätyy testipurun tiedostoon, kun Testipurku painetaan heti tallennuksen
+    // jälkeen (Lr.synkkaaEnnen). Avaa oikean istunnon, joten vain nimetylle skoopille, jossa ei ole automaattivalintaa:
+    //   SCOPES_KOE_TESTIPURKU="scopes chat question" bash scopes/ios/testi.sh
+    // Purkutiedosto (~/.local/state/pura/<slug>.md) luetaan palvelimella testin jälkeen; koerivi poistetaan lopuksi.
+    func testLrTestipurkuNakeeMuokkauksen() throws {
+        guard let skooppi = ProcessInfo.processInfo.environment["SCOPES_KOE_TESTIPURKU"], !skooppi.isEmpty else {
+            throw XCTSkip("avaa istunnon: vain SCOPES_KOE_TESTIPURKU-skoopille")
+        }
+        let app = avaaLr()
+        let polku = skooppi.replacingOccurrences(of: " ", with: "/") + "/REKISTERI.md"
+        let lista = try XCTUnwrap(try pyynto("/api/lr/listat", ["rekisterit": [polku]])[polku] as? [String: Any])
+        let idt = (lista["yksikot"] as? [[String: Any]] ?? []).compactMap { $0["id"] as? String }
+        let yksikot = try XCTUnwrap(try pyynto("/api/lr/hae", ["rekisteri": polku, "idt": idt])["yksikot"] as? [[String: Any]])
+        let ehdokkaat = yksikot.filter {
+            ($0["sisalto"] as? String ?? "").hasSuffix("|\n\n") && $0["poistettu"] as? Bool == false
+                && ($0["rinnakkaiset"] as? [Any] ?? []).isEmpty
+        }
+        let ankkuri = try XCTUnwrap(ehdokkaat.first { $0["laji"] as? String == "avoin" }
+            ?? ehdokkaat.first { $0["laji"] as? String == "taulukko-otsake" && $0["osio"] as? String == "Avoimet asiat" },
+            "Avoimet asiat -taulukon viimeistä riviä ei löydy")
+        let id = try XCTUnwrap(ankkuri["id"] as? String)
+        let asia = "Koe testipurku \(Int(Date().timeIntervalSince1970))"
+        let uusiRivi = "| \(asia) | avoin | testi |"
+
+        let haku = app.searchFields["Hae rekistereistä"]
+        XCTAssertTrue(haku.waitForExistence(timeout: 5))
+        haku.tap()
+        haku.typeText(polku.replacingOccurrences(of: "scopes/", with: ""))
+        let rekisteri = app.buttons["lr-rekisteri-\(polku)"]
+        XCTAssertTrue(rekisteri.waitForExistence(timeout: 5), "rekisteriä ei löydy listasta")
+        rekisteri.tap()
+        let rivi = app.buttons["lr-yksikko-\(id)"]
+        for _ in 0..<15 where !(rivi.exists && rivi.isHittable) { app.swipeUp() }
+        XCTAssertTrue(rivi.isHittable, "riviä \(id) ei löydy")
+        rivi.press(forDuration: 1.2)
+        let tunnus = app.buttons["lr-lisaa-\(id)"]
+        let lisaa = tunnus.waitForExistence(timeout: 5) ? tunnus : app.buttons["Lisää alle"]
+        XCTAssertTrue(lisaa.waitForExistence(timeout: 2), "Lisää alle -valinta puuttuu rivin valikosta")
+        lisaa.tap()
+        let teksti = app.textViews["lr-teksti"]
+        XCTAssertTrue(teksti.waitForExistence(timeout: 5))
+        teksti.typeText(uusiRivi)
+        app.buttons["lr-tallenna"].tap()
+        let tallennettu = Date()
+
+        // Heti skoopin Tiedot-näkymään ja Testipurku; palvelun tilaa ei odoteta väliin.
+        app.navigationBars["REKISTERI.md"].buttons.element(boundBy: 0).tap()
+        let nuoli = app.buttons["sivupalkki"].firstMatch
+        XCTAssertTrue(nuoli.waitForExistence(timeout: 10), "sivupalkin nuoli puuttuu")
+        nuoli.tap()
+        let skoopit = app.searchFields["Hae chateista ja skoopeista"]
+        XCTAssertTrue(skoopit.waitForExistence(timeout: 5), "sivupalkin haku puuttuu")
+        if app.buttons["suodatin-all"].exists && !app.buttons["suodatin-all"].isSelected { app.buttons["suodatin-all"].tap() }
+        skoopit.tap()
+        skoopit.typeText(skooppi)
+        let skooppiRivi = app.buttons["skooppi-\(skooppi)"]
+        XCTAssertTrue(skooppiRivi.waitForExistence(timeout: 15), "haku ei löytänyt skooppia \(skooppi)")
+        skooppiRivi.tap()
+        XCTAssertTrue(app.buttons["tiedot"].waitForExistence(timeout: 15), "tiedot-välilehti puuttuu")
+        app.buttons["tiedot"].tap()
+        let testi = app.buttons["toiminto-pura-testi"]
+        XCTAssertTrue(testi.waitForExistence(timeout: 15), "testipurku-nappi puuttuu")
+        for _ in 0..<4 where !testi.isHittable { app.swipeUp() }
+        testi.tap()
+        XCTAssertTrue(app.buttons["vahvista"].waitForExistence(timeout: 5), "testipurun vahvistus puuttuu")
+        app.buttons["vahvista"].tap()
+        print("TESTIPURKU: vahvistettu \(String(format: "%.1f", Date().timeIntervalSince(tallennettu))) s tallennuksesta")
+        let tulos = app.staticTexts["toiminto-tulos"]
+        let virhe = app.staticTexts["toiminto-virhe"]
+        let loppu = Date().addingTimeInterval(240)
+        while !tulos.exists && !virhe.exists && Date() < loppu { sleep(2) }
+        kuva("testipurku-tulos")
+        XCTAssertFalse(virhe.exists, virhe.exists ? virhe.label : "")
+        XCTAssertTrue(tulos.exists, "testipurku ei avannut istuntoa 240 s:ssa")
+        print("TESTIPURKU: koerivi \(uusiRivi)")
+        let tuloste = try XCTUnwrap(try pyynto("/api/lr/teksti/" + polku, nil)["teksti"] as? String)
+        XCTAssertTrue(tuloste.components(separatedBy: "\n").contains(uusiRivi), "koerivi ei ole palvelun LR:ssä")
+
+        // Koerivi pois: Infra → paikallinen rekisteri → rivi → Poista rivi.
+        nuoli.tap()
+        let infra = app.buttons["sivupalkki-infra"]
+        XCTAssertTrue(infra.waitForExistence(timeout: 5))
+        infra.tap()
+        XCTAssertTrue(app.buttons["infra-lr"].waitForExistence(timeout: 15))
+        app.buttons["infra-lr"].tap()
+        if !app.navigationBars["REKISTERI.md"].exists {
+            XCTAssertTrue(haku.waitForExistence(timeout: 5))
+            haku.tap()
+            haku.typeText(polku.replacingOccurrences(of: "scopes/", with: ""))
+            XCTAssertTrue(rekisteri.waitForExistence(timeout: 5))
+            rekisteri.tap()
+        }
+        let uudet = (try XCTUnwrap(try pyynto("/api/lr/listat", ["rekisterit": [polku]])[polku] as? [String: Any])["yksikot"]
+            as? [[String: Any]] ?? []).compactMap { $0["id"] as? String }.filter { !idt.contains($0) }
+        XCTAssertEqual(uudet.count, 1, "uusia yksiköitä \(uudet)")
+        let uusiNappi = app.buttons["lr-yksikko-\(uudet[0])"]
+        for _ in 0..<15 where !(uusiNappi.exists && uusiNappi.isHittable) { app.swipeUp() }
+        XCTAssertTrue(uusiNappi.isHittable, "koeriviä \(uudet[0]) ei näy")
+        uusiNappi.tap()
+        XCTAssertTrue(app.buttons["lr-poista"].waitForExistence(timeout: 5))
+        app.buttons["lr-poista"].tap()
+        var poistettu = false
+        for _ in 0..<30 {
+            Thread.sleep(forTimeInterval: 2)
+            let y = (try pyynto("/api/lr/hae", ["rekisteri": polku, "idt": [uudet[0]]])["yksikot"] as? [[String: Any]])?.first
+            if y == nil || y?["poistettu"] as? Bool == true { poistettu = true; break }
+        }
+        XCTAssertTrue(poistettu, "koerivin poisto ei tullut palvelulle")
+    }
+
     private func avaaLr() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SCOPES_OSOITE"] = osoite
