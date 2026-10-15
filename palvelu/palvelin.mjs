@@ -11,7 +11,6 @@
 //            istunnon malli --model <malli> → { osoite }; tyhjä runko = oletukset (purkajat.mjs, SCOPES-PURA-MALLI).
 //            Scopes-perhe mallitta: pura-malliton.mjs + tiedostoviesti → { osoite, tiedosto, varoitus? }; purkaja ei koske (T6b)
 //   GET /api/purkajat                 purun valinnat { purkajat: [{ tunnus, kuvaus, ryhma }], mallit, oletusMalli }
-//   POST /api/skoopit/<nimi>/pura-testi   vanha testinapin reitti, sama kuin pura ilman runkoa (poistuu T6e)
 //   POST /api/skoopit/<nimi>/pakkaa   /pakkaa skoopin vapaaseen tmux-istuntoon → { istunto, komento }
 //   POST /api/skoopit/<nimi>/automaattisiirto | herata | herata-pois   samoin /automaattisiirto, /sa, /sa pois
 //            varatulle istunnolle jonoon → { istunto, komento, jonossa: true }; GET-näkymän jonossa: [{ komento, aika }]
@@ -222,7 +221,7 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         // Purun valinnat (SCOPES-PURA-MALLI): runko {purkaja?, malli?} tarkistetaan purkajat.mjs:n listaa vasten; tyhjä = oletus.
         const pu = polku.match(/^\/api\/skoopit\/([^/]+)\/pura$/);
         if (pu) return vastaa(200, await suorita('pura', decodeURIComponent(pu[1]), await purkajat.tarkista(await runko(req))));
-        const t = polku.match(/^\/api\/skoopit\/([^/]+)\/(pura-testi|pakkaa|automaattisiirto|herata|herata-pois|arkistoi)$/);
+        const t = polku.match(/^\/api\/skoopit\/([^/]+)\/(pakkaa|automaattisiirto|herata|herata-pois|arkistoi)$/);
         if (t) return vastaa(200, await suorita(t[2], decodeURIComponent(t[1])));
         return vastaa(404, { virhe: 'tuntematon toiminto' });
       }

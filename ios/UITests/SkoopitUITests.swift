@@ -1007,44 +1007,44 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertTrue(seuraava(app).waitForExistence(timeout: 15), "skoopin näkymä ei latautunut")
     }
 
-    // Testipurku (PURA-MALLITON T3): nappi vain scopes/-rekisterin skoopeille. Vahvistusdialogi avataan ja peruutetaan;
-    // vahvistusta ei paineta, koska se avaisi oikean istunnon tuotantopalvelussa.
-    func testTestipurkuNakyyVainScopesSkoopissa() throws {
+    // PURA-MALLITON T6E: scopes/-perheen skoopin Pura-arkissa ei ole purkajan valintaa (perhe puretaan skriptillä ilman mallia),
+    // mutta istunnon malli ja selite ovat. Vahvistusta ei paineta, koska se avaisi oikean istunnon tuotantopalvelussa.
+    func testPuraScopesSkoopissaEiPurkajaaMuttaMalli() throws {
         let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
         let app = kaynnista(avain: avain)
         tietoihin(app, "scopes lista")
-        let testi = app.buttons["toiminto-pura-testi"]
-        for _ in 0..<4 where !(testi.exists && testi.isHittable) { app.swipeUp() }
-        XCTAssertTrue(testi.waitForExistence(timeout: 5), "testipurku-nappi puuttuu scopes-skoopista")
-        XCTAssertEqual(testi.label, "Testipurku (malliton)")
-        XCTAssertLessThan(app.buttons["toiminto-pura"].frame.minY, testi.frame.minY, "testipurku ei ole Puran alla")
-        XCTAssertTrue(app.buttons["toiminto-pura"].exists)
-        kuva("testipurku-nappi")
-        testi.tap()
-        XCTAssertTrue(app.staticTexts["Avataanko skoopille testipurku?"].waitForExistence(timeout: 5), "vahvistuksen kysymys puuttuu")
-        XCTAssertTrue(app.staticTexts["Uusi Claude-istunto käynnistyy valmiista purkutiedostosta ilman siirtäjämallia (testi)."].exists, "seurauslause puuttuu")
+        let pura = app.buttons["toiminto-pura"]
+        for _ in 0..<4 where !(pura.exists && pura.isHittable) { app.swipeUp() }
+        XCTAssertTrue(pura.waitForExistence(timeout: 5), "Pura-nappi puuttuu")
+        pura.tap()
+        XCTAssertTrue(app.staticTexts["pura-valinta-seuraus"].waitForExistence(timeout: 5), "purun arkki puuttuu")
+        XCTAssertTrue(app.buttons["pura-malli"].waitForExistence(timeout: 15), "istunnon mallin valinta puuttuu scopes-skoopin arkista")
+        XCTAssertTrue(app.staticTexts["pura-malliton-selite"].exists, "mallittoman purun selite puuttuu")
+        XCTAssertEqual(app.staticTexts["pura-malliton-selite"].label, "Scopes-skooppi puretaan skriptillä ilman mallia.")
+        XCTAssertFalse(app.buttons["pura-purkaja"].exists, "purkajan valinta näkyy scopes-skoopin arkissa")
+        XCTAssertFalse(app.staticTexts["pura-purkaja-selite"].exists, "purkajan selite näkyy scopes-skoopin arkissa")
         XCTAssertTrue(app.buttons["vahvista"].exists)
-        kuva("testipurku-vahvistus")
-        // Peruutus: iPhonen action sheet antaa peruutuspainikkeen, popover sulkeutuu taustan napautuksesta.
-        let peru = app.buttons.matching(NSPredicate(format: "label IN {'Cancel', 'Peruuta', 'Peru'}")).firstMatch
-        let tausta = app.otherElements["PopoverDismissRegion"]
-        if peru.waitForExistence(timeout: 2) { peru.tap() }
-        else if tausta.exists { tausta.tap() }
-        else { app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)).tap() }
-        XCTAssertTrue(app.staticTexts["Avataanko skoopille testipurku?"].waitForNonExistence(timeout: 5), "peruutus ei sulkenut dialogia")
+        kuva("pura-scopes-arkki")
+        app.buttons["pura-peru"].tap()
+        XCTAssertTrue(app.staticTexts["pura-valinta-seuraus"].waitForNonExistence(timeout: 5), "peru ei sulkenut arkkia")
         XCTAssertFalse(app.staticTexts["toiminto-tulos"].exists, "peruutus ei saa avata istuntoa")
-        XCTAssertTrue(testi.exists, "nappi katosi peruutuksen jälkeen")
     }
 
-    func testTestipurkuPuuttuuMuustaSkoopista() throws {
+    func testPuraMuussaSkoopissaOnPurkaja() throws {
         let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
         let app = kaynnista(avain: avain)
         tietoihin(app, "claude demo tyokalut")
         let pura = app.buttons["toiminto-pura"]
         for _ in 0..<4 where !(pura.exists && pura.isHittable) { app.swipeUp() }
         XCTAssertTrue(pura.waitForExistence(timeout: 5), "Pura-nappi puuttuu")
-        XCTAssertFalse(app.buttons["toiminto-pura-testi"].exists, "testipurku-nappi näkyy muussa kuin scopes-skoopissa")
-        kuva("testipurku-puuttuu")
+        pura.tap()
+        XCTAssertTrue(app.staticTexts["pura-valinta-seuraus"].waitForExistence(timeout: 5), "purun arkki puuttuu")
+        XCTAssertTrue(app.buttons["pura-purkaja"].waitForExistence(timeout: 15), "purkajan valinta puuttuu muun skoopin arkista")
+        XCTAssertTrue(app.buttons["pura-malli"].exists, "istunnon mallin valinta puuttuu")
+        XCTAssertFalse(app.staticTexts["pura-malliton-selite"].exists, "mallittoman purun selite näkyy muun skoopin arkissa")
+        kuva("pura-muu-arkki")
+        app.buttons["pura-peru"].tap()
+        XCTAssertTrue(app.staticTexts["pura-valinta-seuraus"].waitForNonExistence(timeout: 5), "peru ei sulkenut arkkia")
     }
 
     // Kirjoittava koe (DEMO-SCOPES-PUHELIN): avaa oikean istunnon. Ajetaan vain, kun SCOPES_KOE_PURA nimeää koeskoopin.
