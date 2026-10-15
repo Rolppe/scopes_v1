@@ -9,14 +9,14 @@ import { Hylatty } from './toiminnot.mjs';
 
 const AGY = 'Fetching available models...\ngemini-3.8-flash-medium\tGemini 3.8 Flash (Medium)\ngpt-oss-120b-medium\tGPT-OSS 120B (Medium)\n';
 
-function purkajat({ agy = { koodi: 0, stdout: AGY, stderr: '' }, lms = [{ nimi: 'palvelin/qwen/qwen3.6-35b-a3b', kuvaus: 'Qwen3.6 35B A3B', tyyppi: 'paikallinen' }] } = {}) {
+function purkajat({ agy = { koodi: 0, stdout: AGY, stderr: '' }, lms = [{ nimi: 'palvelin/qwen/qwen3.6-35b-a3b', kuvaus: 'Qwen3.6 35B A3B', tyyppi: 'paikallinen' }], aja: ajaKorvaava, nyt } = {}) {
   const juuri = mkdtempSync(join(tmpdir(), 'purkajat-'));
   mkdirSync(join(juuri, 'claude/siirto'), { recursive: true });
   writeFileSync(join(juuri, 'claude/siirto/ajaja.json'), JSON.stringify({ pura: { moottori: 'claude-cli', malli: 'claude-haiku-5-5' } }));
   const kutsut = [];
-  const aja = async (k, a) => { kutsut.push([k, ...a]); return agy; };
+  const aja = async (k, a) => { kutsut.push([k, ...a]); return ajaKorvaava ? ajaKorvaava() : agy; };
   const paikalliset = async () => [{ nimi: 'claude-opus-5-5', kuvaus: 'Opus 5.5', tyyppi: 'malli' }, ...lms];
-  return { p: luoPurkajat({ juuri, paikalliset, aja }), kutsut };
+  return { p: luoPurkajat({ juuri, paikalliset, aja, ...(nyt && { nyt }) }), kutsut };
 }
 
 test('agyMallit: otsikkorivi pois, tunnus ja nimi talteen', () => {
@@ -36,6 +36,26 @@ test('lista: oletus, Claude, agentti, agy ja paikalliset; agy välimuistissa', a
     'Claude:claude-haiku-5-5', 'Paikalliset:palvelin/qwen/qwen3.6-35b-a3b']);
   await p.lista();
   assert.equal(kutsut.length, 1);
+});
+
+// Kylmä välimuisti ei saa odotuttaa listaa (käyttäjä 15.10.2026: "Näkyy mutta tuli viiveellä"; 14:05Z 6 538 ms).
+test('lista: vanhentunut agy-lista heti, päivitys taustalla yhtenä hakuna', async () => {
+  let aika = 0;
+  let vapauta;
+  let hidas = false;
+  const { p, kutsut } = purkajat({ nyt: () => aika,
+    aja: () => (hidas ? new Promise((r) => { vapauta = () => r({ koodi: 0, stdout: 'uusi-malli\tUusi\n', stderr: '' }); }) : { koodi: 0, stdout: AGY, stderr: '' }) });
+  assert.equal((await p.lista()).purkajat.filter((x) => x.ryhma === 'agy').length, 2);
+  aika = 11 * 60_000;
+  hidas = true;
+  const ennen = await p.lista();
+  await p.lista();
+  assert.equal(kutsut.length, 2);
+  assert.deepEqual(ennen.purkajat.filter((x) => x.ryhma === 'agy').map((x) => x.tunnus), ['agy:gemini-3.8-flash-medium', 'agy:gpt-oss-120b-medium']);
+  vapauta();
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual((await p.lista()).purkajat.filter((x) => x.ryhma === 'agy').map((x) => x.tunnus), ['agy:uusi-malli']);
+  assert.equal(kutsut.length, 2);
 });
 
 test('lista: agy ja palvelin pois → vain Claude', async () => {
