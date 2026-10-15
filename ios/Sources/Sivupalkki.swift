@@ -249,7 +249,8 @@ struct Sivupalkki: View, Equatable {
                 .accessibilityLabel("Arkistoi skooppi \(s.nimi)")
                 .accessibilityIdentifier("arkistoi-\(s.nimi)")
             }
-            Button { if !palautus() { valitse(k) } } label: { rivi(k).contentShape(Rectangle()) }
+            // Rivi täyttää leveyden, jotta X paljastuu listan oikeasta reunasta eikä rivin tekstin perästä (käyttäjä 15.10.2026).
+            Button { if !palautus() { valitse(k) } } label: { rivi(k).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle()) }
                 .buttonStyle(.plain)
                 .background {
                     if dx < 0 { ZStack { Color(.systemBackground); if valittu(k) { Teema.korostusTausta } } }
