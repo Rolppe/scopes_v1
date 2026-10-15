@@ -27,6 +27,7 @@ struct SkooppiNakymaView: View {
     @State private var nakyma: SkooppiNakyma?
     @State private var virhe: String?
     @State private var vahvista: Toiminto?
+    @State private var puraValinta = false
     @State private var kaynnissa: Toiminto?
     @State private var tulos: ToimintoVastaus?
     @State private var toimintoVirhe: String?
@@ -81,7 +82,8 @@ struct SkooppiNakymaView: View {
                 }
             }
             Section {
-                Button("Pura uuteen istuntoon") { vahvista = .pura }.accessibilityIdentifier("toiminto-pura")
+                // Purku avaa mallivalinnan vahvistuksen sijaan (SCOPES-PURA-MALLI, PuraValinta.swift).
+                Button("Pura uuteen istuntoon") { puraValinta = true }.accessibilityIdentifier("toiminto-pura")
                 // Mallivapaa testipurku (PURA-MALLITON T3): vain scopes/-rekisterin skoopeille, kuten palvelun raja
                 // (toiminnot.mjs 'pura-testi'); päärekisteri on skoopin rekisterilistan ensimmäinen.
                 if scopesSkooppi {
@@ -144,6 +146,9 @@ struct SkooppiNakymaView: View {
         } message: { t in
             Text(vahvistus(t).seuraus).accessibilityIdentifier("vahvista-seuraus")
         }
+        .sheet(isPresented: $puraValinta) {
+            PuraValintaView(skooppi: nimi) { v in Task { await aja(.pura, valinta: v) } }.environmentObject(asetukset)
+        }
     }
 
     // Vahvistus kertoo, mitä istunnolle tapahtuu, ei mikä komento lähtee (DESIGN-SKOOPPINAKYMA U6). /pakkaa kirjaa
@@ -196,12 +201,12 @@ struct SkooppiNakymaView: View {
         }
     }
 
-    private func aja(_ t: Toiminto) async {
+    private func aja(_ t: Toiminto, valinta: PuraValinta? = nil) async {
         kaynnissa = t
         tulos = nil
         toimintoVirhe = nil
         do {
-            tulos = try await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).toiminto(t, nimi)
+            tulos = try await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).toiminto(t, nimi, valinta: valinta)
             // Pakkaus ja purku laukaisevat rekisterisynkan (LOCALREGISTER V4).
             if t == .pakkaa || t == .pura || t == .puraTesti { Lr.jaettu.laukaise(.toiminto) }
             await lataa()

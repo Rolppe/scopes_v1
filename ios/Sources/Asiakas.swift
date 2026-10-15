@@ -49,9 +49,14 @@ struct Asiakas {
     func rekisterinOsat(_ polku: String) async throws -> RekisterinOsat { try await hae("/api/rekisterit/\(koodattu(polku))") }
 
     // Istunnon avaus odottaa Remote Controlia jopa 90 s, joten toiminnoilla on pidempi aikaraja.
-    func toiminto(_ toiminto: Toiminto, _ nimi: String) async throws -> ToimintoVastaus {
-        try await hae("/api/skoopit/\(koodattu(nimi))/\(toiminto.rawValue)", metodi: "POST", aikaraja: 150)
+    // Purun valinta (SCOPES-PURA-MALLI) kulkee runkona; ilman sitä palvelu käyttää oletuksia.
+    func toiminto(_ toiminto: Toiminto, _ nimi: String, valinta: PuraValinta? = nil) async throws -> ToimintoVastaus {
+        try await hae("/api/skoopit/\(koodattu(nimi))/\(toiminto.rawValue)", metodi: "POST",
+                      runko: try valinta.map { try JSONEncoder().encode($0) }, aikaraja: 150)
     }
+
+    // agy models ja palvelimen LM Studio voivat viedä sekunteja (agy välimuistissa 10 min).
+    func purkuValinnat() async throws -> PurkuValinnat { try await hae("/api/purkajat", aikaraja: 30) }
 
     // Rekisterisynkka (LOCALREGISTER-APPI, Lr.swift; palvelinpää scopes/localregister/palvelu.mjs). Ensimmäinen haku
     // tuo koko kaksoiskappaleen (~5 500 yksikköä), ja tiivistekysely voi odottaa palvelun uudelleentuontia: pidempi raja.
