@@ -741,6 +741,7 @@ struct SkooppiViestitView: View {
     @State private var teksti = ""
     @State private var lahettaa = false
     @State private var puretaan = false
+    @State private var puraValinta = false
     @State private var virhe: String?
     @State private var kayttoraja: Kayttoraja?
     @State private var liitteet: [Liite] = []
@@ -784,7 +785,8 @@ struct SkooppiViestitView: View {
                     VStack(spacing: Teema.Vali.l) {
                         Text(t.pakattu == true ? "Skooppi on pakattu." : "Skooppi ei ole auki.").font(.headline)
                             .accessibilityIdentifier(t.pakattu == true ? "pakattu" : "ei-auki")
-                        Button { Task { await pura() } } label: { Label("Pura", systemImage: "play.circle") }
+                        // Mallivalinta ennen purkua (SCOPES-PURA-MALLI, PuraValinta.swift).
+                        Button { puraValinta = true } label: { Label("Pura", systemImage: "play.circle") }
                             .buttonStyle(.borderedProminent)
                             .disabled(puretaan)
                             .accessibilityIdentifier("viestit-pura")
@@ -810,6 +812,9 @@ struct SkooppiViestitView: View {
                     .accessibilityIdentifier("tiedot")
             }
             .lasiKapseli()
+        }
+        .sheet(isPresented: $puraValinta) {
+            PuraValintaView(skooppi: nimi) { v in Task { await pura(v) } }.environmentObject(asetukset)
         }
         .task {
             // Käyttöraja minuutin välein: palvelu välimuistittaa, eikä rengas tarvitse tarkempaa.
@@ -880,11 +885,11 @@ struct SkooppiViestitView: View {
     }
 
     // Pura palaa, kun Remote Control -istunto on auki; istunto näkyy palvelulle pian sen jälkeen.
-    private func pura() async {
+    private func pura(_ valinta: PuraValinta) async {
         puretaan = true
         virhe = nil
         do {
-            _ = try await asiakas.toiminto(.pura, nimi)
+            _ = try await asiakas.toiminto(.pura, nimi, valinta: valinta)
             Lr.jaettu.laukaise(.toiminto)
             for _ in 0..<24 {
                 await lataa()

@@ -1,0 +1,119 @@
+import SwiftUI
+
+// Purun mallivalinta (SCOPES-PURA-MALLI 15.10.2026; käyttäjä: "varmistusviestin yhteydessä pitää olla malli valinta.
+// Tässä pitää olla myös agy ja paikalliset mallit saatavilla claude agenttien lisäksi"). Vahvistus on arkki, koska
+// confirmationDialog ei voi sisältää valitsimia. Purkaja ajaa purkuvaiheen (Claude, siirtaja-sonnet-agentti, agy tai
+// palvelimen paikallinen malli); istunnon malli on uuden Claude Code -istunnon malli. Lista tulee palvelulta
+// (GET /api/purkajat, scopes/palvelu/purkajat.mjs), joka hyväksyy vain omat tunnuksensa. Ilman listaa (vanha palvelu,
+// ei yhteyttä) tarjolla on vain oletus, ja Pura toimii kuten ennen.
+
+struct PurkajaVaihtoehto: Decodable, Hashable {
+    let tunnus: String
+    let kuvaus: String
+    let ryhma: String
+}
+
+struct IstunnonMalli: Decodable, Hashable {
+    let nimi: String
+    let kuvaus: String
+}
+
+struct PurkuValinnat: Decodable {
+    let purkajat: [PurkajaVaihtoehto]
+    let mallit: [IstunnonMalli]
+    let oletusMalli: String
+}
+
+// POST /api/skoopit/<nimi>/pura -runko; tyhjä tai puuttuva kenttä = palvelun oletus.
+struct PuraValinta: Encodable, Hashable {
+    var purkaja: String?
+    var malli: String?
+}
+
+struct PuraValintaView: View {
+    let skooppi: String
+    let pura: (PuraValinta) -> Void
+    @Environment(\.dismiss) private var sulje
+    @EnvironmentObject private var asetukset: Asetukset
+    @State private var valinnat: PurkuValinnat?
+    @State private var latausVirhe: String?
+    // Viimeisin valinta muistetaan (per laite); listalta kadonnut (esim. palvelin pois) palaa oletukseen.
+    @AppStorage("pura.purkaja") private var purkaja = ""
+    @AppStorage("pura.malli") private var malli = ""
+
+    private var ryhmat: [(String, [PurkajaVaihtoehto])] {
+        let p = (valinnat?.purkajat ?? []).filter { $0.ryhma != "oletus" }
+        return ["Claude", "agy", "Paikalliset"].compactMap { r in
+            let osat = p.filter { $0.ryhma == r }
+            return osat.isEmpty ? nil : (r, osat)
+        }
+    }
+    private var oletusPurkaja: String { valinnat?.purkajat.first { $0.ryhma == "oletus" }?.kuvaus ?? "Oletus" }
+    private var oletusMalli: String {
+        let m = valinnat.flatMap { v in v.mallit.first { $0.nimi == v.oletusMalli }?.kuvaus } ?? "palvelun oletus"
+        return "Oletus (\(m))"
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text("Uusi Claude-istunto käynnistyy ja lukee skoopin tilanteen rekisteristä.")
+                        .accessibilityIdentifier("pura-valinta-seuraus")
+                }
+                Section {
+                    Picker("Purkaja", selection: $purkaja) {
+                        Text(oletusPurkaja).tag("")
+                        ForEach(ryhmat, id: \.0) { r in
+                            Section(r.0) { ForEach(r.1, id: \.tunnus) { Text($0.kuvaus).tag($0.tunnus) } }
+                        }
+                    }
+                    .pickerStyle(.navigationLink)
+                    .accessibilityIdentifier("pura-purkaja")
+                } header: { Text("Purkaja") } footer: {
+                    Text(latausVirhe.map { "Valintoja ei saatu palvelulta (\($0)): käytössä oletus." }
+                         ?? "Lukee rekisterit ja kirjoittaa purkuraportin. agy ja paikalliset mallit näkyvät, kun ne ovat saatavilla.")
+                        .accessibilityIdentifier("pura-purkaja-selite")
+                }
+                Section {
+                    Picker("Istunnon malli", selection: $malli) {
+                        Text(oletusMalli).tag("")
+                        ForEach(valinnat?.mallit ?? [], id: \.nimi) { Text($0.kuvaus).tag($0.nimi) }
+                    }
+                    .accessibilityIdentifier("pura-malli")
+                } header: { Text("Istunto") } footer: {
+                    Text("Malli, joka tekee työn purun jälkeen. Istunto on aina Claude Code.")
+                }
+            }
+            .navigationTitle("Pura: \(skooppi)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Peru") { sulje() }.accessibilityIdentifier("pura-peru")
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Pura") {
+                        pura(PuraValinta(purkaja: purkaja.isEmpty ? nil : purkaja, malli: malli.isEmpty ? nil : malli))
+                        sulje()
+                    }
+                    .disabled(valinnat == nil && latausVirhe == nil)
+                    .accessibilityIdentifier("vahvista")
+                }
+            }
+            .task { await lataa() }
+        }
+    }
+
+    private func lataa() async {
+        do {
+            let v = try await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).purkuValinnat()
+            if !v.purkajat.contains(where: { $0.tunnus == purkaja }) { purkaja = "" }
+            if !v.mallit.contains(where: { $0.nimi == malli }) { malli = "" }
+            valinnat = v
+        } catch {
+            purkaja = ""
+            malli = ""
+            latausVirhe = error.localizedDescription
+        }
+    }
+}

@@ -1,0 +1,52 @@
+// node --test scopes/palvelu/purkajat.test.mjs
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { agyMallit, luoPurkajat } from './purkajat.mjs';
+import { Hylatty } from './toiminnot.mjs';
+
+const AGY = 'Fetching available models...\ngemini-3.8-flash-medium\tGemini 3.8 Flash (Medium)\ngpt-oss-120b-medium\tGPT-OSS 120B (Medium)\n';
+
+function purkajat({ agy = { koodi: 0, stdout: AGY, stderr: '' }, lms = [{ nimi: 'palvelin/qwen/qwen3.6-35b-a3b', kuvaus: 'Qwen3.6 35B A3B', tyyppi: 'paikallinen' }] } = {}) {
+  const juuri = mkdtempSync(join(tmpdir(), 'purkajat-'));
+  mkdirSync(join(juuri, 'claude/siirto'), { recursive: true });
+  writeFileSync(join(juuri, 'claude/siirto/ajaja.json'), JSON.stringify({ pura: { moottori: 'claude-cli', malli: 'claude-haiku-5-5' } }));
+  const kutsut = [];
+  const aja = async (k, a) => { kutsut.push([k, ...a]); return agy; };
+  const paikalliset = async () => [{ nimi: 'claude-opus-5-5', kuvaus: 'Opus 5.5', tyyppi: 'malli' }, ...lms];
+  return { p: luoPurkajat({ juuri, paikalliset, aja }), kutsut };
+}
+
+test('agyMallit: otsikkorivi pois, tunnus ja nimi talteen', () => {
+  assert.deepEqual(agyMallit(AGY), [{ id: 'gemini-3.8-flash-medium', nimi: 'Gemini 3.8 Flash (Medium)' }, { id: 'gpt-oss-120b-medium', nimi: 'GPT-OSS 120B (Medium)' }]);
+  assert.deepEqual(agyMallit('virhe; rm -rf /\tx\n'), []);
+});
+
+test('lista: oletus, Claude, agentti, agy ja paikalliset; agy välimuistissa', async () => {
+  const { p, kutsut } = purkajat();
+  const l = await p.lista();
+  assert.deepEqual(l.purkajat.map((x) => x.tunnus), ['', 'claude-cli:claude-fable-5-1', 'claude-cli:claude-opus-5-5', 'claude-cli:claude-sonnet-5-5',
+    'claude-cli:claude-haiku-5-5', 'claude-agent:siirtaja-sonnet', 'agy:gemini-3.8-flash-medium', 'agy:gpt-oss-120b-medium', 'paikallinen:qwen/qwen3.6-35b-a3b']);
+  assert.equal(l.purkajat[0].kuvaus, 'Oletus (claude-cli claude-haiku-5-5)');
+  assert.equal(l.oletusMalli, 'claude-opus-5-5');
+  await p.lista();
+  assert.equal(kutsut.length, 1);
+});
+
+test('lista: agy ja palvelin pois → vain Claude', async () => {
+  const { p } = purkajat({ agy: { koodi: 1, stdout: '', stderr: 'x' }, lms: [] });
+  assert.deepEqual([...new Set((await p.lista()).purkajat.map((x) => x.ryhma))], ['oletus', 'Claude']);
+});
+
+test('tarkista: vain listan jäsenet, tyhjä = oletus', async () => {
+  const { p } = purkajat();
+  assert.deepEqual(await p.tarkista({}), { ajaja: null, malli: null });
+  assert.deepEqual(await p.tarkista({ purkaja: 'agy:gemini-3.8-flash-medium', malli: 'claude-sonnet-5-5' }), { ajaja: 'agy:gemini-3.8-flash-medium', malli: 'claude-sonnet-5-5' });
+  const hylkaa = (r) => assert.rejects(p.tarkista(r), (e) => e instanceof Hylatty && e.koodi === 400);
+  await hylkaa({ purkaja: 'agy:gemini --rm' });
+  await hylkaa({ purkaja: 'paikallinen:muu' });
+  await hylkaa({ malli: 'gpt-4' });
+  await hylkaa({ malli: 5 });
+});

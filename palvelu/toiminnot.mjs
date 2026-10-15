@@ -1,7 +1,8 @@
 // Skooppien hallintatoiminnot puhelimesta (DEMO-SCOPES-HALLINTA 13.10.2026). Turvamalli (käyttäjä 13.10.2026,
 // "vain valmiit toiminnot"): palvelu ajaa vain nämä valmiit toiminnot, eikä puhelimelta tule komentoa,
 // lippua tai vapaata tekstiä mihinkään komentoriviin.
-//   pura   — olemassa olevalle skoopille uusi Remote Control -istunto tmuxiin, ensimmäinen viesti `/pura <skooppi>`;
+//   pura   — olemassa olevalle skoopille uusi Remote Control -istunto tmuxiin, ensimmäinen viesti `/pura <skooppi>`
+//            (+ `--ajaja=<purkaja>` ja autovaihdon `--model`, kun äppi valitsi ne purkajat.mjs:n listalta: SCOPES-PURA-MALLI);
 //            skoopin pakatut tmux-istunnot suljetaan ensin `/exit`illä (pakkaamaton istunto estää purun)
 //   pura-testi — kuten pura, mutta mallivapaa: pura-malliton.mjs kirjoittaa purkutiedoston ja uuden istunnon ensimmäinen
 //            viesti käskee lukemaan sen (vain scopes/-skoopeille; PURA-MALLITON, scopes context purascript, T2)
@@ -121,8 +122,8 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
     }
   }
 
-  async function avaaIstunto(skooppi, viesti) {
-    const t = await aja('bash', [autovaihto, 'vaihda', skooppi, '--ei-sulje', '--viesti', viesti]);
+  async function avaaIstunto(skooppi, viesti, malli = null) {
+    const t = await aja('bash', [autovaihto, 'vaihda', skooppi, '--ei-sulje', ...(malli ? ['--model', malli] : []), '--viesti', viesti]);
     const osoite = istuntoOsoite(t.stdout);
     if (t.koodi !== 0 || !osoite) {
       const syy = (t.stderr.trim().split('\n').filter(Boolean).pop() ?? `autovaihto exit ${t.koodi}`).slice(0, 300);
@@ -203,7 +204,8 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
   }
 
   const toteutus = {
-    async pura(nimi) {
+    // valinta = purkajat.mjs:n tarkistama { ajaja, malli } (SCOPES-PURA-MALLI); ajaja kulkee /pura-lippuna aja-siirtaja.sh:lle.
+    async pura(nimi, { ajaja = null, malli = null } = {}) {
       const skoopit = lueSkoopit(asetukset.juuri);
       if (!skoopit[nimi]) throw new Hylatty(404, 'tuntematon skooppi');
       const omat = skoopinIstunnot(nimi, skoopit);
@@ -216,7 +218,8 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
       const varattu = omat.find((i) => i.tila !== 'idle');
       if (varattu) throw new Hylatty(409, `pakattu istunto on vielä varattu (${varattu.tila ?? 'tila tuntematon'}); yritä vuoron jälkeen`);
       for (const i of suljettavat) { await tarkistaRuutu(i); await kirjoita(i, '/exit'); }
-      return { ...await avaaIstunto(nimi, `/pura ${nimi}`), suljettiin: suljettavat.map((i) => i.id) };
+      const tulos = await avaaIstunto(nimi, `/pura ${nimi}${ajaja ? ` --ajaja=${ajaja}` : ''}`, malli);
+      return { ...tulos, suljettiin: suljettavat.map((i) => i.id), ...(ajaja ? { purkaja: ajaja } : {}), ...(malli ? { malli } : {}) };
     },
     // Mallivapaa purku (PURA-MALLITON T2): samat estot kuin purussa, lisäksi vain scopes/-alkuisen rekisterin skoopit
     // (pura-malliton.mjs:n testiraja). Tiedosto kirjoitetaan ennen kuin mitään suljetaan, joten virhe ei jätä skooppia ilman istuntoa.
@@ -250,12 +253,12 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
     },
   };
 
-  async function suorita(toiminto, nimi) {
+  async function suorita(toiminto, nimi, valinta) {
     if (!Object.hasOwn(toteutus, toiminto)) throw new Hylatty(404, 'tuntematon toiminto');
     if (kaynnissa) { kirjaa({ toiminto, nimi, tulos: 'hylätty', syy: 'toinen toiminto käynnissä' }); throw new Hylatty(429, `toinen toiminto on käynnissä (${kaynnissa})`); }
     kaynnissa = toiminto;
     try {
-      const tulos = await toteutus[toiminto](nimi);
+      const tulos = await toteutus[toiminto](nimi, valinta);
       kirjaa({ toiminto, nimi, tulos: 'ok', ...tulos });
       return { ok: true, toiminto, nimi, ...tulos };
     } catch (e) {

@@ -7,7 +7,9 @@
 //   GET /api/terveys          { ok: true } (ei avainta)
 //   GET /api/skoopit          skooppilista tiivistettynä
 //   GET /api/skoopit/<nimi>   yhden skoopin rekisteri (seuraava, avoimet, viat) ja istunnot
-//   POST /api/skoopit/<nimi>/pura     uusi istunto, ensimmäinen viesti /pura <nimi> → { osoite }
+//   POST /api/skoopit/<nimi>/pura {"purkaja"?, "malli"?}   uusi istunto, ensimmäinen viesti /pura <nimi> [--ajaja=<purkaja>],
+//            istunnon malli --model <malli> → { osoite }; tyhjä runko = oletukset (purkajat.mjs, SCOPES-PURA-MALLI)
+//   GET /api/purkajat                 purun valinnat { purkajat: [{ tunnus, kuvaus, ryhma }], mallit, oletusMalli }
 //   POST /api/skoopit/<nimi>/pura-testi   mallivapaa purku (vain scopes/-skoopit): pura-malliton.mjs + istunto → { osoite, tiedosto, varoitus? }
 //   POST /api/skoopit/<nimi>/pakkaa   /pakkaa skoopin vapaaseen tmux-istuntoon → { istunto, komento }
 //   POST /api/skoopit/<nimi>/automaattisiirto | herata | herata-pois   samoin /automaattisiirto, /sa, /sa pois
@@ -57,6 +59,7 @@ import { luoKayttoraja } from './kayttoraja.mjs';
 import { lista, lueSkoopit, rekisterinOsat, rekisterit, yksi } from './lahteet.mjs';
 import { luoLiitteet } from './liitteet.mjs';
 import { luoAsetukset, OLETUS_HAKEMISTO } from './toiminnot-asetukset.mjs';
+import { luoPurkajat } from './purkajat.mjs';
 import { Hylatty, luoToiminnot } from './toiminnot.mjs';
 import { luoViestit } from './viestit.mjs';
 import { LrVirhe, luoLr } from '../localregister/palvelu.mjs';
@@ -103,7 +106,7 @@ function runko(req, raja = 1024) {
   });
 }
 
-export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null })) {
+export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), purkajat = luoPurkajat({ juuri: asetukset.juuri, paikalliset: () => viestit.agentit() })) {
   // Chat suoratoistona (DEMO-SCOPES-SUORATOISTO): NDJSON-rivit {tyyppi: 'pala', teksti} …, lopuksi
   // {tyyppi: 'valmis', vastaus, keskustelu, …} tai {tyyppi: 'virhe', virhe}. Hylkäys ennen agentin käynnistystä
   // palaa tavallisena virhekoodina. Yhteyden katketessa (puhelimen näyttölukko, äpin vaihto) agentti jatkaa, ja
@@ -180,13 +183,17 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         }
         const kp = polku.match(/^\/api\/skoopit\/([^/]+)\/kysymys-pois$/);
         if (kp) return vastaa(200, await viestit.suljeKysymys(decodeURIComponent(kp[1])));
-        const t = polku.match(/^\/api\/skoopit\/([^/]+)\/(pura|pura-testi|pakkaa|automaattisiirto|herata|herata-pois)$/);
+        // Purun valinnat (SCOPES-PURA-MALLI): runko {purkaja?, malli?} tarkistetaan purkajat.mjs:n listaa vasten; tyhjä = oletus.
+        const pu = polku.match(/^\/api\/skoopit\/([^/]+)\/pura$/);
+        if (pu) return vastaa(200, await suorita('pura', decodeURIComponent(pu[1]), await purkajat.tarkista(await runko(req))));
+        const t = polku.match(/^\/api\/skoopit\/([^/]+)\/(pura-testi|pakkaa|automaattisiirto|herata|herata-pois)$/);
         if (t) return vastaa(200, await suorita(t[2], decodeURIComponent(t[1])));
         return vastaa(404, { virhe: 'tuntematon toiminto' });
       }
       if (polku === '/api/skoopit') return vastaa(200, lista(asetukset));
       if (polku === '/api/asetukset') return vastaa(200, kytkimet.lue());
       if (polku === '/api/agentit') return vastaa(200, await viestit.agentit());
+      if (polku === '/api/purkajat') return vastaa(200, await purkajat.lista());
       if (polku === '/api/kayttoraja') return vastaa(200, await kayttoraja());
       // Luetaan joka pyynnöllä: avaimen vaihto ei vaadi palvelun uudelleenkäynnistystä.
       if (polku === '/api/wg-asetus') {

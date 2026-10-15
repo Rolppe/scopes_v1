@@ -818,13 +818,25 @@ final class SkoopitUITests: XCTestCase {
         // Selite on kytkinten alla, joten se haetaan vasta rullauksen jälkeen.
         XCTAssertTrue(app.staticTexts["toiminto-ei-istuntoa"].exists, "selite puuttuu")
         kuva("toiminnot")
-        // Vahvistus kertoo seurauksen, ei komentoa (U6). Vahvistusta ei paineta: se avaisi istunnon.
+        // Vahvistus kertoo seurauksen, ei komentoa (U6), ja tarjoaa purkajan ja istunnon mallin (SCOPES-PURA-MALLI).
+        // Vahvistusta ei paineta: se avaisi istunnon. Peru sulkee arkin.
         let pura = app.buttons["toiminto-pura"]
         if !pura.isHittable { app.swipeDown() }
         pura.tap()
-        XCTAssertTrue(app.staticTexts["Avataanko skoopille uusi istunto?"].waitForExistence(timeout: 5), "vahvistuksen kysymys puuttuu")
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Uusi Claude-istunto käynnistyy'")).firstMatch.exists, "seurauslause puuttuu")
+        XCTAssertTrue(app.staticTexts["pura-valinta-seuraus"].waitForExistence(timeout: 5), "purun vahvistus puuttuu")
+        XCTAssertTrue(app.staticTexts["pura-valinta-seuraus"].label.hasPrefix("Uusi Claude-istunto käynnistyy"), "seurauslause puuttuu")
+        let purkaja = app.buttons["pura-purkaja"], malli = app.buttons["pura-malli"]
+        XCTAssertTrue(purkaja.waitForExistence(timeout: 5) && malli.exists, "purkajan tai mallin valinta puuttuu")
+        XCTAssertTrue(app.buttons["vahvista"].waitForExistence(timeout: 30), "Pura-painike puuttuu")
         kuva("pura-vahvistus")
+        // Purkajalista: Claude-mallit aina; agy ja paikalliset, kun palvelu tavoittaa ne.
+        purkaja.tap()
+        XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS 'siirtaja-sonnet'")).firstMatch.waitForExistence(timeout: 5), "agentti puuttuu purkajista")
+        kuva("pura-purkajat")
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["pura-peru"].tap()
+        XCTAssertTrue(app.staticTexts["pura-valinta-seuraus"].waitForNonExistence(timeout: 5), "peru ei sulkenut vahvistusta")
+        XCTAssertFalse(app.staticTexts["toiminto-tulos"].exists, "peruutus ei saa avata istuntoa")
     }
 
     // Skoopin Tiedot-välilehti haun kautta; palauttaa, kun skoopin näkymä on latautunut.
@@ -891,6 +903,9 @@ final class SkoopitUITests: XCTestCase {
         // Viestinäkymän Pura purkaa ja avaa viestit (DEMO-SCOPES-VALILEHDET).
         XCTAssertTrue(app.buttons["viestit-pura"].waitForExistence(timeout: 15))
         app.buttons["viestit-pura"].tap()
+        // Mallivalinta (SCOPES-PURA-MALLI): oletukset, ellei aiempi valinta ole muistissa.
+        XCTAssertTrue(app.buttons["vahvista"].waitForExistence(timeout: 30), "purun vahvistus puuttuu")
+        app.buttons["vahvista"].tap()
         let auki = app.staticTexts["viestit-istunto"]
         let virhe = app.staticTexts["viestit-virhe"]
         let loppu = Date().addingTimeInterval(240)

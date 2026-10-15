@@ -52,6 +52,15 @@ test('pura: uusi istunto vain tunnetulle skoopille ilman käynnissä olevaa istu
   assert.equal(v.kutsut.length, 1);
 });
 
+test('pura: valittu purkaja /pura-lippuna ja istunnon malli autovaihdon --modelina (SCOPES-PURA-MALLI)', async () => {
+  const a = ymparisto();
+  const v = vaarennos();
+  const r = await luoToiminnot(a, { aja: v.aja })('pura', 'b', { ajaja: 'paikallinen:qwen/qwen3.6-35b-a3b', malli: 'claude-sonnet-5-5' });
+  assert.equal(r.purkaja, 'paikallinen:qwen/qwen3.6-35b-a3b');
+  assert.deepEqual(v.kutsut, [['bash', join(a.juuri, 'claude/siirto/tools/autovaihto.sh'), 'vaihda', 'b', '--ei-sulje', '--model', 'claude-sonnet-5-5',
+    '--viesti', '/pura b --ajaja=paikallinen:qwen/qwen3.6-35b-a3b']]);
+});
+
 test('pura: pakattu tmux-istunto suljetaan ensin, varattu tai pakkaamaton estää', async () => {
   const pakkaa = (a) => writeFileSync(join(a.projektitDir, projektiNimi('/x'), 's1.jsonl'),
     JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'PAKKAUS: vahvistettu — commit abc' }] } }));
@@ -294,8 +303,10 @@ test('istuntoOsoite: vain OK-rivin claude.ai-osoite', () => {
 test('palvelin: POST-reitit vaativat avaimen ja ohjautuvat toimintoihin', async () => {
   const avain = 'k'.repeat(32);
   const kutsut = [];
-  const suorita = async (toiminto, nimi) => {
+  const valinnat = [];
+  const suorita = async (toiminto, nimi, valinta) => {
     kutsut.push([toiminto, nimi]);
+    if (valinta) valinnat.push(valinta);
     if (nimi === 'x') throw new Hylatty(409, 'varattu');
     return { ok: true };
   };
@@ -319,6 +330,9 @@ test('palvelin: POST-reitit vaativat avaimen ja ohjautuvat toimintoihin', async 
     assert.equal((await laheta('/api/uusi', JSON.stringify({ nimi: 'x'.repeat(2000) })))[0], 413);
     assert.equal((await laheta('/api/skoopit/a/pura', '', 'v'.repeat(32)))[0], 401);
     assert.equal((await laheta('/api/skoopit/a/pura', '', avain, 'DELETE'))[0], 405);
-    assert.deepEqual(kutsut, [['pura', 'a b'], ['pakkaa', 'a'], ['pura-testi', 'a'], ['herata-pois', 'a'], ['uusi', 'koe'], ['pura', 'x']]);
+    assert.equal((await laheta('/api/skoopit/a/pura', '{"malli":"claude-sonnet-5-5"}'))[0], 200);
+    assert.deepEqual(await laheta('/api/skoopit/a/pura', '{"malli":"gpt-4"}'), [400, { virhe: 'tuntematon istunnon malli gpt-4' }]);
+    assert.deepEqual(kutsut, [['pura', 'a b'], ['pakkaa', 'a'], ['pura-testi', 'a'], ['herata-pois', 'a'], ['uusi', 'koe'], ['pura', 'x'], ['pura', 'a']]);
+    assert.deepEqual(valinnat, [{ ajaja: null, malli: null }, { ajaja: null, malli: null }, { ajaja: null, malli: 'claude-sonnet-5-5' }]);
   } finally { srv.close(); }
 });
