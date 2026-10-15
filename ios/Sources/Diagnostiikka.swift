@@ -181,12 +181,17 @@ final class Diagnostiikka: NSObject, MXMetricManagerSubscriber {
             let alku = Self.iso.string(from: p.timeStampBegin)
             var raportit: [[String: Any]] = []
             for h in p.hangDiagnostics ?? [] {
-                raportit.append(["laji": "jumi", "kesto_s": h.hangDuration.converted(to: .seconds).value,
-                                 "pino": Self.json(h.callStackTree.jsonRepresentation())])
+                raportit.append(Self.metat(h, ["laji": "jumi", "kesto_s": h.hangDuration.converted(to: .seconds).value,
+                                               "pino": Self.json(h.callStackTree.jsonRepresentation())]))
             }
             for c in p.crashDiagnostics ?? [] {
-                raportit.append(["laji": "kaatuminen", "syy": c.terminationReason ?? "", "signaali": c.signal?.intValue ?? 0,
-                                 "pino": Self.json(c.callStackTree.jsonRepresentation())])
+                var r: [String: Any] = ["laji": "kaatuminen", "syy": c.terminationReason ?? "", "signaali": c.signal?.intValue ?? 0,
+                                        "pino": Self.json(c.callStackTree.jsonRepresentation())]
+                // Ilman poikkeuksen tekstiä 13 SIGABRTia jäi symboloimatta (14.–15.10.2026); syy löytyi vain commit-viestistä.
+                if let e = c.exceptionReason {
+                    r["poikkeus"] = [e.exceptionName, e.className, e.composedMessage].joined(separator: " — ")
+                }
+                raportit.append(Self.metat(c, r))
             }
             for var r in raportit {
                 r["tyyppi"] = "metrickit"
@@ -195,6 +200,15 @@ final class Diagnostiikka: NSObject, MXMetricManagerSubscriber {
             }
         }
         Task { await laheta() }
+    }
+
+    // Simulaattori ja puhelin kirjaavat samaan lokiin: metatiedot erottavat ne ja buildin.
+    private static func metat(_ d: MXDiagnostic, _ r: [String: Any]) -> [String: Any] {
+        var r = r
+        r["ios"] = d.metaData.osVersion
+        r["laitemalli"] = d.metaData.deviceType
+        r["build"] = d.metaData.applicationBuildVersion
+        return r
     }
 
     private static func json(_ data: Data) -> Any { (try? JSONSerialization.jsonObject(with: data)) ?? "" }
