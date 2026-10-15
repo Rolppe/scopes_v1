@@ -844,9 +844,17 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["uusi-varattu"].waitForExistence(timeout: 15), "varattua nimeä ei tunnistettu")
         XCTAssertFalse(app.buttons["uusi-luo"].isEnabled, "varattu nimi ei saa olla lähetettävissä")
         kuva("uusi-varattu")
+        // Scopes-perhe puretaan skriptillä: purkajan tilalla selite, istunnon malli säilyy (PURA-MALLITON T6).
+        XCTAssertTrue(app.buttons["pura-malli"].waitForExistence(timeout: 15), "istunnon mallin valinta puuttuu scopes-skoopilta")
+        XCTAssertTrue(app.staticTexts["pura-malliton-selite"].exists, "mallittoman purun selite puuttuu uudesta scopes-skoopista")
+        XCTAssertFalse(app.buttons["pura-purkaja"].exists, "purkajan valinta näkyy uudessa scopes-skoopissa")
+        kuva("uusi-scopes")
+        kentta.clearText()
+        kentta.typeText("claude koe uusi")
         // Samat valinnat kuin purussa (SCOPES-LISTA-UUSI-VALINNAT): purkaja ja istunnon malli.
         XCTAssertTrue(app.buttons["pura-purkaja"].waitForExistence(timeout: 15), "purkajan valinta puuttuu uudesta skoopista")
         XCTAssertTrue(app.buttons["pura-malli"].exists, "istunnon mallin valinta puuttuu uudesta skoopista")
+        XCTAssertFalse(app.staticTexts["pura-malliton-selite"].exists, "mallittoman purun selite näkyy muussa skoopissa")
         app.buttons["pura-purkaja"].tap()
         XCTAssertTrue(app.navigationBars["Purkaja"].waitForExistence(timeout: 5), "purkajalista ei auennut")
         XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS 'siirtaja-sonnet'")).firstMatch.waitForExistence(timeout: 5), "agentti puuttuu uuden skoopin purkajista")
