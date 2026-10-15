@@ -371,10 +371,46 @@ final class LrUITests: XCTestCase {
         teksti.typeText(uusiRivi)
         app.buttons["lr-tallenna"].tap()
         let tallennettu = Date()
+        // Koerivi pois myös kaatuessa: äppi suljetaan (ei enää lähetyksiä) ja palvelun rivi haudataan suoraan. Kuten
+        // äpin poistossa (Lr.poista), koerivin tyhjä häntä palaa ankkurille, muuten taulukon perän tyhjä rivi katoaa.
+        addTeardownBlock { [self] in
+            app.terminate()
+            let lista = try? pyynto("/api/lr/listat", ["rekisterit": [polku]])[polku] as? [String: Any]
+            let uudet = (lista?["yksikot"] as? [[String: Any]] ?? []).compactMap { $0["id"] as? String }.filter { !idt.contains($0) }
+            guard !uudet.isEmpty,
+                  let ys = try? pyynto("/api/lr/hae", ["rekisteri": polku, "idt": uudet + [id]])["yksikot"] as? [[String: Any]] else { return }
+            let nyt = ISO8601DateFormatter().string(from: Date())
+            func uusi(_ y: [String: Any], _ muutos: [String: Any]) -> [String: Any] {
+                var y = y, v = y["versio"] as? [String: Int] ?? [:]
+                v["uitesti", default: 0] += 1
+                y["versio"] = v; y["muuttaja"] = "uitesti"; y["muutettu"] = nyt
+                return y.merging(muutos) { $1 }
+            }
+            func ydin(_ s: String) -> String { var t = s; while t.hasSuffix("\n") { t.removeLast() }; return t }
+            func hanta(_ s: String) -> String { String(s.dropFirst(ydin(s).count)) }
+            let koe = ys.filter { $0["id"] as? String != id && ($0["sisalto"] as? String ?? "").contains(asia) && $0["poistettu"] as? Bool != true }
+            guard !koe.isEmpty else { return }
+            var lahetys = koe.map { uusi($0, ["poistettu": true]) }
+            let koeHanta = koe.map { hanta($0["sisalto"] as? String ?? "") }.max { $0.count < $1.count } ?? ""
+            if koeHanta.count > 1, let a = ys.first(where: { $0["id"] as? String == id }), let s = a["sisalto"] as? String, hanta(s) == "\n" {
+                lahetys.append(uusi(a, ["sisalto": ydin(s) + koeHanta]))
+            }
+            _ = try? pyynto("/api/lr/laheta", ["metat": [], "yksikot": lahetys])
+            print("TESTIPURKU: siivous haudattu \(koe.count) koeriviä, ankkurin häntä \(lahetys.count > koe.count ? "palautettu" : "ennallaan")")
+        }
 
-        // Heti skoopin Tiedot-näkymään ja Testipurku; palvelun tilaa ei odoteta väliin.
-        app.navigationBars["REKISTERI.md"].buttons.element(boundBy: 0).tap()
+        // Heti skoopin Tiedot-näkymään ja Testipurku; palvelun tilaa ei odoteta väliin. Nuoli on vain Infra-juuren
+        // työkalupalkissa: REKISTERI.md ja Paikallinen rekisteri ovat sen päällä, ja Paikallisen rekisterin auki
+        // oleva alahaku piilottaa navigointipalkin, kunnes haku suljetaan close-napista (iOS 27, 15.10.2026).
         let nuoli = app.buttons["sivupalkki"].firstMatch
+        for _ in 0..<5 where !(nuoli.exists && nuoli.isHittable) {
+            if let palkki = ["REKISTERI.md", "Paikallinen rekisteri"].map({ app.navigationBars[$0] }).first(where: { $0.exists }) {
+                palkki.buttons.element(boundBy: 0).tap()
+            } else if app.buttons["close"].exists {
+                app.buttons["close"].tap()
+            } else { break }
+            _ = nuoli.waitForExistence(timeout: 2)
+        }
         XCTAssertTrue(nuoli.waitForExistence(timeout: 10), "sivupalkin nuoli puuttuu")
         nuoli.tap()
         let skoopit = app.searchFields["Hae chateista ja skoopeista"]
@@ -391,8 +427,10 @@ final class LrUITests: XCTestCase {
         XCTAssertTrue(testi.waitForExistence(timeout: 15), "testipurku-nappi puuttuu")
         for _ in 0..<4 where !testi.isHittable { app.swipeUp() }
         testi.tap()
-        XCTAssertTrue(app.buttons["vahvista"].waitForExistence(timeout: 5), "testipurun vahvistus puuttuu")
-        app.buttons["vahvista"].tap()
+        // Vahvistusnappi näkyy kahdesti (Button Buttonin sisällä, iOS 27): firstMatch.
+        let vahvista = app.buttons["vahvista"].firstMatch
+        XCTAssertTrue(vahvista.waitForExistence(timeout: 5), "testipurun vahvistus puuttuu")
+        vahvista.tap()
         print("TESTIPURKU: vahvistettu \(String(format: "%.1f", Date().timeIntervalSince(tallennettu))) s tallennuksesta")
         let tulos = app.staticTexts["toiminto-tulos"]
         let virhe = app.staticTexts["toiminto-virhe"]
