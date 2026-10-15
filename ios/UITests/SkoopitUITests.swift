@@ -884,7 +884,8 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertTrue(app.buttons["vahvista-arkistointi"].waitForExistence(timeout: 5), "arkistointi ei kysynyt varmistusta")
         kuva("arkistointi-varmistus")
         let peru = app.buttons["Peruuta"].exists ? app.buttons["Peruuta"] : app.buttons["Cancel"]
-        if peru.exists { peru.tap() } else { app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap() }
+        // iOS 26 näyttää varmistuksen ponnahduksena ilman Peruuta-painiketta: kosketus palkin oikealle puolelle sulkee sen.
+        if peru.exists { peru.tap() } else { app.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap() }
         XCTAssertTrue(app.buttons["vahvista-arkistointi"].waitForNonExistence(timeout: 5))
         XCTAssertTrue(rivi.exists, "peruminen poisti skoopin listasta")
     }

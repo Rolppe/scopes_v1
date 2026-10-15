@@ -73,6 +73,7 @@ struct Sivupalkki: View, Equatable {
     @State private var arkistoidaan: String?
     // Palauttava kosketus ei saa samalla avata riviä: listan ele ja rivin painike laukeavat samasta kosketuksesta.
     @State private var suljettu = Date.distantPast
+    @State private var vedetty = Date.distantPast
     @AppStorage("sivupalkinSuodatin") private var suodatin: Suodatin = .kaikki
 
     private var asiakas: Asiakas { Asiakas(osoite: asetukset.osoite, avain: asetukset.avain) }
@@ -107,7 +108,7 @@ struct Sivupalkki: View, Equatable {
             }
             .listStyle(.plain)
             // Kosketus muualle palauttaa avatun rivin (myös haku, suodatin ja tyhjä alue).
-            .simultaneousGesture(TapGesture().onEnded { if avattu != nil { sulje() } }, including: avattu == nil ? .subviews : .all)
+            .simultaneousGesture(TapGesture().onEnded { if avattu != nil && !juuriVedetty { sulje() } }, including: avattu == nil ? .subviews : .all)
             .confirmationDialog("Arkistoidaanko skooppi \(arkistoitava?.nimi ?? "")?", isPresented: Binding(
                 get: { arkistoitava != nil }, set: { if !$0 { arkistoitava = nil; sulje() } }), titleVisibility: .visible) {
                 Button("Arkistoi", role: .destructive) {
@@ -220,8 +221,11 @@ struct Sivupalkki: View, Equatable {
         withAnimation(.snappy) { avattu = nil; veto = nil }
     }
 
+    private var juuriVedetty: Bool { Date().timeIntervalSince(vedetty) < 0.4 }
+
     // true = kosketus palautti avatun rivin (nyt tai juuri listan eleessä), eikä riviä avata.
     private func palautus() -> Bool {
+        if juuriVedetty { return true }
         if avattu != nil { sulje(); return true }
         return Date().timeIntervalSince(suljettu) < 0.4
     }
@@ -261,6 +265,8 @@ struct Sivupalkki: View, Equatable {
                     },
                     loppui: { x in
                         let alku: CGFloat = avattu == k.id ? -Self.xLeveys : 0
+                        // Irrotus laukaisee rivin painikkeen ja listan kosketuksen, jotka muuten sulkisivat juuri avatun rivin.
+                        vedetty = Date()
                         withAnimation(.snappy) { avattu = alku + x < -Self.xLeveys / 2 ? k.id : nil; veto = nil }
                     }))
         }
@@ -348,27 +354,41 @@ struct PitoVeto: UIGestureRecognizerRepresentable {
     // tunnistuvat yhtä aikaa, joten UIKitin oletusetusija ei riittänyt (simulaattori 15.10.2026: veto sulki palkin).
     @MainActor static var kaynnissa = false
 
-    final class Alku { var x: CGFloat = 0 }
+    // Rivin Button-painallus esti pidon tunnistuksen (simulaattori 15.10.2026: X ei paljastunut), joten pito tunnistuu
+    // yhtä aikaa muiden kanssa. Tunnistuttuaan se pysäyttää listan vierityksen vedon ajaksi.
+    final class Alku: NSObject, UIGestureRecognizerDelegate {
+        var x: CGFloat = 0
+        weak var vieritys: UIScrollView?
+        func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith toinen: UIGestureRecognizer) -> Bool { true }
+    }
     func makeCoordinator(converter: CoordinateSpaceConverter) -> Alku { Alku() }
 
     func makeUIGestureRecognizer(context: Context) -> UILongPressGestureRecognizer {
         let g = UILongPressGestureRecognizer()
         g.minimumPressDuration = 0.35
+        g.delegate = context.coordinator
         return g
     }
 
     func handleUIGestureRecognizerAction(_ g: UILongPressGestureRecognizer, context: Context) {
         let x = g.location(in: nil).x
+        let k = context.coordinator
         switch g.state {
         case .began:
-            context.coordinator.x = x
+            k.x = x
             Self.kaynnissa = true
+            var n = g.view
+            while let v = n, !(v is UIScrollView) { n = v.superview }
+            k.vieritys = n as? UIScrollView
+            k.vieritys?.panGestureRecognizer.isEnabled = false
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             alkoi()
-        case .changed: muuttui(x - context.coordinator.x)
+        case .changed: muuttui(x - k.x)
         case .ended, .cancelled, .failed:
             Self.kaynnissa = false
-            loppui(x - context.coordinator.x)
+            k.vieritys?.panGestureRecognizer.isEnabled = true
+            k.vieritys = nil
+            loppui(x - k.x)
         default: break
         }
     }
