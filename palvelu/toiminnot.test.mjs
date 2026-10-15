@@ -26,13 +26,15 @@ function ymparisto({ tila = 'idle', tmux = 'siirto-a-1:@1.%5', skoopit = { a: ['
   return { juuri, istunnotDir, projektitDir, toimintoloki: join(d, 'loki/t.loki') };
 }
 
-// Kirjaa kutsut; tmux display-message palauttaa oman pidin, autovaihto OK-rivin.
-function vaarennos({ autovaihto = { koodi: 0, stdout: `UUSI: …\n${URL_OK}\n`, stderr: '' }, ruudunPid = process.pid, malliton = { koodi: 0, stdout: 'KIRJOITETTU: x\n', stderr: '' } } = {}) {
+// Kirjaa kutsut; tmux display-message palauttaa oman pidin, autovaihto OK-rivin. perhe = `pura-malliton.mjs --perhe`:n
+// vastaus (true → exit 0, false → exit 1, tai valmis tulos).
+function vaarennos({ autovaihto = { koodi: 0, stdout: `UUSI: …\n${URL_OK}\n`, stderr: '' }, ruudunPid = process.pid, malliton = { koodi: 0, stdout: 'KIRJOITETTU: x\n', stderr: '' }, perhe = false } = {}) {
   const kutsut = [];
   const aja = async (komento, argumentit) => {
     kutsut.push([komento, ...argumentit]);
     if (komento === 'tmux' && argumentit[0] === 'display-message') return { koodi: 0, stdout: `${ruudunPid}\n`, stderr: '' };
     if (komento === 'tmux') return { koodi: 0, stdout: '', stderr: '' };
+    if (komento === 'node' && argumentit[1] === '--perhe') return typeof perhe === 'object' ? perhe : { koodi: perhe ? 0 : 1, stdout: `PERHE: ${perhe ? 'kyllä' : 'ei'}\n`, stderr: '' };
     if (komento === 'node') return malliton;
     return autovaihto;
   };
@@ -46,10 +48,11 @@ test('pura: uusi istunto vain tunnetulle skoopille ilman käynnissä olevaa istu
   const v = vaarennos();
   const suorita = luoToiminnot(a, { aja: v.aja });
   assert.deepEqual(await suorita('pura', 'b'), { ok: true, toiminto: 'pura', nimi: 'b', osoite: 'https://claude.ai/code/session_abc123', suljettiin: [] });
-  assert.deepEqual(v.kutsut, [['bash', join(a.juuri, 'claude/siirto/tools/autovaihto.sh'), 'vaihda', 'b', '--ei-sulje', '--viesti', '/pura b']]);
+  assert.deepEqual(v.kutsut, [['node', join(a.juuri, 'claude/siirto/tools/pura-malliton.mjs'), '--perhe', 'b'],
+    ['bash', join(a.juuri, 'claude/siirto/tools/autovaihto.sh'), 'vaihda', 'b', '--ei-sulje', '--viesti', '/pura b']]);
   await hylkaa(suorita('pura', 'a'), 409);
   await hylkaa(suorita('pura', 'c; rm -rf /'), 404);
-  assert.equal(v.kutsut.length, 1);
+  assert.equal(v.kutsut.length, 2);
 });
 
 test('pura: valittu purkaja /pura-lippuna ja istunnon malli autovaihdon --modelina (SCOPES-PURA-MALLI)', async () => {
@@ -57,7 +60,7 @@ test('pura: valittu purkaja /pura-lippuna ja istunnon malli autovaihdon --modeli
   const v = vaarennos();
   const r = await luoToiminnot(a, { aja: v.aja })('pura', 'b', { ajaja: 'paikallinen:qwen/qwen3.6-35b-a3b', malli: 'claude-sonnet-5-5' });
   assert.equal(r.purkaja, 'paikallinen:qwen/qwen3.6-35b-a3b');
-  assert.deepEqual(v.kutsut, [['bash', join(a.juuri, 'claude/siirto/tools/autovaihto.sh'), 'vaihda', 'b', '--ei-sulje', '--model', 'claude-sonnet-5-5',
+  assert.deepEqual(v.kutsut.slice(1), [['bash', join(a.juuri, 'claude/siirto/tools/autovaihto.sh'), 'vaihda', 'b', '--ei-sulje', '--model', 'claude-sonnet-5-5',
     '--viesti', '/pura b --ajaja=paikallinen:qwen/qwen3.6-35b-a3b']]);
 });
 
@@ -69,7 +72,7 @@ test('pura: pakattu tmux-istunto suljetaan ensin, varattu tai pakkaamaton estä�
   const v = vaarennos();
   const r = await luoToiminnot(a, { aja: v.aja })('pura', 'a');
   assert.deepEqual(r.suljettiin, ['s1']);
-  assert.deepEqual(v.kutsut.slice(1), [['tmux', 'send-keys', '-t', '%5', '-l', '/exit'], ['tmux', 'send-keys', '-t', '%5', 'Enter'],
+  assert.deepEqual(v.kutsut.slice(2), [['tmux', 'send-keys', '-t', '%5', '-l', '/exit'], ['tmux', 'send-keys', '-t', '%5', 'Enter'],
     ['bash', join(a.juuri, 'claude/siirto/tools/autovaihto.sh'), 'vaihda', 'a', '--ei-sulje', '--viesti', '/pura a']]);
   const varattu = ymparisto({ tila: 'busy' });
   pakkaa(varattu);
@@ -266,9 +269,11 @@ test('arkistoi: työkalun hylkäys (alaskooppeja) → 409 eikä committia', asyn
 test('yksi toiminto kerrallaan; jokainen yritys lokiin', async () => {
   const a = ymparisto();
   let vapauta;
-  const aja = () => new Promise((ok) => { vapauta = () => ok({ koodi: 0, stdout: URL_OK, stderr: '' }); });
+  const aja = (_k, argumentit) => argumentit[1] === '--perhe' ? Promise.resolve({ koodi: 1, stdout: '', stderr: '' })
+    : new Promise((ok) => { vapauta = () => ok({ koodi: 0, stdout: URL_OK, stderr: '' }); });
   const suorita = luoToiminnot(a, { aja });
   const eka = suorita('pura', 'b');
+  await new Promise((r) => setImmediate(r));
   await hylkaa(suorita('uusi', 'koe'), 429);
   vapauta();
   await eka;
@@ -280,63 +285,79 @@ test('yksi toiminto kerrallaan; jokainen yritys lokiin', async () => {
 const SCOPES = { a: ['scopes/x/REKISTERI.md'], 'b c': ['scopes/y/REKISTERI.md'], e: ['claude/REKISTERI.md'] };
 const MALLITON_TIEDOSTO = (nimi) => join(homedir(), '.local/state/pura', `${nimi}.md`);
 
-test('pura-testi: pura-malliton ajetaan ensin, istunto avataan kiinteällä viestillä', async () => {
+// Scopes-perhe (PURA-MALLITON T6b): äpin Pura ajaa pura-malliton.mjs:n ja avaa istunnon tiedostoviestillä, ei /pura-taitoa.
+test('pura: scopes-perhe → purkutiedosto ja tiedostoviesti, malli säilyy, purkajavalinta ei koske', async () => {
   const a = ymparisto({ skoopit: SCOPES });
-  const v = vaarennos();
-  const r = await luoToiminnot(a, { aja: v.aja })('pura-testi', 'b c');
-  assert.deepEqual(r, { ok: true, toiminto: 'pura-testi', nimi: 'b c', osoite: 'https://claude.ai/code/session_abc123', suljettiin: [], tiedosto: MALLITON_TIEDOSTO('b-c') });
+  const v = vaarennos({ perhe: true });
+  const r = await luoToiminnot(a, { aja: v.aja })('pura', 'b c', { ajaja: 'claude-cli:claude-haiku-5-5', malli: 'claude-sonnet-5-5' });
+  assert.deepEqual(r, { ok: true, toiminto: 'pura', nimi: 'b c', osoite: 'https://claude.ai/code/session_abc123', suljettiin: [], tiedosto: MALLITON_TIEDOSTO('b-c'), malli: 'claude-sonnet-5-5' });
+  const malliton = join(a.juuri, 'claude/siirto/tools/pura-malliton.mjs');
   assert.deepEqual(v.kutsut, [
-    ['node', join(a.juuri, 'claude/siirto/tools/pura-malliton.mjs'), 'b c', '--kohde', 'claude'],
-    ['bash', join(a.juuri, 'claude/siirto/tools/autovaihto.sh'), 'vaihda', 'b c', '--ei-sulje', '--viesti', `Malliton purku: lue ${MALLITON_TIEDOSTO('b-c')} ja noudata sitä.`]]);
+    ['node', malliton, '--perhe', 'b c'],
+    ['node', malliton, 'b c', '--kohde', 'claude'],
+    ['bash', join(a.juuri, 'claude/siirto/tools/autovaihto.sh'), 'vaihda', 'b c', '--ei-sulje', '--model', 'claude-sonnet-5-5',
+      '--viesti', `Malliton purku: lue ${MALLITON_TIEDOSTO('b-c')} ja noudata sitä.`]]);
+  assert.ok(!v.kutsut.some((k) => k.at(-1)?.startsWith('/pura')), 'perheelle lähti /pura');
 });
 
-test('pura-testi: slug on sama kuin pura-malliton.mjs:ssä', () => {
+test('pura: muu skooppi → /pura ennallaan', async () => {
+  const a = ymparisto({ skoopit: SCOPES });
+  const v = vaarennos({ perhe: false });
+  const r = await luoToiminnot(a, { aja: v.aja })('pura', 'e', { ajaja: 'claude-cli:claude-haiku-5-5' });
+  assert.equal(r.tiedosto, undefined);
+  assert.deepEqual(v.kutsut.map((k) => k.at(-1)), ['e', '/pura e --ajaja=claude-cli:claude-haiku-5-5']);
+});
+
+test('pura: slug on sama kuin pura-malliton.mjs:ssä', () => {
   for (const n of ['a', 'b c', 'claude r&d2', 'x  y']) assert.equal(mallitonSlug(n), slug(n));
 });
 
-test('pura-testi: ei-scopes-skooppi 400 ja tuntematon 404 ilman yhtään ajoa', async () => {
-  const a = ymparisto({ skoopit: SCOPES });
-  const v = vaarennos();
-  const suorita = luoToiminnot(a, { aja: v.aja });
-  await hylkaa(suorita('pura-testi', 'e'), 400);
-  await hylkaa(suorita('pura-testi', 'z; rm -rf /'), 404);
-  assert.equal(v.kutsut.length, 0);
-});
-
-test('pura-testi: käynnissä oleva tai varattu istunto estää ennen ajoa, pakattu suljetaan', async () => {
+test('pura: perheen käynnissä oleva tai varattu istunto estää ennen ajoa, pakattu suljetaan tiedoston jälkeen', async () => {
   const pakkaa = (a) => writeFileSync(join(a.projektitDir, projektiNimi('/x'), 's1.jsonl'),
     JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'PAKKAUS: vahvistettu — commit abc' }] } }));
   const kaynnissa = ymparisto({ skoopit: SCOPES });
-  const v = vaarennos();
-  await hylkaa(luoToiminnot(kaynnissa, { aja: v.aja })('pura-testi', 'a'), 409);
+  const v = vaarennos({ perhe: true });
+  await hylkaa(luoToiminnot(kaynnissa, { aja: v.aja })('pura', 'a'), 409);
   const varattu = ymparisto({ tila: 'busy', skoopit: SCOPES });
   pakkaa(varattu);
-  await hylkaa(luoToiminnot(varattu, { aja: v.aja })('pura-testi', 'a'), 409);
+  await hylkaa(luoToiminnot(varattu, { aja: v.aja })('pura', 'a'), 409);
   assert.equal(v.kutsut.length, 0);
   const a = ymparisto({ skoopit: SCOPES });
   pakkaa(a);
-  const v2 = vaarennos();
-  assert.deepEqual((await luoToiminnot(a, { aja: v2.aja })('pura-testi', 'a')).suljettiin, ['s1']);
-  assert.deepEqual(v2.kutsut.slice(0, 4).map((k) => k[0]), ['node', 'tmux', 'tmux', 'tmux']);
-  assert.deepEqual(v2.kutsut[0].slice(2), ['a', '--kohde', 'claude', '--suljettavat', 's1']);
-  assert.deepEqual(v2.kutsut.slice(2, 4), [['tmux', 'send-keys', '-t', '%5', '-l', '/exit'], ['tmux', 'send-keys', '-t', '%5', 'Enter']]);
+  const v2 = vaarennos({ perhe: true });
+  assert.deepEqual((await luoToiminnot(a, { aja: v2.aja })('pura', 'a')).suljettiin, ['s1']);
+  assert.deepEqual(v2.kutsut.slice(0, 5).map((k) => k[0]), ['node', 'node', 'tmux', 'tmux', 'tmux']);
+  assert.deepEqual(v2.kutsut[1].slice(2), ['a', '--kohde', 'claude', '--suljettavat', 's1']);
+  assert.deepEqual(v2.kutsut.slice(3, 5), [['tmux', 'send-keys', '-t', '%5', '-l', '/exit'], ['tmux', 'send-keys', '-t', '%5', 'Enter']]);
 });
 
-test('pura-testi: pura-malliton exit 1 → 500 eikä istuntoa avata', async () => {
-  const pakkaaMuttaEiSulje = ymparisto({ skoopit: SCOPES });
-  const v = vaarennos({ malliton: { koodi: 1, stdout: '', stderr: 'alku\npura-malliton: ' + 'x'.repeat(400) + '\n' } });
-  await assert.rejects(luoToiminnot(pakkaaMuttaEiSulje, { aja: v.aja })('pura-testi', 'b c'),
+test('pura: perheen pura-malliton exit 1 → 500 eikä istuntoa avata eikä mallireittiä', async () => {
+  const v = vaarennos({ perhe: true, malliton: { koodi: 1, stdout: '', stderr: 'alku\npura-malliton: ' + 'x'.repeat(400) + '\n' } });
+  await assert.rejects(luoToiminnot(ymparisto({ skoopit: SCOPES }), { aja: v.aja })('pura', 'b c'),
     (e) => e instanceof Hylatty && e.koodi === 500 && e.message.startsWith('pura-malliton: xxx') && e.message.length === 300);
+  assert.deepEqual(v.kutsut.map((k) => k[0]), ['node', 'node']);
+});
+
+test('pura: --perhe-tarkistuksen virhe → 500 eikä istuntoa', async () => {
+  const v = vaarennos({ perhe: { koodi: 2, stdout: '', stderr: 'Käyttö: pura-malliton.mjs --perhe\n' } });
+  await assert.rejects(luoToiminnot(ymparisto({ skoopit: SCOPES }), { aja: v.aja })('pura', 'b c'),
+    (e) => e instanceof Hylatty && e.koodi === 500 && /Käyttö/.test(e.message));
   assert.deepEqual(v.kutsut.map((k) => k[0]), ['node']);
 });
 
-test('pura-testi: pura-malliton exit 4 → ok + varoitus', async () => {
-  const v = vaarennos({ malliton: { koodi: 4, stdout: 'VAROITUS: x\n', stderr: '' } });
-  const r = await luoToiminnot(ymparisto({ skoopit: SCOPES }), { aja: v.aja })('pura-testi', 'b c');
+test('pura: perheen pura-malliton exit 4 → ok + varoitus', async () => {
+  const v = vaarennos({ perhe: true, malliton: { koodi: 4, stdout: 'VAROITUS: x\n', stderr: '' } });
+  const r = await luoToiminnot(ymparisto({ skoopit: SCOPES }), { aja: v.aja })('pura', 'b c');
   assert.equal(r.ok, true);
   assert.equal(r.varoitus, true);
   assert.equal(r.tiedosto, MALLITON_TIEDOSTO('b-c'));
-  assert.deepEqual(v.kutsut.map((k) => k[0]), ['node', 'bash']);
+  assert.deepEqual(v.kutsut.map((k) => k[0]), ['node', 'node', 'bash']);
+});
+
+test('pura-testi: vanha reitti on sama kuin pura (poistuu T6e:ssä)', async () => {
+  const v = vaarennos({ perhe: true });
+  const r = await luoToiminnot(ymparisto({ skoopit: SCOPES }), { aja: v.aja })('pura-testi', 'b c');
+  assert.equal(r.tiedosto, MALLITON_TIEDOSTO('b-c'));
 });
 
 test('istuntoOsoite: vain OK-rivin claude.ai-osoite', () => {
