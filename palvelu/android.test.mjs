@@ -5,7 +5,7 @@ import { mkdtempSync } from 'node:fs';
 import { createServer, request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { GEMINI, geminiKeskustelu, jasennaUi, luoAndroid, q } from './android.mjs';
+import { GEMINI, geminiKeskustelu, jasennaUi, liitaAlkuun, luoAndroid, osatTekstiksi, q, samaViesti, vastauksenOsat } from './android.mjs';
 import { kasittelija } from './palvelin.mjs';
 import { Hylatty } from './toiminnot.mjs';
 
@@ -150,4 +150,49 @@ test('laheta kuittaa jaon vahvistuksen (Share) ja arvostelupyynnön (Not now) en
     assert.deepEqual(v.muuttavat(), [piste, 'input tap 1230 1181']);
     a.lopeta();
   }
+});
+
+// CHAT-GEMINI 15.10.2026: vastauksen rakenne laitteelta — tekstikappaleet ja koodilohko, jonka teksti tulee heittomerkeissä.
+const solmu = (id, teksti, y1, y2) => `<node text='${teksti.replace(/'/g, '&apos;')}' resource-id="com.google.android.googlequicksearchbox:id/${id}" class="android.widget.TextView" content-desc="" clickable="false" bounds="[84,${y1}][1356,${y2}]" />`;
+const VASTAUS = (...solmut) => `<hierarchy>${solmut.join('')}</hierarchy>`;
+
+test('vastauksenOsat: koodilohko heittomerkeistä, kieli otsakkeesta, nollaleveät pois, aiempi vastaus pois', () => {
+  const s = jasennaUi(VASTAUS(
+    solmu('assistant_robin_text', 'vanha vastaus', 100, 200),
+    solmu('assistant_robin_user_message_text', 'kysy', 300, 400),
+    solmu('assistant_robin_text', 'Otsikko\u200b\nkappale', 500, 900),
+    solmu('assistant_robin_code_info', 'python', 950, 1000),
+    solmu('assistant_robin_code_impl', 'print("hei")\n', 1010, 1100),
+    solmu('assistant_robin_text', 'Loppu', 1200, 1300),
+  ));
+  assert.deepEqual(vastauksenOsat(s), [
+    { laji: 'teksti', teksti: 'Otsikko\nkappale' }, { laji: 'koodi', teksti: 'print("hei")', kieli: 'python' }, { laji: 'teksti', teksti: 'Loppu' }]);
+  assert.equal(osatTekstiksi(vastauksenOsat(s)), 'Otsikko\nkappale\n\n```python\nprint("hei")\n```\n\nLoppu');
+});
+
+test('liitaAlkuun: ylempi ruudullinen alkuun päällekkäisyyden kohdalta; kieli täydentyy', () => {
+  const k = { laji: 'koodi', teksti: 'x = 1', kieli: '' };
+  const alempi = [k, { laji: 'teksti', teksti: 'C' }];
+  const ylempi = [{ laji: 'teksti', teksti: 'A' }, { laji: 'teksti', teksti: 'B' }, { ...k, kieli: 'python' }];
+  assert.deepEqual(liitaAlkuun(liitaAlkuun([], alempi), ylempi).map((o) => o.teksti), ['A', 'B', 'x = 1', 'C']);
+  assert.equal(liitaAlkuun(alempi, ylempi)[2].kieli, 'python');
+  // Sama korkea osa ruudullisesta toiseen: ei kaksoiskappaletta.
+  assert.deepEqual(liitaAlkuun([{ laji: 'teksti', teksti: 'A' }], [{ laji: 'teksti', teksti: 'A' }]), [{ laji: 'teksti', teksti: 'A' }]);
+  assert.ok(samaViesti('a  b\n c', 'a b c')); assert.ok(!samaViesti('', ''));
+});
+
+test('kysyGeminilta: teksti jakointentillä, vastaus kun generointi on loppunut ja ruutu vakaa', async () => {
+  const ui = VASTAUS(solmu('assistant_robin_user_message_text', 'Sano hei', 300, 400), solmu('assistant_robin_text', 'Hei!', 500, 600),
+    '<node text="" resource-id="" class="V" content-desc="Send" clickable="true" bounds="[1181,1132][1279,1230]" />');
+  const v = vaarennos({ ui });
+  const a = luoAndroid({ aja: v.aja, odota });
+  const palat = [];
+  const r = await a.kysyGeminilta({ teksti: 'Sano hei', pala: (p) => palat.push(p), vali: 0 });
+  assert.deepEqual(r, { vastaus: 'Hei!' });
+  assert.deepEqual(palat, ['Hei!']);
+  assert.ok(v.rivit.some((x) => x.startsWith('am start -a android.intent.action.SEND') && x.includes("'Sano hei'")));
+  // Kuiva: ei lähetystä eikä vastausta.
+  const k = luoAndroid({ aja: vaarennos({ ui }).aja, odota, kuiva: true });
+  assert.deepEqual(await k.kysyGeminilta({ teksti: 'x' }), { vastaus: '', kuiva: true });
+  a.lopeta(); k.lopeta();
 });

@@ -20,6 +20,26 @@ export const MALLIT = [
   { nimi: 'claude-haiku-5-5', kuvaus: 'Haiku 5.5', tyyppi: 'malli' },
 ];
 export const VIESTIN_MAKSIMI = 8000;
+// Puhelimen Gemini-äppi chat-mallina (CHAT-GEMINI 15.10.2026): android.mjs ajaa sen adb:llä samalla laitteella.
+export const GEMINI_AGENTTI = Object.freeze({ nimi: 'android/gemini', kuvaus: 'Gemini', tyyppi: 'gemini' });
+const GEMINI_MAKSIMI = 8000; // android.mjs TEKSTIN_MAKSIMI: jakointentin tekstikenttä
+
+// Jatkoviesti Geminille: jokainen kysymys on oma Gemini-chattinsa (android.mjs kysyGeminilta), joten aiempi keskustelu
+// kulkee tekstin alussa kuten paikallisten mallien messages-listassa. Vanhimmat viestit jäävät pois, kun raja tulee vastaan.
+export function geminiKehote(aiemmat, viesti, maksimi = GEMINI_MAKSIMI) {
+  if (!aiemmat.length) return viesti;
+  const alku = 'Jatka alla olevaa keskustelua ja vastaa vain viimeiseen viestiin.\n\n[Aiempi keskustelu]\n';
+  const loppu = `\n[Uusi viesti]\n${viesti}`;
+  const rivit = aiemmat.map((v) => `${v.rooli === 'kayttaja' ? 'Minä' : 'Gemini'}: ${v.teksti}\n`);
+  let tila = maksimi - alku.length - loppu.length;
+  const mukaan = [];
+  for (let i = rivit.length - 1; i >= 0 && tila > 40; i--) {
+    const r = rivit[i].length <= tila ? rivit[i] : `…${rivit[i].slice(-(tila - 2))}\n`;
+    mukaan.unshift(r);
+    tila -= r.length;
+  }
+  return mukaan.length ? alku + mukaan.join('') + loppu : viesti;
+}
 const ISTUNTO_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 // palvelimen LM Studio kuuntelee vain 127.0.0.1:1234:ää, joten palvelu käyttää sitä ssh:n yli. Etäkomennot ovat
@@ -159,7 +179,8 @@ export function transkriptissa(transkripti, teksti) {
   return false;
 }
 
-export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimintoloki } = {}) {
+// android: () => luoAndroid-olio (palvelin.mjs); ilman sitä Gemini ei ole valittavissa.
+export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimintoloki, android = null } = {}) {
   let chatKaynnissa = false;
   // Käynnissä olevan chat-vastauksen pysäytin (CHAT-STOP 14.10.2026): stop-nappi katkaisee ajon, ja osittainen
   // vastaus palaa valmiina, keskeytetty: true.
@@ -215,9 +236,10 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
     paikalliset = { aika: Date.now(), mallit: t.koodi === 0 ? paikallisetMallit(t.stdout) : [] };
     return paikalliset.mallit;
   }
-  const kaikkiMallit = async () => [...MALLIT, ...await haePaikalliset()];
+  const kaikkiMallit = async () => [...MALLIT, ...(android ? [GEMINI_AGENTTI] : []), ...await haePaikalliset()];
 
   // Paikallisen mallin keskustelu talletetaan itse (LM Studio ei pidä historiaa): chatDir/paikalliset/<uuid>.json.
+  // Samaan kansioon menevät Gemini-keskustelut, koska Geminin oma historia on joka kysymykselle eri chat.
   const paikallisetDir = () => join(asetukset.chatDir, 'paikalliset');
   const luePaikallinen = (id) => { try { return JSON.parse(readFileSync(join(paikallisetDir(), `${id}.json`), 'utf8')); } catch { return null; } };
 
@@ -258,6 +280,22 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
     return { vastaus, keskustelu: id, agentti: valittu.nimi, kustannus: 0, ...(pysaytetty() ? { keskeytetty: true } : {}) };
   }
 
+  async function geminiChat(valittu, viesti, jatko, { pala, alku, pysaytetty }) {
+    const k = jatko ? luePaikallinen(jatko) : { agentti: valittu.nimi, viestit: [] };
+    if (!k) throw new Hylatty(404, 'tuntematon keskustelu');
+    if (k.agentti !== valittu.nimi) throw new Hylatty(409, 'keskustelu kuuluu toiselle mallille');
+    const kehote = geminiKehote(k.viestit, viesti);
+    k.viestit.push({ rooli: 'kayttaja', teksti: viesti, aika: new Date().toISOString() });
+    alku?.();
+    const { vastaus } = await android().kysyGeminilta({ teksti: kehote, pala, pysaytetty });
+    if (!vastaus && !pysaytetty()) throw new Hylatty(502, 'Gemini ei vastannut (ruudulta ei löytynyt vastausta)');
+    if (vastaus) k.viestit.push({ rooli: 'agentti', teksti: vastaus, aika: new Date().toISOString() });
+    const id = jatko ?? randomUUID();
+    mkdirSync(paikallisetDir(), { recursive: true });
+    writeFileSync(join(paikallisetDir(), `${id}.json`), JSON.stringify(k));
+    return { vastaus, keskustelu: id, agentti: valittu.nimi, kustannus: 0, ...(pysaytetty() ? { keskeytetty: true } : {}) };
+  }
+
   const malliTranskriptista = (rivit) => {
     for (const r of rivit) { try { const m = JSON.parse(r).message?.model; if (MALLIT.some((x) => x.nimi === m)) return m; } catch { /* ohita */ } }
     return null;
@@ -268,10 +306,10 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
 
     keskustelut() {
       const dir = chatProjekti();
-      if (!existsSync(dir)) return [];
       const nimet = lueAgentit();
       const tulos = [];
-      for (const f of readdirSync(dir).filter((x) => x.endsWith('.jsonl'))) {
+      // Ilman yhtään Claude-chattia kansiota ei ole, mutta paikalliset ja Gemini-keskustelut luetaan silti.
+      for (const f of existsSync(dir) ? readdirSync(dir).filter((x) => x.endsWith('.jsonl')) : []) {
         const id = f.slice(0, -6);
         if (!ISTUNTO_ID.test(id)) continue;
         const polku = join(dir, f);
@@ -311,6 +349,7 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
     // `signal` katkaisee ajon, kun puhelin sulkee yhteyden.
     async chat({ agentti, viesti, keskustelu: jatko } = {}, { pala, alku, signal } = {}) {
       const valittu = MALLIT.find((a) => a.nimi === agentti)
+        ?? (android && agentti === GEMINI_AGENTTI.nimi ? GEMINI_AGENTTI : undefined)
         ?? (typeof agentti === 'string' && agentti.startsWith(PAIKALLINEN) ? (await haePaikalliset()).find((a) => a.nimi === agentti) : undefined);
       if (!valittu) throw new Hylatty(400, 'tuntematon agentti');
       if (typeof viesti !== 'string' || !viesti.trim()) throw new Hylatty(400, 'viesti puuttuu');
@@ -323,6 +362,7 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
       signal = signal ? AbortSignal.any([signal, pysaytin.signal]) : pysaytin.signal;
       try {
         if (valittu.tyyppi === 'paikallinen') return await paikallinenChat(valittu, viesti, jatko, { pala, alku, signal, pysaytetty });
+        if (valittu.tyyppi === 'gemini') return await geminiChat(valittu, viesti, jatko, { pala, alku, pysaytetty });
         mkdirSync(asetukset.chatDir, { recursive: true });
         const argumentit = ['-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--tools', '',
           '--model', valittu.nimi,

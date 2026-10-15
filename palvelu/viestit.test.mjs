@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { projektiNimi } from './lahteet.mjs';
 import { kasittelija } from './palvelin.mjs';
 import { Hylatty } from './toiminnot.mjs';
-import { keskustelu, luoViestit, mallinNayttonimi, MALLIT, paikallisetMallit, transkriptissa, tyokaluRivi } from './viestit.mjs';
+import { GEMINI_AGENTTI, geminiKehote, keskustelu, luoViestit, mallinNayttonimi, MALLIT, paikallisetMallit, transkriptissa, tyokaluRivi } from './viestit.mjs';
 
 const ID = '38c487b9-3c36-4723-b2af-5f07b106c172';
 const rivi = (o) => JSON.stringify(o);
@@ -484,4 +484,32 @@ test('palvelin: katkennut virta ei pysäytä agenttia, ja kaynnissa liittyy siih
   } finally {
     srv.close();
   }
+});
+
+test('geminiKehote: ensimmäinen viesti sellaisenaan, jatko historian kanssa, vanhimmat pois rajalla', () => {
+  assert.equal(geminiKehote([], 'moi'), 'moi');
+  const h = [{ rooli: 'kayttaja', teksti: 'eka' }, { rooli: 'agentti', teksti: 'vastaus' }];
+  assert.equal(geminiKehote(h, 'toka'), 'Jatka alla olevaa keskustelua ja vastaa vain viimeiseen viestiin.\n\n[Aiempi keskustelu]\nMinä: eka\nGemini: vastaus\n\n[Uusi viesti]\ntoka');
+  const pitka = geminiKehote([{ rooli: 'kayttaja', teksti: 'A'.repeat(5000) }, { rooli: 'agentti', teksti: 'B'.repeat(5000) }], 'uusi', 8000);
+  // Uusin viesti kokonaan, vanhemmasta loppuosa.
+  assert.ok(pitka.length <= 8000 && pitka.includes(`Gemini: ${'B'.repeat(5000)}\n`) && pitka.includes('\n…AAA') && pitka.endsWith('uusi'));
+});
+
+test('chat: Gemini (Android) — vain android-olion kanssa, historia talteen, jatko kehotteessa', async () => {
+  const a = ymparisto();
+  const saadut = [];
+  const android = () => ({ async kysyGeminilta({ teksti, pala }) { saadut.push(teksti); pala?.('Vas'); return { vastaus: `Vastaus ${saadut.length}` }; } });
+  const v = luoViestit(a, { aja: vaarennos().aja, android });
+  assert.ok((await v.agentit()).some((x) => x.nimi === GEMINI_AGENTTI.nimi && x.tyyppi === 'gemini'));
+  const palat = [];
+  const r = await v.chat({ agentti: 'android/gemini', viesti: 'eka' }, { pala: (t) => palat.push(t) });
+  assert.deepEqual([r.vastaus, r.agentti, palat], ['Vastaus 1', 'android/gemini', ['Vas']]);
+  await v.chat({ agentti: 'android/gemini', viesti: 'toka', keskustelu: r.keskustelu });
+  assert.equal(saadut[0], 'eka');
+  assert.match(saadut[1], /Minä: eka\nGemini: Vastaus 1\n\n\[Uusi viesti\]\ntoka$/);
+  assert.deepEqual(v.keskustelunViestit(r.keskustelu).viestit.map((x) => x.teksti), ['eka', 'Vastaus 1', 'toka', 'Vastaus 2']);
+  assert.ok(v.keskustelut().some((k) => k.id === r.keskustelu && k.agentti === 'android/gemini'));
+  const ilman = luoViestit(a, { aja: vaarennos().aja });
+  assert.ok(!(await ilman.agentit()).some((x) => x.tyyppi === 'gemini'));
+  await hylkaa(ilman.chat({ agentti: 'android/gemini', viesti: 'x' }), 400);
 });
