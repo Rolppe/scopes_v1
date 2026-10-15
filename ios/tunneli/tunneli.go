@@ -15,6 +15,7 @@ import (
 	"net/netip"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.zx2c4.com/wireguard/conn"
@@ -27,7 +28,9 @@ type ajo struct {
 	laite         *device.Device
 	verkko        *netstack.Net
 	kuuntelija    net.Listener
-	paate         string // Endpoint-rivi sellaisenaan (nimi:portti); ratkaistaan uudelleen Paivita-kutsussa
+	kuollut       atomic.Bool // Accept palautti virheen: iOS otti pistokkeen takaisin äpin ollessa jäädytettynä
+	paate         string      // Endpoint-rivi sellaisenaan (nimi:portti); ratkaistaan uudelleen Paivita-kutsussa
+	vertainen     string      // PublicKey heksana: UAPI hyväksyy endpoint-rivin vain vertaisen public_key-rivin perässä
 }
 
 var (
@@ -36,12 +39,18 @@ var (
 )
 
 // Kaynnista avaa tunnelin wg-quick-muotoisella asetuksella ja palauttaa paikallisen portin, joka välittää
-// kohteeseen (isäntä:portti tunnelin takana). Sama asetus ja kohde palauttavat käynnissä olevan tunnelin portin.
+// kohteeseen (isäntä:portti tunnelin takana). Sama asetus ja kohde palauttavat käynnissä olevan tunnelin portin;
+// kuollut paikallinen portti avataan ensin uudelleen (V-487: muuten jokainen pyyntö sai -1004:n äpin uudelleenkäynnistykseen asti).
 func Kaynnista(asetus, kohde string) (int, error) {
 	lukko.Lock()
 	defer lukko.Unlock()
 	if nyt != nil && nyt.asetus == asetus && nyt.kohde == kohde {
-		return nyt.kuuntelija.Addr().(*net.TCPAddr).Port, nil
+		if nyt.kuollut.Load() {
+			if err := nyt.kuuntele(); err != nil {
+				return 0, err
+			}
+		}
+		return nyt.portti(), nil
 	}
 	pysayta()
 	a, err := avaa(asetus, kohde)
@@ -49,16 +58,20 @@ func Kaynnista(asetus, kohde string) (int, error) {
 		return 0, err
 	}
 	nyt = a
-	return a.kuuntelija.Addr().(*net.TCPAddr).Port, nil
+	return a.portti(), nil
 }
 
-// Paivita ratkaisee päätepisteen nimen uudelleen (DDNS) ja avaa UDP-pistokkeen uudelleen verkon vaihtuessa
-// (Wi-Fi ↔ mobiili). Äppi kutsuu tätä palatessaan etualalle.
+// Paivita avaa paikallisen portin uudelleen (iOS ottaa jäädytetyn äpin kuuntelevan pistokkeen takaisin, eikä
+// Accept välttämättä ole vielä huomannut sitä), ratkaisee päätepisteen nimen uudelleen (DDNS) ja avaa
+// UDP-pistokkeen uudelleen verkon vaihtuessa (Wi-Fi ↔ mobiili). Äppi kutsuu tätä palatessaan etualalle.
 func Paivita() error {
 	lukko.Lock()
 	defer lukko.Unlock()
 	if nyt == nil {
 		return nil
+	}
+	if err := nyt.kuuntele(); err != nil {
+		return err
 	}
 	if err := nyt.laite.BindUpdate(); err != nil {
 		return err
@@ -67,7 +80,7 @@ func Paivita() error {
 	if err != nil {
 		return err
 	}
-	return nyt.laite.IpcSet("endpoint=" + osoite + "\n")
+	return nyt.laite.IpcSet("public_key=" + nyt.vertainen + "\nendpoint=" + osoite + "\n")
 }
 
 // Pysayta sulkee tunnelin ja paikallisen portin.
@@ -94,9 +107,10 @@ func pysayta() {
 }
 
 type jasennetty struct {
-	osoite netip.Addr
-	uapi   string
-	paate  string
+	osoite    netip.Addr
+	uapi      string
+	paate     string
+	vertainen string
 }
 
 // jasenna lukee wg-quick-asetuksen: [Interface] PrivateKey, Address; [Peer] PublicKey, PresharedKey, Endpoint,
@@ -148,6 +162,7 @@ func jasenna(asetus string) (jasennetty, error) {
 				return j, fmt.Errorf("PublicKey: %w", err)
 			}
 			fmt.Fprintf(&vertainen, "public_key=%s\n", h)
+			j.vertainen = h
 		case "peer.presharedkey":
 			h, err := heksana(arvo)
 			if err != nil {
@@ -231,16 +246,42 @@ func avaa(asetus, kohde string) (*ajo, error) {
 		laite.Close()
 		return nil, err
 	}
-	a := &ajo{asetus: asetus, kohde: kohde, laite: laite, verkko: verkko, kuuntelija: kuuntelija, paate: j.paate}
-	go a.valita()
+	a := &ajo{asetus: asetus, kohde: kohde, laite: laite, verkko: verkko, kuuntelija: kuuntelija, paate: j.paate, vertainen: j.vertainen}
+	go a.valita(kuuntelija)
 	return a, nil
 }
 
-// valita ottaa paikalliset yhteydet vastaan ja kytkee kunkin tunnelin läpi kohteeseen.
-func (a *ajo) valita() {
+func (a *ajo) portti() int { return a.kuuntelija.Addr().(*net.TCPAddr).Port }
+
+// kuuntele vaihtaa paikallisen kuuntelijan uuteen samaan porttiin, jotta äpin muistama osoite pysyy voimassa;
+// jos portti ei vapaudu, mikä tahansa vapaa portti (äppi kysyy sen Kaynnista-kutsulla, kun reitti valitaan uudelleen).
+func (a *ajo) kuuntele() error {
+	vanha := a.portti()
+	a.kuuntelija.Close()
+	k, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", vanha))
+	if err != nil {
+		if k, err = net.Listen("tcp", "127.0.0.1:0"); err != nil {
+			a.kuollut.Store(true)
+			return err
+		}
+	}
+	a.kuuntelija = k
+	a.kuollut.Store(false)
+	go a.valita(k)
+	return nil
+}
+
+// valita ottaa paikalliset yhteydet vastaan ja kytkee kunkin tunnelin läpi kohteeseen. Kuuntelija annetaan
+// parametrina: vaihdettu kuuntelija ei saa merkitä uutta kuolleeksi.
+func (a *ajo) valita(kuuntelija net.Listener) {
 	for {
-		paikallinen, err := a.kuuntelija.Accept()
+		paikallinen, err := kuuntelija.Accept()
 		if err != nil {
+			lukko.Lock()
+			if a.kuuntelija == kuuntelija {
+				a.kuollut.Store(true)
+			}
+			lukko.Unlock()
 			return
 		}
 		go func() {
