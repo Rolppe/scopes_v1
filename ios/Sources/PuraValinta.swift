@@ -131,8 +131,16 @@ struct PurkuValitsimet: View {
                  : "Malli, joka tekee työn purun jälkeen. Istunto on Claude Code; paikalliset mallit näkyvät, kun palvelin on päällä.")
                 .accessibilityIdentifier("pura-malli-selite")
         }
-        .task { if valinnat == nil && latausVirhe == nil { await lataa() } }
+        // Irrallinen Task, ei .task: valitsimen avaus (siirtymä) peruisi .taskin, ja peruttu haku jäi virheeksi, jolloin listalla
+        // oli vain oletus (käyttäjä 15.10.2026: "uuden skoopin ... mallien valinnoissa ei ole muuta vaihtoehtoja kun default";
+        // palvelun loki 13:38Z: puhelimen haku katkesi 3,3 s:n kohdalla eikä uusiutunut).
+        .onAppear {
+            guard valinnat == nil && latausVirhe == nil && lataus == nil else { return }
+            lataus = Task { await lataa(); lataus = nil }
+        }
     }
+
+    @State private var lataus: Task<Void, Never>?
 
     private func lataa() async {
         do {
@@ -140,6 +148,10 @@ struct PurkuValitsimet: View {
             if !v.purkajat.contains(where: { $0.tunnus == purkaja }) { purkaja = "" }
             if !v.mallit.contains(where: { $0.nimi == malli }) { malli = "" }
             valinnat = v
+        } catch is CancellationError {
+            return
+        } catch let e as URLError where e.code == .cancelled {
+            return
         } catch {
             purkaja = ""
             malli = ""
