@@ -185,7 +185,22 @@ final class Ilmoittaja: NSObject, UNUserNotificationCenterDelegate {
         guard paalla else { return }
         ajoita()
         if edellinen == nil { edellinen = lueLahtotaso() }
-        tallennaTaustahaku(await hae(Asetukset()) ?? -1)
+        let maara = await hae(Asetukset()) ?? -1
+        tallennaTaustahaku(maara)
+        await raportoi(maara)
+    }
+
+    // Lukitulta puhelimelta devicectl ei saa plistiä (CoreDevice 4016), joten herätys ja ilmoitusten määrä kirjataan myös
+    // palvelun äppilokiin, josta taustahaku.sh lukee ne (NOTIFICATIONS-LUKITUS-TODENNUS 15.10.2026).
+    private func raportoi(_ ilmoituksia: Int) async {
+        let a = Asetukset()
+        guard a.valmis else { return }
+        let versio = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        let tapahtuma: [String: Any] = ["tyyppi": "taustahaku", "ilmoituksia": ilmoituksia,
+                                        "aika": ISO8601DateFormatter().string(from: Date())]
+        guard let runko = try? JSONSerialization.data(withJSONObject: ["laite": ["versio": versio], "tapahtumat": [tapahtuma]])
+        else { return }
+        _ = try? await Asiakas(osoite: a.osoite, avain: a.avain).diagnostiikka(runko)
     }
 
     // Palauttaa lähetettyjen ilmoitusten määrän, nil jos haku epäonnistui.
