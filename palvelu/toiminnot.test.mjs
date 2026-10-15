@@ -318,6 +318,7 @@ test('pura-testi: käynnissä oleva tai varattu istunto estää ennen ajoa, paka
   const v2 = vaarennos();
   assert.deepEqual((await luoToiminnot(a, { aja: v2.aja })('pura-testi', 'a')).suljettiin, ['s1']);
   assert.deepEqual(v2.kutsut.slice(0, 4).map((k) => k[0]), ['node', 'tmux', 'tmux', 'tmux']);
+  assert.deepEqual(v2.kutsut[0].slice(2), ['a', '--kohde', 'claude', '--suljettavat', 's1']);
   assert.deepEqual(v2.kutsut.slice(2, 4), [['tmux', 'send-keys', '-t', '%5', '-l', '/exit'], ['tmux', 'send-keys', '-t', '%5', 'Enter']]);
 });
 
