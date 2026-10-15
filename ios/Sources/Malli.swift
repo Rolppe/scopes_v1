@@ -169,6 +169,7 @@ func prosentti(_ osa: Int, _ kaikki: Int) -> String {
 enum Toiminto: String {
     case pura, pakkaa, automaattisiirto, herata
     case herataPois = "herata-pois"
+    case puraTesti = "pura-testi"
 }
 
 // Globaalit pakkauskytkimet (palvelu/toiminnot-asetukset.mjs, käyttäjä 14.10.2026): koskevat kaikkia skooppeja.
