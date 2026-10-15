@@ -79,15 +79,6 @@ struct Asiakas {
         try await hae("/api/asetukset/\(kytkin.rawValue)/\(paalle ? "paalle" : "pois")", metodi: "POST")
     }
 
-    // Ilmoitusvahdin asetukset ja koe (NOTIFICATIONS-HA-PUSH 15.10.2026): ilmoitukset lähettää palvelin HA:n kautta.
-    func ilmoitusAsetukset() async throws -> IlmoitusArvot { try await hae("/api/ilmoitukset") }
-
-    func asetaIlmoitukset(_ a: IlmoitusArvot) async throws -> IlmoitusArvot {
-        try await hae("/api/ilmoitukset", metodi: "POST", runko: try JSONEncoder().encode(a))
-    }
-
-    func koeIlmoitus() async throws -> KoeVastaus { try await hae("/api/ilmoitukset/koe", metodi: "POST", aikaraja: 15) }
-
     func uusi(_ nimi: String) async throws -> ToimintoVastaus {
         try await hae("/api/uusi", metodi: "POST", runko: try JSONEncoder().encode(["nimi": nimi]), aikaraja: 150)
     }

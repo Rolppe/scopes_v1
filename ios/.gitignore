@@ -2,3 +2,6 @@ Skoopit.xcodeproj/
 Info.plist
 build/
 *.xcresult
+Skoopit.entitlements
+Widget/Info.plist
+Widget/*.entitlements

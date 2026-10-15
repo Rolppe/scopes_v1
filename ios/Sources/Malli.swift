@@ -1,7 +1,7 @@
 // Rajapinnan `scopes/palvelu` vastaukset (palvelin.mjs, lahteet.mjs). Kenttien nimet ovat palvelun nimiä.
 import Foundation
 
-struct SkooppiYhteenveto: Decodable, Identifiable, Hashable {
+struct SkooppiYhteenveto: Codable, Identifiable, Hashable {
     let nimi: String
     let seuraava: String?
     let avoimia: Int

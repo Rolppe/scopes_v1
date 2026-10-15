@@ -12,11 +12,12 @@ targets:
     type: application
     platform: iOS
     deploymentTarget: "18.0"
-    sources: [Sources, Resources]
+    sources: [Sources, Resources, Jaettu]
     # Äpin oma WireGuard-tunneli (SCOPES-ETAYHTEYS): tunneli/rakenna.sh kääntää Macissa ennen xcodegeniä.
     dependencies:
       - framework: tunneli/Tunneli.xcframework
         embed: false
+      - target: SkoopitWidget
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.skoopit
@@ -30,14 +31,42 @@ targets:
         UILaunchScreen: {}
         # Vaaka chat- ja listanäkymään (käyttäjä 14.10.2026, DESIGN-VAAKATUKI); ylösalaisin ei iPhonessa.
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
-        # HA-ilmoituksen napautus avaa skoopin: skoopit://skooppi/<nimi> (NOTIFICATIONS-HA-PUSH 15.10.2026).
+        # Widgetin napautus avaa skoopin: skoopit://skooppi/<nimi> (NOTIFICATIONS-TAUSTA 15.10.2026).
         CFBundleURLTypes:
           - CFBundleURLName: com.example.skoopit
             CFBundleURLSchemes: [skoopit]
+        # Vähävirtainen taustapäivitys (NOTIFICATIONS-TAUSTA): iOS ajoittaa, Ilmoitukset.swift taustahaku().
+        UIBackgroundModes: [fetch]
+        BGTaskSchedulerPermittedIdentifiers: [com.example.skoopit.paivitys]
         NSLocalNetworkUsageDescription: Sovellus lukee skooppien tilan kotipalvelimelta.
         NSCameraUsageDescription: Kameralla otettu kuva liitetään skoopin viestiin.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+    # App Group jakaa tilannekuvan lukitusnäytön widgetille (Jaettu/Tilannekuva.swift).
+    entitlements:
+      path: Skoopit.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.example.skoopit]
+  # Lukitusnäytön ja kotinäytön widget (NOTIFICATIONS-TAUSTA 15.10.2026): näyttää odottavat skoopit äpin viimeisimmästä
+  # hausta; ei verkkoa omassa prosessissaan.
+  SkoopitWidget:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources: [Widget, Jaettu]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.skoopit.widget
+    info:
+      path: Widget/Info.plist
+      properties:
+        CFBundleDisplayName: Scopes
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Widget/SkoopitWidget.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.example.skoopit]
   SkoopitUITests:
     type: bundle.ui-testing
     platform: iOS
