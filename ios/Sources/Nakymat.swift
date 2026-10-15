@@ -292,6 +292,9 @@ struct UusiSkooppiView: View {
     @AppStorage("pura.malli") private var malli = ""
 
     private var varattu: Bool { varatut.contains(nimi) }
+    // Scopes-perhe (`scopes …` → scopes/, luo-skooppi.mjs) puretaan skriptillä ilman mallia (/pura vaihe 1, PURA-MALLITON T6),
+    // joten purkajan valinta piiloon kuten purun arkissa (käyttäjä 15.10.2026: "uuden skoopin purkamisessa ... kaikki mut paitsi script").
+    private var perhe: Bool { nimi.split(separator: " ").first == "scopes" }
 
     var body: some View {
         NavigationStack {
@@ -308,7 +311,7 @@ struct UusiSkooppiView: View {
                         Text("1–4 sanaa: pienet kirjaimet a–z, numerot ja viivat. Palvelin avaa skoopille uuden istunnon.")
                     }
                 }
-                PurkuValitsimet(valinnat: $valinnat, latausVirhe: $latausVirhe, purkaja: $purkaja, malli: $malli)
+                PurkuValitsimet(valinnat: $valinnat, latausVirhe: $latausVirhe, purkaja: $purkaja, malli: $malli, naytaPurkaja: !perhe)
                 Section {
                     Button("Luo skooppi") { vahvista = true }
                         .disabled(!kelpaaUudeksi(nimi) || varattu || kaynnissa)
@@ -333,7 +336,7 @@ struct UusiSkooppiView: View {
         virhe = nil
         do {
             tulos = try await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain)
-                .uusi(nimi, valinta: PuraValinta(purkaja: purkaja.isEmpty ? nil : purkaja, malli: malli.isEmpty ? nil : malli))
+                .uusi(nimi, valinta: PuraValinta(purkaja: perhe || purkaja.isEmpty ? nil : purkaja, malli: malli.isEmpty ? nil : malli))
         } catch {
             virhe = error.localizedDescription
         }
