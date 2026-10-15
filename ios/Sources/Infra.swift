@@ -5,6 +5,9 @@
 import SwiftUI
 
 struct InfraView: View {
+    // Infra pysyy rakennettuna piilossakin (Juuri.swift nakyvissa), joten lista ladataan uudelleen aina, kun näkymä
+    // tulee esiin: muuten istunnon aikana luotu skooppi puuttui puusta (V-312 14.10.2026).
+    let nakyvissa: Bool
     @EnvironmentObject private var asetukset: Asetukset
     @State private var skoopit: [SkooppiYhteenveto] = []
     // Kontekstitiedostot katon täyttöasteineen (SCOPES-INFRA-REKISTERIT); nil = vanha palvelu tai lataus epäonnistui.
@@ -60,7 +63,9 @@ struct InfraView: View {
             .toolbar { Sivupalkkipainike() }
             .navigationDestination(for: SkooppiReitti.self) { $0.nakyma }
             .refreshable { await lataa() }
-            .task(id: asetukset.osoite + asetukset.avain) { await lataa() }
+            .task(id: "\(nakyvissa)" + asetukset.osoite + asetukset.avain) {
+                if nakyvissa { await lataa() }
+            }
         }
     }
 

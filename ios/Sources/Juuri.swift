@@ -100,7 +100,7 @@ struct JuuriView: View {
             ZStack(alignment: .leading) {
                 ZStack {
                     ChatView().nakyvissa(navigaatio.nakyma == .chat)
-                    InfraView().nakyvissa(navigaatio.nakyma == .infra)
+                    InfraView(nakyvissa: navigaatio.nakyma == .infra).nakyvissa(navigaatio.nakyma == .infra)
                     AndroidView(nakyvissa: navigaatio.nakyma == .android).nakyvissa(navigaatio.nakyma == .android)
                     if case let .skooppi(nimi) = navigaatio.nakyma {
                         NavigationStack {
