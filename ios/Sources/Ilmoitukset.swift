@@ -91,7 +91,22 @@ func ilmoitukset(edellinen: [SkooppiYhteenveto], uusi: [SkooppiYhteenveto], raja
 func lueLahtotaso(_ d: UserDefaults = .standard) -> [SkooppiYhteenveto]? {
     d.data(forKey: "lahtotaso").flatMap { try? JSONDecoder().decode([SkooppiYhteenveto].self, from: $0) }
 }
-func tallennaLahtotaso(_ s: [SkooppiYhteenveto], _ d: UserDefaults = .standard) { d.set(try? JSONEncoder().encode(s), forKey: "lahtotaso") }
+func tallennaLahtotaso(_ s: [SkooppiYhteenveto], aika: Date = Date(), _ d: UserDefaults = .standard) {
+    d.set(try? JSONEncoder().encode(s), forKey: "lahtotaso")
+    d.set(aika, forKey: "lahtotasoAika")
+}
+func lueLahtotasoAika(_ d: UserDefaults = .standard) -> Date? { d.object(forKey: "lahtotasoAika") as? Date }
+
+// Taustahaun raporttiin (NOTIFICATIONS-LUKITUS-TODENNUS 16.10.2026): skoopit, joiden ilmoitukset()-kentät (tilaNyt,
+// seuraava, vikoja) muuttuivat lähtötasoon nähden. 0 ilmoitusta ja 0 muuttunutta = ei muutoksia; 0 ilmoitusta ja
+// muuttuneita > 0 = muutos ei ollut ilmoitettava siirtymä tai ilmoitukset()-vika.
+func muuttuneet(edellinen: [SkooppiYhteenveto], uusi: [SkooppiYhteenveto]) -> Int {
+    let vanhat = Dictionary(edellinen.map { ($0.nimi, $0) }, uniquingKeysWith: { a, _ in a })
+    return uusi.filter { s in
+        guard let v = vanhat[s.nimi] else { return false }
+        return s.tilaNyt != v.tilaNyt || s.seuraava != v.seuraava || s.vikoja != v.vikoja
+    }.count
+}
 
 // Viimeisin iOS:n herättämä taustahaku Asetusten Ilmoitukset-sivulle (NOTIFICATIONS-TAUSTA-TODENNUS 15.10.2026: käyttäjä
 // ei nähnyt, herättikö iOS äppiä lainkaan). Ilmoituksia -1 = haku epäonnistui (reitti, tunneli tai palvelu).
@@ -185,19 +200,25 @@ final class Ilmoittaja: NSObject, UNUserNotificationCenterDelegate {
         guard paalla else { return }
         ajoita()
         if edellinen == nil { edellinen = lueLahtotaso() }
+        let vanha = edellinen
+        let ika = lueLahtotasoAika().map { Int(Date().timeIntervalSince($0)) }
         let maara = await hae(Asetukset()) ?? -1
         tallennaTaustahaku(maara)
-        await raportoi(maara)
+        let muuttui = maara < 0 ? nil : vanha.flatMap { v in edellinen.map { muuttuneet(edellinen: v, uusi: $0) } }
+        await raportoi(maara, muuttuneita: muuttui, lahtotasonIka: ika)
     }
 
     // Lukitulta puhelimelta devicectl ei saa plistiä (CoreDevice 4016), joten herätys ja ilmoitusten määrä kirjataan myös
     // palvelun äppilokiin, josta taustahaku.sh lukee ne (NOTIFICATIONS-LUKITUS-TODENNUS 15.10.2026).
-    private func raportoi(_ ilmoituksia: Int) async {
+    // muuttuneita nil = ei lähtötasoa tai haku epäonnistui; lahtotasonIka sekunteina (nil = ei tallennettua aikaa).
+    private func raportoi(_ ilmoituksia: Int, muuttuneita: Int?, lahtotasonIka: Int?) async {
         let a = Asetukset()
         guard a.valmis else { return }
         let versio = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
-        let tapahtuma: [String: Any] = ["tyyppi": "taustahaku", "ilmoituksia": ilmoituksia,
+        var tapahtuma: [String: Any] = ["tyyppi": "taustahaku", "ilmoituksia": ilmoituksia,
                                         "aika": ISO8601DateFormatter().string(from: Date())]
+        if let muuttuneita { tapahtuma["muuttuneita"] = muuttuneita }
+        if let lahtotasonIka { tapahtuma["lahtotasonIka"] = lahtotasonIka }
         guard let runko = try? JSONSerialization.data(withJSONObject: ["laite": ["versio": versio], "tapahtumat": [tapahtuma]])
         else { return }
         _ = try? await Asiakas(osoite: a.osoite, avain: a.avain).diagnostiikka(runko)
