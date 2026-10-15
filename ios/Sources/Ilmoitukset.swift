@@ -53,13 +53,13 @@ func tallennaIlmoitusPaalla(_ l: IlmoitusLaji, _ p: Bool, _ d: UserDefaults = .s
 // joten kaikki muu kuin käsittely ja pakattu lasketaan odottavaksi.
 func odottaa(_ s: SkooppiYhteenveto) -> Bool { !["kasittely", "pakattu"].contains(s.tilaNyt) }
 
-// Edellisen ja uuden haun ero ilmoituksiksi. Skooppi, jota edellisessä haussa ei ollut, on uusi: siitä ei ilmoiteta.
 // Widgetin tilannekuva: käyttäjää odottavat skoopit, viimeksi muuttunut ensin.
 func tilannekuva(_ s: [SkooppiYhteenveto], aika: Date = Date()) -> Tilannekuva {
     Tilannekuva(aika: aika, odottavat: s.filter(odottaa).sorted { ($0.aika ?? "") > ($1.aika ?? "") }
         .map { Tilannekuva.Rivi(nimi: $0.nimi, tila: $0.tilaNyt) })
 }
 
+// Edellisen ja uuden haun ero ilmoituksiksi. Skooppi, jota edellisessä haussa ei ollut, on uusi: siitä ei ilmoiteta.
 func ilmoitukset(edellinen: [SkooppiYhteenveto], uusi: [SkooppiYhteenveto], raja: Int) -> [Ilmoitus] {
     let vanhat = Dictionary(edellinen.map { ($0.nimi, $0) }, uniquingKeysWith: { a, _ in a })
     var r: [Ilmoitus] = []
@@ -83,6 +83,13 @@ func ilmoitukset(edellinen: [SkooppiYhteenveto], uusi: [SkooppiYhteenveto], raja
     }
     return r
 }
+
+// Taustahaun lähtötaso levyllä: iOS voi lopettaa äpin hakujen välissä, joten herätetty taustahaku vertaa edellisen haun
+// tallennettuun listaan. Puuttuva tai rikkinäinen arvo on "ei lähtötasoa": ensimmäinen haku ei ilmoita.
+func lueLahtotaso(_ d: UserDefaults = .standard) -> [SkooppiYhteenveto]? {
+    d.data(forKey: "lahtotaso").flatMap { try? JSONDecoder().decode([SkooppiYhteenveto].self, from: $0) }
+}
+func tallennaLahtotaso(_ s: [SkooppiYhteenveto], _ d: UserDefaults = .standard) { d.set(try? JSONEncoder().encode(s), forKey: "lahtotaso") }
 
 #if canImport(UIKit)
 import BackgroundTasks
@@ -161,9 +168,7 @@ final class Ilmoittaja: NSObject, UNUserNotificationCenterDelegate {
     func taustahaku() async {
         guard paalla else { return }
         ajoita()
-        if edellinen == nil, let data = UserDefaults.standard.data(forKey: "lahtotaso") {
-            edellinen = try? JSONDecoder().decode([SkooppiYhteenveto].self, from: data)
-        }
+        if edellinen == nil { edellinen = lueLahtotaso() }
         await hae(Asetukset())
     }
 
@@ -172,7 +177,7 @@ final class Ilmoittaja: NSObject, UNUserNotificationCenterDelegate {
               let uusi = try? await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).skoopit() else { return }
         defer {
             edellinen = uusi
-            UserDefaults.standard.set(try? JSONEncoder().encode(uusi), forKey: "lahtotaso")
+            tallennaLahtotaso(uusi)
             if tilannekuva(uusi).tallenna() { WidgetCenter.shared.reloadAllTimelines() }
         }
         guard let vanha = edellinen else { return }
