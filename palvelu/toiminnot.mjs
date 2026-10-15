@@ -238,7 +238,8 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
       const suljettavat = omat.filter((i) => i.ruutu);
       const varattu = omat.find((i) => i.tila !== 'idle');
       if (varattu) throw new Hylatty(409, `pakattu istunto on vielä varattu (${varattu.tila ?? 'tila tuntematon'}); yritä vuoron jälkeen`);
-      const r = await aja('node', [malliton, nimi, '--kohde', 'claude']);
+      // Suljettavat pois purkutiedoston ISTUNNOT-riviltä: ne suljetaan heti tiedoston jälkeen (PURASCRIPT-ISTUNNOT).
+      const r = await aja('node', [malliton, nimi, '--kohde', 'claude', ...(suljettavat.length ? ['--suljettavat', suljettavat.map((i) => i.id).join(',')] : [])]);
       if (r.koodi !== 0 && r.koodi !== 4) {
         throw new Hylatty(500, (r.stderr.trim().split('\n').filter(Boolean).pop() ?? `pura-malliton exit ${r.koodi}`).slice(0, 300));
       }
