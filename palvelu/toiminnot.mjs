@@ -6,7 +6,6 @@
 //            skoopin pakatut tmux-istunnot suljetaan ensin `/exit`illä (pakkaamaton istunto estää purun).
 //            Scopes-perhe (`pura-malliton.mjs --perhe`) puretaan mallitta: skripti kirjoittaa purkutiedoston ja uuden
 //            istunnon ensimmäinen viesti käskee lukemaan sen; purkajavalinta ei koske perhettä (PURA-MALLITON T6b)
-//   pura-testi — vanha testinapin reitti, nyt sama kuin pura; poistuu äpin napin kanssa (T6e)
 //   pakkaa — skoopin ainoaan vapaaseen tmux-istuntoon kirjoitetaan `/pakkaa`; jos istunto odottaa vastausta auki
 //            olevaan kysymykseen, Escape sulkee sen ensin (käyttäjä 14.10.2026: Pakkaa sai 409:n juuri silloin)
 //   automaattisiirto, herata, herata-pois — samoin `/automaattisiirto` (pakkaus ja sessionvaihto), `/sa` ja `/sa pois`
@@ -245,7 +244,6 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
       const tulos = await avaaIstunto(nimi, `/pura ${nimi}${ajaja ? ` --ajaja=${ajaja}` : ''}`, malli);
       return { ...tulos, suljettiin: suljettavat.map((i) => i.id), ...(ajaja ? { purkaja: ajaja } : {}), ...(malli ? { malli } : {}) };
     },
-    'pura-testi': (nimi) => toteutus.pura(nimi),
     pakkaa: (nimi) => istuntoon(nimi, '/pakkaa', 'pakkaa'),
     automaattisiirto: (nimi) => istuntoon(nimi, '/automaattisiirto', 'automaattisiirto'),
     herata: (nimi) => istuntoon(nimi, '/sa', 'herata'),

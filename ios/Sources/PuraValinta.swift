@@ -7,6 +7,7 @@ import SwiftUI
 // 15.10.2026: "Paikalliset mallit pitää saada myös keskustelun ajoon"; ilman Remote Controlia). Lista tulee palvelulta
 // (GET /api/purkajat, scopes/palvelu/purkajat.mjs), joka hyväksyy vain omat tunnuksensa. Ilman listaa (vanha palvelu,
 // ei yhteyttä) tarjolla on vain oletus, ja Pura toimii kuten ennen.
+// PURA-MALLITON-T6E: scopes/-perheen skooppi puretaan skriptillä ilman mallia, joten sen arkissa ei ole purkajan valintaa (purkaja lähtee nil).
 
 struct PurkajaVaihtoehto: Decodable, Hashable {
     let tunnus: String
@@ -35,6 +36,8 @@ struct PuraValinta: Encodable, Hashable {
 
 struct PuraValintaView: View {
     let skooppi: String
+    // Scopes-perhe: purkajan valinta piiloon, selite tilalle.
+    var perhe: Bool = false
     let pura: (PuraValinta) -> Void
     @Environment(\.dismiss) private var sulje
     @State private var valinnat: PurkuValinnat?
@@ -50,7 +53,7 @@ struct PuraValintaView: View {
                     Text("Uusi Claude-istunto käynnistyy ja lukee skoopin tilanteen rekisteristä.")
                         .accessibilityIdentifier("pura-valinta-seuraus")
                 }
-                PurkuValitsimet(valinnat: $valinnat, latausVirhe: $latausVirhe, purkaja: $purkaja, malli: $malli)
+                PurkuValitsimet(valinnat: $valinnat, latausVirhe: $latausVirhe, purkaja: $purkaja, malli: $malli, naytaPurkaja: !perhe)
             }
             .navigationTitle("Pura: \(skooppi)")
             .navigationBarTitleDisplayMode(.inline)
@@ -60,7 +63,7 @@ struct PuraValintaView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Pura") {
-                        pura(PuraValinta(purkaja: purkaja.isEmpty ? nil : purkaja, malli: malli.isEmpty ? nil : malli))
+                        pura(PuraValinta(purkaja: perhe || purkaja.isEmpty ? nil : purkaja, malli: malli.isEmpty ? nil : malli))
                         sulje()
                     }
                     .disabled(valinnat == nil && latausVirhe == nil)
@@ -78,6 +81,8 @@ struct PurkuValitsimet: View {
     @Binding var latausVirhe: String?
     @Binding var purkaja: String
     @Binding var malli: String
+    // false = ei purkajan osiota (scopes-perhe, T6E); purkaja pysyy tyhjänä.
+    var naytaPurkaja: Bool = true
     @EnvironmentObject private var asetukset: Asetukset
 
     private var ryhmat: [(String, [PurkajaVaihtoehto])] {
@@ -102,19 +107,26 @@ struct PurkuValitsimet: View {
     }
 
     var body: some View {
-        Section {
-            Picker("Purkaja", selection: $purkaja) {
-                Text(oletusPurkaja).tag("")
-                ForEach(ryhmat, id: \.0) { r in
-                    Section(r.0) { ForEach(r.1, id: \.tunnus) { Text($0.kuvaus).tag($0.tunnus) } }
+        if naytaPurkaja {
+            Section {
+                Picker("Purkaja", selection: $purkaja) {
+                    Text(oletusPurkaja).tag("")
+                    ForEach(ryhmat, id: \.0) { r in
+                        Section(r.0) { ForEach(r.1, id: \.tunnus) { Text($0.kuvaus).tag($0.tunnus) } }
+                    }
                 }
+                .pickerStyle(.navigationLink)
+                .accessibilityIdentifier("pura-purkaja")
+            } header: { Text("Purkaja") } footer: {
+                Text(latausVirhe.map { "Valintoja ei saatu palvelulta (\($0)): käytössä oletus." }
+                     ?? "Lukee rekisterit ja kirjoittaa purkuraportin. agy ja paikalliset mallit näkyvät, kun ne ovat saatavilla.")
+                    .accessibilityIdentifier("pura-purkaja-selite")
             }
-            .pickerStyle(.navigationLink)
-            .accessibilityIdentifier("pura-purkaja")
-        } header: { Text("Purkaja") } footer: {
-            Text(latausVirhe.map { "Valintoja ei saatu palvelulta (\($0)): käytössä oletus." }
-                 ?? "Lukee rekisterit ja kirjoittaa purkuraportin. agy ja paikalliset mallit näkyvät, kun ne ovat saatavilla.")
-                .accessibilityIdentifier("pura-purkaja-selite")
+        } else {
+            Section {
+                Text("Scopes-skooppi puretaan skriptillä ilman mallia.")
+                    .accessibilityIdentifier("pura-malliton-selite")
+            }
         }
         Section {
             Picker("Istunnon malli", selection: $malli) {

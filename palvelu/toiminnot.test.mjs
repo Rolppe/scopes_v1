@@ -354,10 +354,11 @@ test('pura: perheen pura-malliton exit 4 → ok + varoitus', async () => {
   assert.deepEqual(v.kutsut.map((k) => k[0]), ['node', 'node', 'bash']);
 });
 
-test('pura-testi: vanha reitti on sama kuin pura (poistuu T6e:ssä)', async () => {
+test('pura-testi: poistunut toiminto on tuntematon (404) eikä kutsu mitään', async () => {
   const v = vaarennos({ perhe: true });
-  const r = await luoToiminnot(ymparisto({ skoopit: SCOPES }), { aja: v.aja })('pura-testi', 'b c');
-  assert.equal(r.tiedosto, MALLITON_TIEDOSTO('b-c'));
+  await assert.rejects(luoToiminnot(ymparisto({ skoopit: SCOPES }), { aja: v.aja })('pura-testi', 'b c'),
+    (e) => e instanceof Hylatty && e.koodi === 404 && e.message === 'tuntematon toiminto');
+  assert.deepEqual(v.kutsut, []);
 });
 
 test('istuntoOsoite: vain OK-rivin claude.ai-osoite', () => {
@@ -396,7 +397,7 @@ test('palvelin: POST-reitit vaativat avaimen ja ohjautuvat toimintoihin', async 
   try {
     assert.equal((await laheta('/api/skoopit/a%20b/pura'))[0], 200);
     assert.equal((await laheta('/api/skoopit/a/pakkaa'))[0], 200);
-    assert.equal((await laheta('/api/skoopit/a/pura-testi'))[0], 200);
+    assert.deepEqual(await laheta('/api/skoopit/a/pura-testi'), [404, { virhe: 'tuntematon toiminto' }]);
     assert.equal((await laheta('/api/skoopit/a/herata-pois'))[0], 200);
     assert.equal((await laheta('/api/uusi', '{"nimi":"koe"}'))[0], 200);
     assert.deepEqual(await laheta('/api/skoopit/x/pura'), [409, { virhe: 'varattu' }]);
@@ -409,7 +410,7 @@ test('palvelin: POST-reitit vaativat avaimen ja ohjautuvat toimintoihin', async 
     assert.deepEqual(await laheta('/api/skoopit/a/pura', '{"malli":"gpt-4"}'), [400, { virhe: 'tuntematon istunnon malli gpt-4' }]);
     assert.equal((await laheta('/api/skoopit/a/arkistoi'))[0], 200);
     assert.equal((await laheta('/api/uusi', '{"nimi":"koe2","malli":"claude-sonnet-5-5"}'))[0], 200);
-    assert.deepEqual(kutsut, [['pura', 'a b'], ['pakkaa', 'a'], ['pura-testi', 'a'], ['herata-pois', 'a'], ['uusi', 'koe'], ['pura', 'x'], ['pura', 'a'],
+    assert.deepEqual(kutsut, [['pura', 'a b'], ['pakkaa', 'a'], ['herata-pois', 'a'], ['uusi', 'koe'], ['pura', 'x'], ['pura', 'a'],
       ['arkistoi', 'a'], ['uusi', 'koe2']]);
     assert.deepEqual(valinnat, [{ ajaja: null, malli: null }, { ajaja: null, malli: null }, { ajaja: null, malli: null }, { ajaja: null, malli: 'claude-sonnet-5-5' },
       { ajaja: null, malli: 'claude-sonnet-5-5' }]);
