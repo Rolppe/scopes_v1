@@ -23,12 +23,21 @@ export function agyMallit(stdout) {
     .map(([id, nimi]) => ({ id, nimi: nimi.trim() }));
 }
 
-export function luoPurkajat({ juuri, paikalliset = async () => [], aja = ajaKomento } = {}) {
-  let agy = { aika: 0, mallit: [] };
+export function luoPurkajat({ juuri, paikalliset = async () => [], aja = ajaKomento, nyt = Date.now } = {}) {
+  // Vanhentunut agy-lista palautetaan heti ja päivitetään taustalla; vain ensimmäinen haku odottaa. Kylmä välimuisti
+  // odotutti koko listaa, myös istunnon malleja, joihin agy ei kuulu (käyttäjä 15.10.2026: "Näkyy mutta tuli viiveellä";
+  // pyyntöloki 14:05Z /api/purkajat 6 538 ms, lämpimänä 0–3 ms).
+  let agy = { aika: -Infinity, mallit: [], haku: null };
+  function paivitaAgy() {
+    agy.haku ??= aja('agy', ['models'], { aikaraja: 20_000 })
+      .then((t) => { agy = { aika: nyt(), mallit: t.koodi === 0 ? agyMallit(t.stdout) : [], haku: null }; },
+        () => { agy.haku = null; });
+    return agy.haku;
+  }
   async function haeAgy() {
-    if (Date.now() - agy.aika < AGY_VALIMUISTI_MS) return agy.mallit;
-    const t = await aja('agy', ['models'], { aikaraja: 20_000 });
-    agy = { aika: Date.now(), mallit: t.koodi === 0 ? agyMallit(t.stdout) : [] };
+    if (nyt() - agy.aika < AGY_VALIMUISTI_MS) return agy.mallit;
+    const haku = paivitaAgy();
+    if (agy.aika === -Infinity) await haku;
     return agy.mallit;
   }
 

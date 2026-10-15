@@ -20,3 +20,9 @@ mkdir -p "$(dirname "$loki")"
 # tyhjä SCOPES_LR_VIENTI= kytkee pois (koeinstanssi, jonka repojuuri on tuotannon).
 SCOPES_LR_VIENTI=${SCOPES_LR_VIENTI-scopes/} SCOPES_OSOITE=${SCOPES_OSOITE:-0.0.0.0} SCOPES_PORTTI=$portti SCOPES_AVAIN_TIEDOSTO=$avain \
   nohup "${NODE:-node}" "$tama/palvelin.mjs" >>"$loki" 2>&1 &
+# Purun mallilistan esihaku: ensimmäinen /api/purkajat odottaa `agy models` -ajoa (7,7 s 15.10.2026), myöhemmät saavat
+# välimuistin heti (purkajat.mjs). Tehdään tässä, ettei puhelin osu siihen uudelleenkäynnistyksen jälkeen.
+(for _ in $(seq 1 30); do
+  curl -fsS -m 2 "http://127.0.0.1:$portti/api/terveys" >/dev/null 2>&1 && break; sleep 1
+done
+curl -fsS -m 40 -o /dev/null -H "Authorization: Bearer $(cat "$avain")" "http://127.0.0.1:$portti/api/purkajat") >/dev/null 2>&1 &
