@@ -44,7 +44,7 @@ struct SkoopitApp: App {
 }
 
 enum Paanakyma: Hashable {
-    case chat, infra
+    case chat, infra, android
     case skooppi(String)
 }
 
@@ -100,6 +100,7 @@ struct JuuriView: View {
                 ZStack {
                     ChatView().nakyvissa(navigaatio.nakyma == .chat)
                     InfraView().nakyvissa(navigaatio.nakyma == .infra)
+                    AndroidView(nakyvissa: navigaatio.nakyma == .android).nakyvissa(navigaatio.nakyma == .android)
                     if case let .skooppi(nimi) = navigaatio.nakyma {
                         NavigationStack {
                             SkooppiViestitView(nimi: nimi)
@@ -407,10 +408,10 @@ struct SivuttaisVeto: UIGestureRecognizerRepresentable {
             return abs(v.x) > 2 * abs(v.y)
         }
         // Tekstikentän kosketukset kuuluvat kentälle: kursorin raahaus ja valinta (kopioi, leikkaa, liitä) katkesivat,
-        // kun vaakaveto otti ne (käyttäjä 13.10.2026).
+        // kun vaakaveto otti ne (käyttäjä 13.10.2026). Android-ruudun veto kuuluu laitteelle (Android.swift).
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive kosketus: UITouch) -> Bool {
             var n = kosketus.view
-            while let v = n { if v is UITextView || v is UITextField { return false }; n = v.superview }
+            while let v = n { if v is UITextView || v is UITextField || v is AndroidEleNakyma { return false }; n = v.superview }
             return true
         }
         // Vain vierityksen veto odottaa: listan pitkä painallus (rivin nosto, .onMove ja .draggable) jäi odottamaan
