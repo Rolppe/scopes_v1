@@ -257,6 +257,14 @@ enum LrLaskenta {
         }
     }
 
+    // Testipurku lukee palvelimen LR:n (pura-malliton.mjs), joten äpin muutokset lähetetään ennen pyyntöä: oma kierros,
+    // ja jos kierros oli jo käynnissä, odotetaan sen lisäkierros loppuun (enintään 15 s, ettei purku jumitu verkkoon).
+    func synkkaaEnnen() async {
+        await synkkaa()
+        let raja = Date().addingTimeInterval(15)
+        while kaynnissa && Date() < raja { try? await Task.sleep(for: .milliseconds(200)) }
+    }
+
     // MARK: Synkka
 
     func synkkaa() async {

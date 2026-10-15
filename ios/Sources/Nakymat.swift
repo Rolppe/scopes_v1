@@ -206,6 +206,7 @@ struct SkooppiNakymaView: View {
         tulos = nil
         toimintoVirhe = nil
         do {
+            if t == .puraTesti { await Lr.jaettu.synkkaaEnnen() }
             tulos = try await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).toiminto(t, nimi, valinta: valinta)
             // Pakkaus ja purku laukaisevat rekisterisynkan (LOCALREGISTER V4).
             if t == .pakkaa || t == .pura || t == .puraTesti { Lr.jaettu.laukaise(.toiminto) }
