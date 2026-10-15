@@ -232,7 +232,7 @@ struct Asiakas {
     // Katkos unohtaa reitin: seuraava pyyntö kokeilee kotiverkkoa ja tunnelia uudelleen (Reitti.swift).
     private func reititetty<T>(_ tee: () async throws -> T) async throws -> T {
         do { return try await tee() } catch {
-            if Self.yhteysKatkesi(error) { await Reitti.jaettu.unohda() }
+            if Self.yhteysKatkesi(error) { await Reitti.jaettu.unohda(error) }
             throw error
         }
     }
