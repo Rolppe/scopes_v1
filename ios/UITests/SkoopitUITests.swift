@@ -309,7 +309,7 @@ final class SkoopitUITests: XCTestCase {
         kuva("konteksti")
         let osa = app.buttons["konteksti-osa-0-0"]
         for _ in 0..<6 where !osa.isHittable { app.swipeUp() }
-        XCTAssertTrue(osa.isHittable, "rekisterin ensimmäinen osa ei näy")
+        XCTAssertTrue(osa.isHittable, "ensimmäisen ryhmän (elävän istunnon kehote tai rekisteri, V-400) ensimmäinen osa ei näy")
         osa.tap()
         XCTAssertTrue(app.staticTexts["konteksti-teksti"].waitForExistence(timeout: 5), "osan teksti ei näy")
         kuva("konteksti-teksti")
@@ -320,6 +320,37 @@ final class SkoopitUITests: XCTestCase {
         app.buttons["Koko"].tap()
         app.swipeDown()
         kuva("konteksti-koko")
+    }
+
+    // Elävän istunnon ladatut osat kontekstinäkymässä (SCOPES-KONTEKSTI-LADATUT V-400 15.10.2026): ensimmäinen ryhmä on
+    // järjestelmäkehote ja sen osa avautuu tekstinä. Vaatii elävän istunnon skoopissa SCOPES_KOE_LADATUT (oletus scopes infra).
+    func testKontekstiLadatut() throws {
+        let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        let nimi = ProcessInfo.processInfo.environment["SCOPES_KOE_LADATUT"] ?? "scopes infra"
+        let app = kaynnista(avain: avain)
+        nayta(app, "sivupalkki-infra")
+        XCTAssertTrue(app.buttons["infra-avaa-claude"].waitForExistence(timeout: 15), "infrapuu ei latautunut")
+        // Lista on laiska: alaskooppien vanhempi tulee näkyviin vierittämällä.
+        let vanhempi = app.buttons["infra-avaa-\(nimi.split(separator: " ")[0])"]
+        for _ in 0..<8 where !(vanhempi.exists && vanhempi.isHittable) { app.swipeUp() }
+        vanhempi.tap()
+        let skooppi = app.buttons["infra-\(nimi)"]
+        for _ in 0..<8 where !(skooppi.exists && skooppi.isHittable) { app.swipeUp() }
+        XCTAssertTrue(skooppi.isHittable, "infrapuussa ei ole skooppia \(nimi)")
+        skooppi.tap()
+        let avaa = app.buttons["konteksti-avaa"]
+        XCTAssertTrue(avaa.waitForExistence(timeout: 15), "skoopin näkymässä ei ole kontekstia")
+        avaa.tap()
+        XCTAssertTrue(app.staticTexts["Järjestelmäkehote"].firstMatch.waitForExistence(timeout: 5), "ladattu kehote puuttuu")
+        kuva("ladatut")
+        app.swipeUp()
+        kuva("ladatut-2")
+        let osa = app.buttons["konteksti-osa-0-0"]
+        for _ in 0..<12 where !osa.isHittable { app.swipeUp() }
+        XCTAssertTrue(osa.isHittable, "kehotteen ensimmäinen osa ei näy")
+        osa.tap()
+        XCTAssertTrue(app.staticTexts["konteksti-teksti"].waitForExistence(timeout: 5), "kehotteen teksti ei näy")
+        kuva("ladattu-kehote")
     }
 
     // Kaikkien skooppien rekisterit katon täyttöasteen mukaan (SCOPES-INFRA-REKISTERIT 14.10.2026): Infra › Rekisterit,
