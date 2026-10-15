@@ -92,6 +92,35 @@ struct Asiakas {
         try await hae("/api/palvelin/\(toiminto.rawValue)", metodi: "POST", aikaraja: 150)
     }
 
+    // Android-puolen Gemini (SCOPES-ANDROID-GEMINI, Android.swift; palvelinpää palvelu/android.mjs). Vanha palvelu vastaa
+    // 404 "tuntematon polku", jolloin näkymä sanoo, ettei palvelin tue ohjausta. Palvelin sarjallistaa toiminnot ja
+    // kirjoitus ja liite voivat viedä 10–15 s, joten toiminnoilla on pitkä aikaraja; ruutu 10 s.
+    func androidRuutu(leveys: Int = 720) async throws -> Data { try await tavut("/api/android/ruutu?leveys=\(leveys)", aikaraja: 10) }
+
+    func android(_ toiminto: String, _ runko: some Encodable) async throws -> AndroidVastaus {
+        try await hae("/api/android/\(toiminto)", metodi: "POST", runko: try JSONEncoder().encode(runko), aikaraja: 150)
+    }
+
+    func android(_ toiminto: String) async throws -> AndroidVastaus {
+        try await hae("/api/android/\(toiminto)", metodi: "POST", aikaraja: 150)
+    }
+
+    func androidLiite(_ liite: Liite) async throws -> AndroidVastaus {
+        let tiedosto = liite.nimi.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "liite"
+        return try await hae("/api/android/liite?nimi=\(tiedosto)", metodi: "POST", runko: liite.data,
+                             tyyppi: "application/octet-stream", aikaraja: 150)
+    }
+
+    func androidTuotokset() async throws -> [AndroidTuotos] {
+        let v: AndroidTuotokset = try await hae("/api/android/tuotokset", aikaraja: 30)
+        return v.tiedostot
+    }
+
+    func androidTuotos(_ polku: String) async throws -> Data {
+        let p = polku.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? polku
+        return try await tavut("/api/android/tuotos?polku=\(p)", aikaraja: 150)
+    }
+
     func uusi(_ nimi: String) async throws -> ToimintoVastaus {
         try await hae("/api/uusi", metodi: "POST", runko: try JSONEncoder().encode(["nimi": nimi]), aikaraja: 150)
     }
@@ -211,6 +240,21 @@ struct Asiakas {
 
     private func virhe(_ koodi: Int, _ data: Data) -> Virhe {
         .palvelu(koodi, (try? JSONDecoder().decode([String: String].self, from: data))?["virhe"] ?? "tuntematon virhe")
+    }
+
+    // Binäärivastaus (JPEG, tuotostiedosto): sama reitti, avain ja diagnostiikka kuin hae(), mutta tavut sellaisenaan.
+    private func tavut(_ polku: String, aikaraja: TimeInterval) async throws -> Data {
+        let p = try await pyynto(polku, metodi: "GET", runko: nil, aikaraja: aikaraja)
+        let id = Diagnostiikka.jaettu.alkoi(polku)
+        let data: Data, vastaus: URLResponse
+        do { (data, vastaus) = try await reititetty { try await URLSession.shared.data(for: p) } } catch {
+            Diagnostiikka.jaettu.paattyi(id, virhe: error)
+            throw error
+        }
+        let koodi = (vastaus as? HTTPURLResponse)?.statusCode ?? 0
+        Diagnostiikka.jaettu.paattyi(id, koodi: koodi)
+        guard koodi == 200 else { throw virhe(koodi, data) }
+        return data
     }
 
     private func hae<T: Decodable>(_ polku: String, metodi: String = "GET", runko: Data? = nil, tyyppi: String = "application/json",

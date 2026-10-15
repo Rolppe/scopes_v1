@@ -302,6 +302,30 @@ struct LinuxVastaus: Decodable {
     let kuiva: String?
 }
 
+// Android-näkymän vastaukset (SCOPES-ANDROID-GEMINI, palvelun android.mjs): kaikki kentät valinnaisia, koska toiminnot
+// palauttavat eri osat (liite: nimi ja liitetty, talteen: polku ja teksti, kuiva: koepalvelun komento).
+struct AndroidVastaus: Decodable {
+    let ok: Bool?
+    let nimi: String?
+    let liitetty: Bool?
+    let polku: String?
+    let teksti: String?
+    let kuiva: String?
+}
+
+// Laitteen tuotostiedosto (GET /api/android/tuotokset); aika ISO-merkkijonona.
+struct AndroidTuotos: Decodable, Identifiable {
+    let polku: String
+    let nimi: String
+    let koko: Int
+    let aika: String
+    var id: String { polku }
+}
+
+struct AndroidTuotokset: Decodable {
+    let tiedostot: [AndroidTuotos]
+}
+
 // Chatin stop-napin kuittaus (CHAT-STOP).
 struct PysaytysVastaus: Decodable {
     let ok: Bool

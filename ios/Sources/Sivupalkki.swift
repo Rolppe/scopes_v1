@@ -117,6 +117,9 @@ struct Sivupalkki: View, Equatable {
                     Button { navigaatio.avaa(.infra) } label: { Label("Infra", systemImage: "point.3.connected.trianglepath.dotted") }
                         .accessibilityIdentifier("sivupalkki-infra").accessibilityShowsLargeContentViewer()
                     Spacer()
+                    Button { navigaatio.avaa(.android) } label: { Label("Android", systemImage: "iphone") }
+                        .accessibilityIdentifier("sivupalkki-android").accessibilityShowsLargeContentViewer()
+                    Spacer()
                     Button { navigaatio.asetuksetAuki = true } label: { Label("Asetukset", systemImage: "gearshape") }
                         .accessibilityIdentifier("asetukset").accessibilityShowsLargeContentViewer()
                 }

@@ -39,6 +39,17 @@
 //   GET /api/palvelin             PC:n tila pingin TTL:stä { tila: linux|windows|sammuksissa, osoite? } (palvelin.mjs)
 //   POST /api/palvelin/<kaynnista|sammuta>   WoL / Windows → Linux -kertaboot tai poweroff → { tila, lahto, viesti, kuiva? }
 //            (SCOPES-LINUX-NAPIT 15.10.2026; ei runkoa; yksi kerrallaan, muuten 429)
+//   GET /api/android                 Android-puolen tila { hereilla, heratimme, koko: [w, h], kuiva } (android.mjs,
+//            SCOPES-ANDROID-GEMINI 15.10.2026: Geminin etäkäyttö; ruutu herää toiminnosta ja nukkuu minuutin hiljaisuuden jälkeen)
+//   GET /api/android/ruutu?leveys=    ruutukaappaus image/jpeg (oletus 720 px leveä)
+//   GET /api/android/ui               uiautomator-solmut { koko, solmut: [{ teksti, kuvaus, id, luokka, napautettava, alue }],
+//            gemini: { viestit: [{ rooli: gemini|kayttaja, teksti }], kaynnissa } }
+//   POST /api/android/<napauta|pyyhkaise|nappi|avaa|uusi|kirjoita|laheta|talteen>   runko {x, y} | {x1, y1, x2, y2, kesto?} |
+//            {nimi} | – | – | {teksti, laheta?} | – | – (koordinaatit 0–1-osuuksina ruudusta) → { ok, piste?, kuiva?, polku?, teksti? }
+//   POST /api/android/liite?nimi=&teksti=   runko = tiedoston tavut → laitteelle ja Geminin liitteeksi; teksti (valinnainen)
+//            kenttään ennen liitettä ja lähetys perään → { ok, nimi, liitetty, lahetetty }. kirjoita kieltäytyy (409), kun liite odottaa
+//   GET /api/android/tuotokset        laitteen Download/Pictures/Movies/Documents/DCIM 14 vrk { tiedostot: [{ polku, nimi, koko, aika }] }
+//   GET /api/android/tuotos?polku=    tiedoston tavut (kopio palvelimelle ~/.local/state/scopes-android/laitteelta/)
 //   GET /api/wg-asetus                äpin oman WireGuard-tunnelin asetus { asetus } (SCOPES-ETAYHTEYS 14.10.2026);
 //            äppi hakee sen kotiverkossa ja käyttää sitä kodin ulkopuolella. 404, jos tiedostoa ei ole.
 //
@@ -50,7 +61,9 @@
 // (oletus ~/.local/state/scopes-app.loki), SCOPES_TILA_DIR (pakkauskytkinten tilatiedostot; oletus
 // ~/.claude/skills/keskustelun-siirto/state), SCOPES_LR_VIENTI (rekisteripolun etuliite, jonka localregister vie
 // gittiin, esim. scopes/; oletus pois, LOCALREGISTER-VIENTI), SCOPES_LINUX_KUIVA (1 = palvelimen napit eivät
-// aja herätys- eikä sammutuskomentoa, :8788-koepalvelu). Ilman avainta palvelu ei käynnisty.
+// aja herätys- eikä sammutuskomentoa, :8788-koepalvelu), SCOPES_ANDROID_KUIVA (1 = Android-ohjaus lukee mutta ei herätä,
+// napauta eikä vie tiedostoja), SCOPES_ANDROID_LAITE (adb-laite; oletus 127.0.0.1:5555), SCOPES_ANDROID_DIR (tuotokset;
+// oletus ~/.local/state/scopes-android). Ilman avainta palvelu ei käynnisty.
 
 import { timingSafeEqual } from 'node:crypto';
 import { readFileSync, realpathSync } from 'node:fs';
@@ -62,6 +75,7 @@ import { luoDiagnostiikka } from './diagnostiikka.mjs';
 import { luoKayttoraja } from './kayttoraja.mjs';
 import { lista, lueSkoopit, rekisterinOsat, rekisterit, yksi } from './lahteet.mjs';
 import { luoLiitteet } from './liitteet.mjs';
+import { luoAndroid } from './android.mjs';
 import { luoLinuxServer } from './palvelin.mjs';
 import { luoAsetukset, OLETUS_HAKEMISTO } from './toiminnot-asetukset.mjs';
 import { luoPurkajat } from './purkajat.mjs';
@@ -86,6 +100,9 @@ export function asetuksetYmparistosta(env = process.env) {
     tilaDir: env.SCOPES_TILA_DIR ?? OLETUS_HAKEMISTO,
     lrVienti: env.SCOPES_LR_VIENTI || null,
     linuxKuiva: env.SCOPES_LINUX_KUIVA === '1',
+    androidKuiva: env.SCOPES_ANDROID_KUIVA === '1',
+    androidLaite: env.SCOPES_ANDROID_LAITE ?? '127.0.0.1:5555',
+    androidDir: env.SCOPES_ANDROID_DIR ?? join(homedir(), '.local/state/scopes-android'),
   };
 }
 
@@ -112,7 +129,7 @@ function runko(req, raja = 1024) {
   });
 }
 
-export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), purkajat = luoPurkajat({ juuri: asetukset.juuri, paikalliset: () => viestit.agentit() }), linux = luoLinuxServer({ loki: asetukset.toimintoloki, kuiva: asetukset.linuxKuiva === true })) {
+export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), purkajat = luoPurkajat({ juuri: asetukset.juuri, paikalliset: () => viestit.agentit() }), linux = luoLinuxServer({ loki: asetukset.toimintoloki, kuiva: asetukset.linuxKuiva === true }), android = luoAndroid({ loki: asetukset.toimintoloki, kuiva: asetukset.androidKuiva === true, ...(asetukset.androidLaite && { laite: asetukset.androidLaite }), ...(asetukset.androidDir && { tuotoksetDir: asetukset.androidDir }) })) {
   // Chat suoratoistona (DEMO-SCOPES-SUORATOISTO): NDJSON-rivit {tyyppi: 'pala', teksti} …, lopuksi
   // {tyyppi: 'valmis', vastaus, keskustelu, …} tai {tyyppi: 'virhe', virhe}. Hylkäys ennen agentin käynnistystä
   // palaa tavallisena virhekoodina. Yhteyden katketessa (puhelimen näyttölukko, äpin vaihto) agentti jatkaa, ja
@@ -160,6 +177,11 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
       res.writeHead(koodi, { 'content-type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(data));
     };
+    const vastaaTavut = ({ tyyppi, data, nimi }) => {
+      res.writeHead(200, { 'content-type': tyyppi, 'content-length': data.length, 'cache-control': 'no-store',
+        ...(nimi && { 'content-disposition': `inline; filename*=UTF-8''${encodeURIComponent(nimi)}` }) });
+      res.end(data);
+    };
     if (req.method !== 'GET' && req.method !== 'POST') return vastaa(405, { virhe: 'vain GET ja POST' });
     const url = new URL(req.url, 'http://x');
     const polku = url.pathname;
@@ -174,6 +196,10 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         if (as) return vastaa(200, kytkimet.aseta(decodeURIComponent(as[1]), as[2] === 'paalle'));
         const ls = polku.match(/^\/api\/palvelin\/(kaynnista|sammuta)$/);
         if (ls) return vastaa(200, await linux.suorita(ls[1]));
+        // Android-ohjaus (SCOPES-ANDROID-GEMINI): liite tallennetaan ensin kuten skoopin liite, sitten laitteelle.
+        if (polku === '/api/android/liite') return vastaa(200, await android.liita((await liitteet('android', url.searchParams.get('nimi'), req)).polku, url.searchParams.get('teksti')));
+        const an = polku.match(/^\/api\/android\/([a-z]+)$/);
+        if (an) return vastaa(200, await android.suorita(an[1], await runko(req, 32_768)));
         if (polku === '/api/uusi') return vastaa(200, await suorita('uusi', (await runko(req)).nimi));
         if (polku === '/api/chat') return vastaa(200, await viestit.chat(await runko(req, 32_768)));
         if (polku === '/api/chat/virta') return await virtaa(res, await runko(req, 32_768));
@@ -203,6 +229,11 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
       if (polku === '/api/agentit') return vastaa(200, await viestit.agentit());
       if (polku === '/api/purkajat') return vastaa(200, await purkajat.lista());
       if (polku === '/api/palvelin') return vastaa(200, await linux.tila());
+      if (polku === '/api/android') return vastaa(200, await android.tila());
+      if (polku === '/api/android/ruutu') return vastaaTavut(await android.ruutu(url.searchParams.get('leveys') ?? 720));
+      if (polku === '/api/android/ui') return vastaa(200, await android.ui());
+      if (polku === '/api/android/tuotokset') return vastaa(200, await android.tuotokset());
+      if (polku === '/api/android/tuotos') return vastaaTavut(await android.tuotos(url.searchParams.get('polku')));
       if (polku === '/api/kayttoraja') return vastaa(200, await kayttoraja());
       // Luetaan joka pyynnöllä: avaimen vaihto ei vaadi palvelun uudelleenkäynnistystä.
       if (polku === '/api/wg-asetus') {
