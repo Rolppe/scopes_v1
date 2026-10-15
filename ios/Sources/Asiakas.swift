@@ -153,7 +153,7 @@ struct Asiakas {
     }
 
     private func virta(_ pyynto: URLRequest) async throws -> AsyncThrowingStream<ChatTapahtuma, Error> {
-        let id = Diagnostiikka.jaettu.alkoi(pyynto.url?.path ?? "")
+        let id = Diagnostiikka.jaettu.alkoi(pyynto.url?.path ?? "", url: pyynto.url)
         let tavut: URLSession.AsyncBytes, vastaus: URLResponse
         do { (tavut, vastaus) = try await reititetty { try await URLSession.shared.bytes(for: pyynto) } } catch {
             Diagnostiikka.jaettu.paattyi(id, virhe: error)
@@ -188,7 +188,9 @@ struct Asiakas {
     func viestit(_ nimi: String) async throws -> SkooppiViestit { try await hae("/api/skoopit/\(koodattu(nimi))/viestit") }
 
     func laheta(_ nimi: String, _ teksti: String) async throws -> LahetysVastaus {
-        try await hae("/api/skoopit/\(koodattu(nimi))/viesti", metodi: "POST", runko: try JSONEncoder().encode(["teksti": teksti]))
+        // Palvelu odottaa istunnon kuittausta; 15.10.2026 se kesti yli 10 s, ja äppi näytti virheen perille menneestä viestistä.
+        try await hae("/api/skoopit/\(koodattu(nimi))/viesti", metodi: "POST", runko: try JSONEncoder().encode(["teksti": teksti]),
+                      aikaraja: 30)
     }
 
     // Liite raakarunkona; palvelu tallentaa sen ja palauttaa polun (liitteet.mjs). Iso kuva hitaalla yhteydellä: 120 s.
@@ -253,7 +255,7 @@ struct Asiakas {
     // Binäärivastaus (JPEG, tuotostiedosto): sama reitti, avain ja diagnostiikka kuin hae(), mutta tavut sellaisenaan.
     private func tavut(_ polku: String, aikaraja: TimeInterval) async throws -> Data {
         let p = try await pyynto(polku, metodi: "GET", runko: nil, aikaraja: aikaraja)
-        let id = Diagnostiikka.jaettu.alkoi(polku)
+        let id = Diagnostiikka.jaettu.alkoi(polku, url: p.url)
         let data: Data, vastaus: URLResponse
         do { (data, vastaus) = try await reititetty { try await URLSession.shared.data(for: p) } } catch {
             Diagnostiikka.jaettu.paattyi(id, virhe: error)
@@ -265,13 +267,18 @@ struct Asiakas {
         return data
     }
 
+    // GET yritetään katkoksen jälkeen kerran uudelleen uudella reitillä (V-487: hetkellinen Wi-Fi-katko näkyi virheenä,
+    // vaikka yhteys palasi itsestään). POSTia ei toisteta: viesti voisi mennä perille kahdesti.
     private func hae<T: Decodable>(_ polku: String, metodi: String = "GET", runko: Data? = nil, tyyppi: String = "application/json",
-                                   aikaraja: TimeInterval = 10) async throws -> T {
+                                   aikaraja: TimeInterval = 10, uusinta: Bool = false) async throws -> T {
         let p = try await pyynto(polku, metodi: metodi, runko: runko, tyyppi: tyyppi, aikaraja: aikaraja)
-        let id = Diagnostiikka.jaettu.alkoi(polku)
+        let id = Diagnostiikka.jaettu.alkoi(polku, url: p.url, uusinta: uusinta)
         let data: Data, vastaus: URLResponse
         do { (data, vastaus) = try await reititetty { try await URLSession.shared.data(for: p) } } catch {
             Diagnostiikka.jaettu.paattyi(id, virhe: error)
+            if metodi == "GET" && !uusinta && Self.yhteysKatkesi(error) && !Task.isCancelled {
+                return try await hae(polku, metodi: metodi, runko: runko, tyyppi: tyyppi, aikaraja: aikaraja, uusinta: true)
+            }
             throw error
         }
         let koodi = (vastaus as? HTTPURLResponse)?.statusCode ?? 0

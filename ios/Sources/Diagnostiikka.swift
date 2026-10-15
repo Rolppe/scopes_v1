@@ -3,7 +3,8 @@
 // ne tiedostoon ~/.local/state/scopes-app.loki (palvelu/diagnostiikka.mjs). Tapahtumat:
 //   jumi           pääsäie ei vastannut vähintään JUMI_S sekuntiin; ms ja jumin aikana kesken olleet pyynnöt
 //   jumi-kesken    edellinen käynnistys päättyi kesken jumin (iOS:n vahti tai käyttäjä sulki äpin)
-//   pyynto         hidas (≥ HIDAS_S), epäonnistunut tai muu kuin 200-vastaus: polku, ms, koodi tai virhe
+//   pyynto         hidas (≥ HIDAS_S), epäonnistunut tai muu kuin 200-vastaus: polku, ms, koodi tai virhe, reitti
+//                  (koti tai tunneli, V-487: katkon syy ei näkynyt lokista) ja uusinta (GET yritettiin toisen kerran)
 //   kaynnistys, vaihe   elinkaari (active, inactive, background), jotta jumi asettuu aikajanalle
 //   metrickit      iOS:n oma jumi- tai kaatumisraportti kutsupinoineen (MXDiagnosticPayload, toimitetaan viiveellä)
 // Palvelun pyyntöloki (scopes-pyynnot.loki) näyttää saman hetken palvelimen puolelta.
@@ -25,7 +26,7 @@ final class Diagnostiikka: NSObject, MXMetricManagerSubscriber {
     // Kaikki tila käsitellään tällä jonolla; pääsäie vain kuittaa vahdin pingin.
     private let jono = DispatchQueue(label: "com.example.skoopit.diagnostiikka")
     private var tapahtumat: [[String: Any]] = []
-    private var kesken: [UUID: (polku: String, alku: CFTimeInterval)] = [:]
+    private var kesken: [UUID: (polku: String, alku: CFTimeInterval, reitti: String?, uusinta: Bool)] = [:]
     private var vahti: DispatchSourceTimer?
     private var pingLahti: CFTimeInterval?
     private var edellinenTikki: CFTimeInterval = 0
@@ -88,11 +89,12 @@ final class Diagnostiikka: NSObject, MXMetricManagerSubscriber {
     }
 
     // Asiakas kutsuu jokaisen pyynnön ympärillä; oma lähetys ei kirjaa itseään.
-    func alkoi(_ polku: String) -> UUID? {
+    func alkoi(_ polku: String, url: URL? = nil, uusinta: Bool = false) -> UUID? {
         guard !polku.hasPrefix(Self.polku) else { return nil }
         let id = UUID()
         let alku = CACurrentMediaTime()
-        jono.async { self.kesken[id] = (Self.ilmanKyselya(polku), alku) }
+        let reitti = url.map { $0.host() == "127.0.0.1" ? "tunneli" : "koti" }
+        jono.async { self.kesken[id] = (Self.ilmanKyselya(polku), alku, reitti, uusinta) }
         return id
     }
 
@@ -107,6 +109,8 @@ final class Diagnostiikka: NSObject, MXMetricManagerSubscriber {
             guard kesto >= Self.HIDAS_S || virhe != nil || (koodi ?? 200) != 200 else { return }
             var t: [String: Any] = ["tyyppi": "pyynto", "polku": p.polku, "ms": Int(kesto * 1000)]
             if let koodi { t["koodi"] = koodi }
+            if let reitti = p.reitti { t["reitti"] = reitti }
+            if p.uusinta { t["uusinta"] = true }
             if let virhe {
                 t["virhe"] = (virhe as? URLError).map { "URLError \($0.code.rawValue)" } ?? String(describing: virhe)
             }
