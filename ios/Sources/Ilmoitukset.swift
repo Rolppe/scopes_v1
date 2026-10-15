@@ -9,7 +9,7 @@
 import Foundation
 
 enum IlmoitusLaji: String {
-    case odottaa, valmis, konteksti, vika
+    case odottaa, kysely, valmis, konteksti, vika
 }
 
 struct Ilmoitus: Equatable {
@@ -32,10 +32,12 @@ func ilmoitusRaja(_ d: UserDefaults = .standard) -> Int {
 func tallennaIlmoitusRaja(_ r: Int, _ d: UserDefaults = .standard) { d.set(r, forKey: "ilmoitusRaja") }
 
 // Lajikohtainen kytkin (NOTIFICATIONS-ASETUKSET 14.10.2026): oletus päällä; UserDefaults-avain "ilmoitus-<laji>".
+// Kysely erotettiin odottavasta omaksi kytkimekseen (NOTIFICATIONS-KYSELY-KYTKIN, käyttäjä 15.10.2026).
 extension IlmoitusLaji: CaseIterable {
     var nimi: String {
         switch self {
         case .odottaa: return "Istunto odottaa sinua"
+        case .kysely: return "Kysymys odottaa vastaustasi"
         case .valmis: return "Paketti valmis tai pakattu"
         case .konteksti: return "Konteksti lähellä rajaa"
         case .vika: return "Uusi avoin vika"
@@ -73,7 +75,7 @@ func ilmoitukset(edellinen: [SkooppiYhteenveto], uusi: [SkooppiYhteenveto], raja
         if pakattiin || (v.seuraava != nil && s.seuraava != v.seuraava) {
             r.append(Ilmoitus(skooppi: s.nimi, laji: .valmis, teksti: pakattiin ? "Skooppi pakattiin" : "Paketti valmis: seuraava \(s.seuraava ?? "ei mitään")"))
         } else if s.tilaNyt == "kysely", v.tilaNyt != "kysely" {
-            r.append(Ilmoitus(skooppi: s.nimi, laji: .odottaa, teksti: "Kysely odottaa vastaustasi"))
+            r.append(Ilmoitus(skooppi: s.nimi, laji: .kysely, teksti: "Kysely odottaa vastaustasi"))
         } else if odottaa(s), !odottaa(v) {
             r.append(Ilmoitus(skooppi: s.nimi, laji: .odottaa, teksti: "Istunto odottaa sinua"))
         }
