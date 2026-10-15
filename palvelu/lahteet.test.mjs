@@ -65,14 +65,25 @@ test('pysahdys: valmis vuoro tai monivalinta, ei työn välivaihetta eikä ali-a
   assert.equal(pysahdys(a('tool_use', bash, 't1')), null);
 });
 
-test('istunnon skooppi: nimestä tai viimeisimmästä /pura-argumentista', () => {
+test('istunnon skooppi: nimestä tai käyttäjän viimeisimmästä purusta', () => {
   const nimet = ['a', 'b c'];
-  const pura = (x) => `<command-name>/pura</command-name>\n<command-args>${x}</command-args>`;
+  const kayttaja = (content, lisa = {}) => JSON.stringify({ type: 'user', message: { role: 'user', content }, ...lisa }) + '\n';
+  const pura = (x) => kayttaja(`<command-message>pura</command-message>\n<command-name>/pura</command-name>\n<command-args>${x}</command-args>`);
   assert.equal(istunnonSkooppi('a', '', nimet), 'a');
   assert.equal(istunnonSkooppi('kone-1', pura('a') + pura('uusi b c --autojatko'), nimet), 'b c');
   assert.equal(istunnonSkooppi('kone-1', pura('tuntematon'), nimet), null);
-  // Transkriptin JSON-rivi: rivinvaihto on merkit \n.
-  assert.equal(istunnonSkooppi('kone-1', JSON.stringify(pura('b c')), nimet), 'b c');
+  // V-508: mallittoman purun aloitusviesti (äpin Pura, autovaihto.sh) ilman /pura-komentoa; viimeisin purku voittaa.
+  const malliton = (slug) => kayttaja(`Malliton purku: lue /h/.local/state/pura/${slug}.md ja noudata sitä.`);
+  assert.equal(istunnonSkooppi('kone-1', malliton('b-c'), nimet), 'b c');
+  assert.equal(istunnonSkooppi('kone-1', pura('a') + malliton('b-c'), nimet), 'b c');
+  assert.equal(istunnonSkooppi('kone-1', malliton('b-c') + pura('a'), nimet), 'a');
+  assert.equal(istunnonSkooppi('kone-1', malliton('tuntematon'), nimet), null);
+  assert.equal(istunnonSkooppi('kone-1', kayttaja('Malliton purku epäonnistui (b c): pura-malliton: rekisteriä ei löydy'), nimet), 'b c');
+  // Työkalutulos, agentin teksti ja sivuketju eivät ole purkuja, vaikka lainaavat purkuviestiä.
+  const tulos = kayttaja([{ type: 'tool_result', content: 'Malliton purku: lue /h/.local/state/pura/b-c.md ja noudata sitä.' }]);
+  const agentti = JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'Malliton purku: lue /h/b-c.md ja noudata sitä.' }] } }) + '\n';
+  const sivu = kayttaja('Malliton purku: lue /h/b-c.md ja noudata sitä.', { isSidechain: true });
+  assert.equal(istunnonSkooppi('kone-1', pura('a') + tulos + agentti + sivu, nimet), 'a');
   assert.equal(projektiNimi('/h/m_x/a.b'), '-h-m-x-a-b');
 });
 
@@ -92,7 +103,7 @@ function ymparisto() {
   const projektitDir = join(d, 'projektit');
   mkdirSync(join(projektitDir, projektiNimi(cwd)), { recursive: true });
   writeFileSync(join(projektitDir, projektiNimi(cwd), 's1.jsonl'),
-    '<command-name>/pura</command-name>\n<command-args>a</command-args>\n' +
+    JSON.stringify({ type: 'user', message: { content: 'Malliton purku: lue /h/.local/state/pura/a.md ja noudata sitä.' } }) + '\n' +
     JSON.stringify({ message: { usage: { input_tokens: 5, cache_read_input_tokens: 50000 } }, timestamp: 't' }));
   return { juuri, istunnotDir, projektitDir, wgTiedosto: join(d, 'wg.conf') };
 }

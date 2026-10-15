@@ -146,14 +146,26 @@ export function hereilla(transkripti) {
   return tulos;
 }
 
-// Istunnon skooppi: nimi, joka on skooppi, tai transkriptin viimeisin /pura-argumentti ("uusi" ja --liput pois).
-// Transkriptin JSON-rivillä rivinvaihto on kirjoitettu merkeillä \n, joten väli hyväksyy molemmat.
+// Istunnon skooppi: nimi, joka on skooppi, tai transkriptin viimeisin purku: /pura-argumentti ("uusi" ja --liput pois)
+// tai mallittoman purun aloitusviesti (V-508): äpin Pura (toiminnot.mjs) ja autovaihto.sh avaavat scopes-perheen
+// istunnon viestillä `Malliton purku: lue …/<slug>.md ja noudata sitä.` tai `Malliton purku epäonnistui (<skooppi>): …`
+// ilman /pura-komentoa, ja istunnon nimeksi jää koneen nimi. slug = skooppi, välit viivoiksi (toiminnot.mjs mallitonSlug).
+// Vain käyttäjän viestit (ei sivuketjua, työkalutuloksia eikä agentin tekstiä): purkuohjetta lainaava tuloste ei vaihda skooppia.
+const PURKU = /<command-name>\/pura<\/command-name>\s*<command-args>([^<]*)<\/command-args>|^Malliton purku: lue \S*\/([^/\s]+)\.md ja noudata|^Malliton purku epäonnistui \(([^)]+)\)/g;
 export function istunnonSkooppi(nimi, transkripti, skooppiNimet) {
   if (skooppiNimet.includes(nimi)) return nimi;
   let viimeisin = null;
-  for (const m of transkripti.matchAll(/<command-name>\/pura<\/command-name>(?:\s|\\n)*<command-args>([^<]*)<\/command-args>/g)) viimeisin = m[1];
+  for (const rivi of transkripti.split('\n')) {
+    let j;
+    try { j = JSON.parse(rivi); } catch { continue; }
+    if (j?.type !== 'user' || j.isSidechain) continue;
+    const c = j.message?.content;
+    const teksti = typeof c === 'string' ? c : Array.isArray(c) ? c.filter((o) => o?.type === 'text').map((o) => o.text).join('\n') : '';
+    for (const m of teksti.trim().matchAll(PURKU)) viimeisin = m;
+  }
   if (viimeisin === null) return null;
-  const arg = viimeisin.replace(/\s--\S+/g, '').replace(/^\s*uusi\s+/, '').split(' — ')[0].trim();
+  if (viimeisin[2] !== undefined) return skooppiNimet.find((s) => s.trim().replace(/\s+/g, '-') === viimeisin[2]) ?? null;
+  const arg = (viimeisin[1] ?? viimeisin[3]).replace(/\s--\S+/g, '').replace(/^\s*uusi\s+/, '').split(' — ')[0].trim();
   return skooppiNimet.includes(arg) ? arg : null;
 }
 
