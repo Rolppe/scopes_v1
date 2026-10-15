@@ -404,7 +404,7 @@ struct SivuttaisVeto: UIGestureRecognizerRepresentable {
 
     final class Valvoja: NSObject, UIGestureRecognizerDelegate {
         func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
-            guard let p = g as? UIPanGestureRecognizer else { return false }
+            guard let p = g as? UIPanGestureRecognizer, !PitoVeto.kaynnissa else { return false }
             let v = p.velocity(in: nil)
             return abs(v.x) > 2 * abs(v.y)
         }

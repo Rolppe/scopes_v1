@@ -121,8 +121,16 @@ struct Asiakas {
         return try await tavut("/api/android/tuotos?polku=\(p)", aikaraja: 150)
     }
 
-    func uusi(_ nimi: String) async throws -> ToimintoVastaus {
-        try await hae("/api/uusi", metodi: "POST", runko: try JSONEncoder().encode(["nimi": nimi]), aikaraja: 150)
+    // Uusi skooppi saa purun valinnat (SCOPES-LISTA-UUSI-VALINNAT); tyhjä kenttä jää pois, jolloin palvelu käyttää oletusta.
+    func uusi(_ nimi: String, valinta: PuraValinta? = nil) async throws -> ToimintoVastaus {
+        struct Runko: Encodable { let nimi: String; let purkaja: String?; let malli: String? }
+        return try await hae("/api/uusi", metodi: "POST", runko: try JSONEncoder().encode(Runko(nimi: nimi, purkaja: valinta?.purkaja, malli: valinta?.malli)),
+                             aikaraja: 150)
+    }
+
+    // Arkistointi (SCOPES-LISTA-POISTO): palvelu committoi ja asentaa reitittimen, joten aikaraja on toimintojen luokkaa.
+    func arkistoi(_ nimi: String) async throws -> ArkistointiVastaus {
+        try await hae("/api/skoopit/\(koodattu(nimi))/arkistoi", metodi: "POST", runko: nil, aikaraja: 150)
     }
 
     // Chat (DEMO-SCOPES-VALILEHDET): agentin vastaus voi kestää minuutteja.

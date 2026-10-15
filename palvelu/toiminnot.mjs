@@ -14,7 +14,9 @@
 //            pysähtyy kysymykseen, joten hylkäys esti kytkimen juuri silloin, kun sitä tarvitaan). Jono tallennetaan
 //            levylle jokaisen muutoksen jälkeen ja luetaan käynnistyksessä, joten palvelun uudelleenkäynnistys ei
 //            pudota sitä (käyttäjä 14.10.2026, scopes siirto)
-//   uusi   — uusi istunto, ensimmäinen viesti `/pura uusi <nimi>`; nimi on tiukka [a-z0-9-]-sanoja ja vielä vapaa
+//   uusi   — uusi istunto, ensimmäinen viesti `/pura uusi <nimi>`; nimi on tiukka [a-z0-9-]-sanoja ja vielä vapaa;
+//            purkaja ja istunnon malli kuten purussa (SCOPES-LISTA-UUSI-VALINNAT)
+//   arkistoi — arkistoi-skooppi.mjs + commit sen nimeämistä poluista + install.sh (SCOPES-LISTA-POISTO)
 // Skoopin nimi tarkistetaan skoopit.json:n avaimista (uudella: muodosta ja vapaudesta), ja komennot ajetaan
 // argumenttitaulukkona ilman kuorta. Yksi toiminto kerrallaan; jokainen yritys kirjataan lokiin, myös hylätty.
 
@@ -80,6 +82,7 @@ const kelpaaJonoon = (j) => j && typeof j.nimi === 'string' && typeof j.istunto 
 export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toimintoloki, jonoVali = 5_000, jonoTiedosto = oletusJonotiedosto(asetukset) } = {}) {
   const autovaihto = join(asetukset.juuri, 'claude/siirto/tools/autovaihto.sh');
   const malliton = join(asetukset.juuri, 'claude/siirto/tools/pura-malliton.mjs');
+  const arkistoija = join(asetukset.juuri, 'claude/siirto/tools/arkistoi-skooppi.mjs');
   let kaynnissa = null;
   const jono = new Map(); // `${skooppi}\n${ryhmä}` → { nimi, istunto, komento, toiminto, aika }
   let ajastin = null;
@@ -248,11 +251,37 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
     automaattisiirto: (nimi) => istuntoon(nimi, '/automaattisiirto', 'automaattisiirto'),
     herata: (nimi) => istuntoon(nimi, '/sa', 'herata'),
     'herata-pois': (nimi) => istuntoon(nimi, '/sa pois', 'herata-pois'),
-    async uusi(nimi) {
+    // Uusi skooppi saa samat valinnat kuin pura (SCOPES-LISTA-UUSI-VALINNAT 15.10.2026): /pura-taito siirtää --ajaja-lipun
+    // luonnin ohi purkuvaiheeseen.
+    async uusi(nimi, { ajaja = null, malli = null } = {}) {
       if (typeof nimi !== 'string' || !UUSI_NIMI.test(nimi)) throw new Hylatty(400, 'nimi: 1–4 sanaa pienaakkosia, numeroita tai viivoja');
       const skoopit = lueSkoopit(asetukset.juuri);
       if (skoopit[nimi]) throw new Hylatty(409, 'skooppi on jo olemassa');
-      return avaaIstunto(nimi, `/pura uusi ${nimi}`);
+      const tulos = await avaaIstunto(nimi, `/pura uusi ${nimi}${ajaja ? ` --ajaja=${ajaja}` : ''}`, malli);
+      return { ...tulos, ...(ajaja ? { purkaja: ajaja } : {}), ...(malli ? { malli } : {}) };
+    },
+    // Arkistointi (SCOPES-LISTA-POISTO 15.10.2026, käyttäjä: listassa veto vasemmalle, punainen X ja varmistus).
+    // arkistoi-skooppi.mjs poistaa skoopin kartoista ja reitittimestä ja siirtää rekisterin nimelle
+    // REKISTERI.arkistoitu.md; tämä committoi vain sen nimeämät polut ja asentaa reitittimen. Käynnissä oleva istunto
+    // estää; pakatut tmux-istunnot suljetaan ensin kuten purussa.
+    async arkistoi(nimi) {
+      const skoopit = lueSkoopit(asetukset.juuri);
+      if (!Object.hasOwn(skoopit, nimi)) throw new Hylatty(404, 'tuntematon skooppi');
+      const omat = skoopinIstunnot(nimi, skoopit);
+      if (omat.some((i) => !i.pakattu)) throw new Hylatty(409, 'skoopissa on käynnissä oleva istunto: pakkaa se ensin');
+      const varattu = omat.find((i) => i.tila !== 'idle');
+      if (varattu) throw new Hylatty(409, `pakattu istunto on vielä varattu (${varattu.tila ?? 'tila tuntematon'}); yritä vuoron jälkeen`);
+      const r = await aja('node', [arkistoija, nimi]);
+      if (r.koodi !== 0) throw new Hylatty(r.koodi === 1 ? 409 : 500, (r.stderr.trim().split('\n').filter(Boolean).pop() ?? `arkistoi-skooppi exit ${r.koodi}`).slice(0, 300));
+      const polut = [...r.stdout.matchAll(/^(?:KIRJOITETTU|POISTETTU): (.+)$|^SIIRRETTY: (.+) → (.+)$/gm)].flatMap((m) => m.slice(1).filter(Boolean));
+      const git = (...a) => aja('git', a, { cwd: asetukset.juuri });
+      const lisays = await git('add', '-A', '--', ...polut);
+      const commit = lisays.koodi === 0 ? await git('commit', '-q', '-m', `chore(siirto): arkistoi skooppi ${nimi} (Scopes-äppi)`, '--', ...polut) : lisays;
+      if (commit.koodi !== 0) throw new Hylatty(500, `arkistoitu, mutta commit epäonnistui: ${(commit.stderr.trim() || commit.stdout.trim()).slice(0, 240)}`);
+      const sha = (await git('rev-parse', '--short', 'HEAD')).stdout.trim();
+      for (const i of omat.filter((o) => o.ruutu)) { await tarkistaRuutu(i); await kirjoita(i, '/exit'); }
+      const asennus = await aja('bash', [join(asetukset.juuri, 'Infra/skills/install.sh')], { cwd: asetukset.juuri });
+      return { commit: sha, polut, ...(asennus.koodi !== 0 ? { varoitus: true } : {}) };
     },
   };
 

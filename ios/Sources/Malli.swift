@@ -202,6 +202,12 @@ struct ToimintoVastaus: Decodable, Hashable {
     let jonossa: Bool?
 }
 
+// POST /api/skoopit/<nimi>/arkistoi (SCOPES-LISTA-POISTO); varoitus = install.sh epäonnistui commitin jälkeen.
+struct ArkistointiVastaus: Decodable {
+    let commit: String?
+    let varoitus: Bool?
+}
+
 // Chat ja skoopin viestit (viestit.mjs, DEMO-SCOPES-VALILEHDET).
 struct Agentti: Decodable, Identifiable, Hashable {
     let nimi: String

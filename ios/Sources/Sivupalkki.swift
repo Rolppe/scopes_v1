@@ -64,6 +64,15 @@ struct Sivupalkki: View, Equatable {
     @State private var agentit: [Agentti] = []
     @State private var virhe: String?
     @State private var haku = ""
+    // Arkistointi (SCOPES-LISTA-POISTO 15.10.2026, käyttäjä): skooppiriviä painetaan paikallaan hetki ja vedetään vasemmalle,
+    // jolloin alta paljastuu punainen X. Muualle koskettaminen palauttaa rivin; X kysyy varmistuksen ja arkistoi.
+    // Ilman pitoa vaakaveto kuuluu sivupalkille (Juuri.swift SivuttaisVeto), joten tavallista swipeActionsia ei käytetä.
+    @State private var avattu: String?
+    @State private var veto: (id: String, x: CGFloat)?
+    @State private var arkistoitava: SkooppiYhteenveto?
+    @State private var arkistoidaan: String?
+    // Palauttava kosketus ei saa samalla avata riviä: listan ele ja rivin painike laukeavat samasta kosketuksesta.
+    @State private var suljettu = Date.distantPast
     @AppStorage("sivupalkinSuodatin") private var suodatin: Suodatin = .kaikki
 
     private var asiakas: Asiakas { Asiakas(osoite: asetukset.osoite, avain: asetukset.avain) }
@@ -84,14 +93,30 @@ struct Sivupalkki: View, Equatable {
                 if let virhe { Text(virhe).foregroundStyle(.red).accessibilityIdentifier("sivupalkki-virhe") }
                 Section {
                     ForEach(kohteet) { k in
-                        Button { valitse(k) } label: { rivi(k).contentShape(Rectangle()) }
-                            .buttonStyle(.plain)
-                            .listRowBackground(valittu(k) ? Teema.korostusTausta : nil)
-                            .accessibilityIdentifier(k.id)
+                        if case let .skooppi(s) = k {
+                            vedettava(k, s)
+                                .listRowBackground(valittu(k) ? Teema.korostusTausta : nil)
+                        } else {
+                            Button { if !palautus() { valitse(k) } } label: { rivi(k).contentShape(Rectangle()) }
+                                .buttonStyle(.plain)
+                                .listRowBackground(valittu(k) ? Teema.korostusTausta : nil)
+                                .accessibilityIdentifier(k.id)
+                        }
                     }
                 }
             }
             .listStyle(.plain)
+            // Kosketus muualle palauttaa avatun rivin (myös haku, suodatin ja tyhjä alue).
+            .simultaneousGesture(TapGesture().onEnded { if avattu != nil { sulje() } }, including: avattu == nil ? .subviews : .all)
+            .confirmationDialog("Arkistoidaanko skooppi \(arkistoitava?.nimi ?? "")?", isPresented: Binding(
+                get: { arkistoitava != nil }, set: { if !$0 { arkistoitava = nil; sulje() } }), titleVisibility: .visible) {
+                Button("Arkistoi", role: .destructive) {
+                    if let s = arkistoitava { arkistoidaan = s.nimi; Task { await arkistoi(s.nimi) } }
+                }
+                .accessibilityIdentifier("vahvista-arkistointi")
+            } message: {
+                Text("Skooppi poistuu listasta ja /pura-reitittimestä. Rekisteri jää arkistoon, ja muutos committoidaan, joten sen voi palauttaa gitistä.")
+            }
             // Ohut reunaviiva erottaa palkin chatista (käyttäjä 13.10.2026, kuten Claude-äpissä). Alkaa haun alta
             // listan yläreunasta: yläreunan turva-alue on navigointipalkki ja haku.
             .overlay(alignment: .trailing) {
@@ -182,6 +207,79 @@ struct Sivupalkki: View, Equatable {
         }
     }
 
+    private static let xLeveys: CGFloat = 72
+
+    private func siirtyma(_ id: String) -> CGFloat {
+        if arkistoidaan == id { return -Self.xLeveys }
+        if let veto, veto.id == id { return veto.x }
+        return avattu == id ? -Self.xLeveys : 0
+    }
+
+    private func sulje() {
+        if avattu != nil { suljettu = Date() }
+        withAnimation(.snappy) { avattu = nil; veto = nil }
+    }
+
+    // true = kosketus palautti avatun rivin (nyt tai juuri listan eleessä), eikä riviä avata.
+    private func palautus() -> Bool {
+        if avattu != nil { sulje(); return true }
+        return Date().timeIntervalSince(suljettu) < 0.4
+    }
+
+    // Skooppirivi, jonka alta veto paljastaa punaisen X:n. Tausta on läpinäkymätön vain liikkeessä, ettei valinnan korostus peity.
+    @ViewBuilder private func vedettava(_ k: Kohde, _ s: SkooppiYhteenveto) -> some View {
+        let dx = siirtyma(k.id)
+        ZStack(alignment: .trailing) {
+            if dx < 0 {
+                Button { arkistoitava = s } label: {
+                    Group {
+                        if arkistoidaan == s.nimi { ProgressView().tint(.white) } else { Image(systemName: "xmark").font(.title3.weight(.bold)) }
+                    }
+                    .foregroundStyle(.white)
+                    .frame(width: Self.xLeveys)
+                    .frame(maxHeight: .infinity)
+                    .background(Teema.virhe, in: RoundedRectangle(cornerRadius: Teema.Vali.m))
+                }
+                .buttonStyle(.plain)
+                .disabled(arkistoidaan != nil)
+                .accessibilityLabel("Arkistoi skooppi \(s.nimi)")
+                .accessibilityIdentifier("arkistoi-\(s.nimi)")
+            }
+            Button { if !palautus() { valitse(k) } } label: { rivi(k).contentShape(Rectangle()) }
+                .buttonStyle(.plain)
+                .background {
+                    if dx < 0 { ZStack { Color(.systemBackground); if valittu(k) { Teema.korostusTausta } } }
+                }
+                .offset(x: dx)
+                .accessibilityIdentifier(k.id)
+                .accessibilityAction(named: "Arkistoi") { arkistoitava = s }
+                .gesture(PitoVeto(
+                    alkoi: { if avattu != k.id { withAnimation(.snappy) { avattu = nil } } },
+                    muuttui: { x in
+                        let alku: CGFloat = avattu == k.id ? -Self.xLeveys : 0
+                        veto = (k.id, min(0, max(-Self.xLeveys * 1.6, alku + x)))
+                    },
+                    loppui: { x in
+                        let alku: CGFloat = avattu == k.id ? -Self.xLeveys : 0
+                        withAnimation(.snappy) { avattu = alku + x < -Self.xLeveys / 2 ? k.id : nil; veto = nil }
+                    }))
+        }
+    }
+
+    private func arkistoi(_ nimi: String) async {
+        arkistoidaan = nimi
+        defer { arkistoidaan = nil }
+        do {
+            _ = try await asiakas.arkistoi(nimi)
+            withAnimation(.snappy) { skoopit.removeAll { $0.nimi == nimi }; avattu = nil }
+            if navigaatio.nakyma == .skooppi(nimi) { navigaatio.avaa(.infra) }
+            await lataa()
+        } catch {
+            virhe = error.localizedDescription
+            sulje()
+        }
+    }
+
     @ViewBuilder private func rivi(_ k: Kohde) -> some View {
         switch k {
         case let .chat(c):
@@ -234,6 +332,44 @@ private struct KansioIkoni: View {
             Image(systemName: "folder.fill").foregroundStyle(Teema.odottaa).accessibilityLabel("odottaa sinua")
         default:
             Image(systemName: "folder").foregroundStyle(Color(.systemGray)).accessibilityLabel("pakattu")
+        }
+    }
+}
+
+// Pito ja veto (SCOPES-LISTA-POISTO): UIKitin pitkä painallus tunnistuu vasta, kun sormi on ollut paikallaan hetken, ja
+// tunnistuttuaan se seuraa sormea. Tunnistus estää sivupalkin vaakaveton ja listan vierityksen samalta kosketukselta, joten
+// tavallinen sivuttaisveto siirtää yhä listaa (käyttäjä 15.10.2026). Värähdys kertoo, että rivin voi nyt vetää.
+struct PitoVeto: UIGestureRecognizerRepresentable {
+    let alkoi: () -> Void
+    let muuttui: (CGFloat) -> Void
+    let loppui: (CGFloat) -> Void
+
+    // Sivupalkin vaakaveto (Juuri.swift SivuttaisVeto) ei ala, kun pito on tunnistettu: SwiftUI-käärityt tunnistimet
+    // tunnistuvat yhtä aikaa, joten UIKitin oletusetusija ei riittänyt (simulaattori 15.10.2026: veto sulki palkin).
+    @MainActor static var kaynnissa = false
+
+    final class Alku { var x: CGFloat = 0 }
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Alku { Alku() }
+
+    func makeUIGestureRecognizer(context: Context) -> UILongPressGestureRecognizer {
+        let g = UILongPressGestureRecognizer()
+        g.minimumPressDuration = 0.35
+        return g
+    }
+
+    func handleUIGestureRecognizerAction(_ g: UILongPressGestureRecognizer, context: Context) {
+        let x = g.location(in: nil).x
+        switch g.state {
+        case .began:
+            context.coordinator.x = x
+            Self.kaynnissa = true
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            alkoi()
+        case .changed: muuttui(x - context.coordinator.x)
+        case .ended, .cancelled, .failed:
+            Self.kaynnissa = false
+            loppui(x - context.coordinator.x)
+        default: break
         }
     }
 }
