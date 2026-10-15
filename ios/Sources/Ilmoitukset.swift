@@ -1,18 +1,13 @@
-// Paikalliset ilmoitukset (NOTIFICATIONS-PAIKALLINEN, käyttäjä 14.10.2026): äppi hakee /api/skoopit 10 s välein ja
-// ilmoittaa muutoksista kuten Claude iOS -äppi. Ilmainen allekirjoitus ei salli APNs-pushia, joten ilmoitus syntyy vain,
-// kun äppi on auki tai enintään noin 30 s taustalla (beginBackgroundTask). Ensimmäinen haku on lähtötaso, ei ilmoituksia.
-// UI-testit (SCOPES_AVAIN annettu) eivät kysy ilmoituslupaa, ellei SCOPES_ILMOITUKSET=1. SCOPES_KOEILMOITUS="<skooppi>"
-// lähettää luvan jälkeen yhden koeilmoituksen, jonka napautus avaa skoopin (NOTIFICATIONS-SIMULAATTORI).
+// Ilmoitukset (NOTIFICATIONS-HA-PUSH, käyttäjä 15.10.2026): palvelimen vahti (scopes/notifications/vahti.mjs) vertaa
+// skooppien tilaa 10 s välein ja lähettää muutokset Home Assistant -äpin push-ilmoituksina, jotka tulevat myös lukitulle
+// näytölle. Äpin omat paikalliset ilmoitukset (NOTIFICATIONS-PAIKALLINEN 14.10.2026) poistettiin: iOS pysäyttää äpin
+// noin 30 s:ssa taustalla, eikä ilmainen allekirjoitus salli APNs-pushia. Napautus avaa skoopin URL:lla
+// skoopit://skooppi/<nimi> (Juuri.swift onOpenURL). Tämä tiedosto pitää lajit, rajan ja asetusnäkymän; arvot
+// tallentuvat palvelimelle (GET/POST /api/ilmoitukset) ja paikallisesti välimuistiksi.
 import Foundation
 
 enum IlmoitusLaji: String {
     case odottaa, valmis, konteksti, vika
-}
-
-struct Ilmoitus: Equatable {
-    let skooppi: String
-    let laji: IlmoitusLaji
-    let teksti: String
 }
 
 // Kontekstirajan oletus: pienimmät mallikohtaiset pakkausrajat ovat 71–72 k ja suurin 220 k (rd-trigger.sh ctx_limit),
@@ -46,153 +41,41 @@ func ilmoitusPaalla(_ l: IlmoitusLaji, _ d: UserDefaults = .standard) -> Bool {
 
 func tallennaIlmoitusPaalla(_ l: IlmoitusLaji, _ p: Bool, _ d: UserDefaults = .standard) { d.set(p, forKey: "ilmoitus-\(l.rawValue)") }
 
-// Käyttäjää odottava skooppi: kysymys tai lupa (odottaa) tai valmis vuoro. V-300 erottaa valmiin vuoron omaksi tilakseen,
-// joten kaikki muu kuin käsittely ja pakattu lasketaan odottavaksi.
-func odottaa(_ s: SkooppiYhteenveto) -> Bool { !["kasittely", "pakattu"].contains(s.tilaNyt) }
+// Palvelimen vahdin asetukset (GET/POST /api/ilmoitukset): lajit nimillä odottaa, valmis, konteksti, vika.
+struct IlmoitusArvot: Codable, Equatable {
+    var raja: Int
+    var lajit: [String: Bool]
 
-// Edellisen ja uuden haun ero ilmoituksiksi. Skooppi, jota edellisessä haussa ei ollut, on uusi: siitä ei ilmoiteta.
-func ilmoitukset(edellinen: [SkooppiYhteenveto], uusi: [SkooppiYhteenveto], raja: Int) -> [Ilmoitus] {
-    let vanhat = Dictionary(edellinen.map { ($0.nimi, $0) }, uniquingKeysWith: { a, _ in a })
-    var r: [Ilmoitus] = []
-    for s in uusi {
-        guard let v = vanhat[s.nimi] else { continue }
-        if s.vikoja > v.vikoja {
-            let n = s.vikoja - v.vikoja
-            r.append(Ilmoitus(skooppi: s.nimi, laji: .vika, teksti: n == 1 ? "Uusi avoin vika" : "\(n) uutta avointa vikaa"))
-        }
-        let pakattiin = s.tilaNyt == "pakattu" && v.tilaNyt != "pakattu"
-        if pakattiin || (v.seuraava != nil && s.seuraava != v.seuraava) {
-            r.append(Ilmoitus(skooppi: s.nimi, laji: .valmis, teksti: pakattiin ? "Skooppi pakattiin" : "Paketti valmis: seuraava \(s.seuraava ?? "ei mitään")"))
-        } else if s.tilaNyt == "kysely", v.tilaNyt != "kysely" {
-            r.append(Ilmoitus(skooppi: s.nimi, laji: .odottaa, teksti: "Kysely odottaa vastaustasi"))
-        } else if odottaa(s), !odottaa(v) {
-            r.append(Ilmoitus(skooppi: s.nimi, laji: .odottaa, teksti: "Istunto odottaa sinua"))
-        }
-        if let k = s.suurinKonteksti, k >= raja, (v.suurinKonteksti ?? 0) < raja {
-            r.append(Ilmoitus(skooppi: s.nimi, laji: .konteksti, teksti: "Konteksti \(tokenit(k)) — lähellä rajaa"))
-        }
+    init(raja: Int, paalla: [IlmoitusLaji: Bool]) {
+        self.raja = raja
+        lajit = Dictionary(uniqueKeysWithValues: IlmoitusLaji.allCases.map { ($0.rawValue, paalla[$0] ?? true) })
     }
-    return r
+
+    var paalla: [IlmoitusLaji: Bool] {
+        Dictionary(uniqueKeysWithValues: IlmoitusLaji.allCases.map { ($0, lajit[$0.rawValue] ?? true) })
+    }
 }
+
+struct KoeVastaus: Decodable { let lahetetty: Bool }
 
 #if canImport(UIKit)
 import SwiftUI
 import UIKit
-import UserNotifications
-
-@MainActor
-final class Ilmoittaja: NSObject, UNUserNotificationCenterDelegate {
-    static let jaettu = Ilmoittaja()
-
-    // Napautetun ilmoituksen skooppi; App kytkee tämän navigaatioon.
-    var avaa: ((String) -> Void)?
-    private var edellinen: [SkooppiYhteenveto]?
-    private var silmukka: Task<Void, Never>?
-    private var tausta = UIBackgroundTaskIdentifier.invalid
-    private let ymparisto = ProcessInfo.processInfo.environment
-    private var paalla: Bool { ymparisto["SCOPES_AVAIN"] == nil || ymparisto["SCOPES_ILMOITUKSET"] == "1" }
-
-    func kaynnista(_ asetukset: Asetukset) {
-        guard paalla else { return }
-        let keskus = UNUserNotificationCenter.current()
-        keskus.delegate = self
-        let koe = ymparisto["SCOPES_KOEILMOITUS"]
-        Task {
-            let sallittu = (try? await keskus.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
-            guard sallittu, let koe else { return }
-            try? await Task.sleep(for: .seconds(2))
-            laheta(Ilmoitus(skooppi: koe, laji: .odottaa, teksti: "Koeilmoitus"))
-        }
-        silmukka?.cancel()
-        silmukka = Task { [weak self] in
-            while !Task.isCancelled {
-                await self?.hae(asetukset)
-                try? await Task.sleep(for: .seconds(10))
-            }
-        }
-    }
-
-    // Taustalle siirtyessä iOS antaa noin 30 s lisäaikaa; silmukka jatkaa sen ajan ja pysähtyy sitten itsestään.
-    func vaihe(_ v: ScenePhase, _ asetukset: Asetukset) {
-        guard paalla else { return }
-        switch v {
-        case .background where tausta == .invalid:
-            tausta = UIApplication.shared.beginBackgroundTask(withName: "ilmoitukset") { [weak self] in
-                Task { @MainActor in self?.lopetaTausta() }
-            }
-        case .active:
-            lopetaTausta()
-            Task { await hae(asetukset) }
-        default: break
-        }
-    }
-
-    private func lopetaTausta() {
-        guard tausta != .invalid else { return }
-        UIApplication.shared.endBackgroundTask(tausta)
-        tausta = .invalid
-    }
-
-    private func hae(_ asetukset: Asetukset) async {
-        guard asetukset.valmis,
-              let uusi = try? await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).skoopit() else { return }
-        defer { edellinen = uusi }
-        guard let vanha = edellinen else { return }
-        for i in ilmoitukset(edellinen: vanha, uusi: uusi, raja: ilmoitusRaja()) where ilmoitusPaalla(i.laji) { laheta(i) }
-    }
-
-    // Asetusten koeilmoitus: kysyy luvan, jos sitä ei ole vielä kysytty; napautus avaa juuriskoopin "scopes".
-    func koe() async -> Bool {
-        let keskus = UNUserNotificationCenter.current()
-        keskus.delegate = self
-        guard (try? await keskus.requestAuthorization(options: [.alert, .sound, .badge])) == true else { return false }
-        laheta(Ilmoitus(skooppi: "scopes", laji: .odottaa, teksti: "Koeilmoitus"))
-        return true
-    }
-
-    private func laheta(_ i: Ilmoitus) {
-        let sisalto = UNMutableNotificationContent()
-        sisalto.title = i.skooppi
-        sisalto.body = i.teksti
-        sisalto.sound = .default
-        sisalto.threadIdentifier = i.skooppi
-        sisalto.userInfo = ["skooppi": i.skooppi]
-        // Sama skooppi ja laji korvaa edellisen ilmoituksen, jotta ilmoituskeskukseen ei kerry toistoja.
-        let pyynto = UNNotificationRequest(identifier: "\(i.skooppi)|\(i.laji.rawValue)", content: sisalto, trigger: nil)
-        UNUserNotificationCenter.current().add(pyynto)
-    }
-
-    // Banneri myös äpin ollessa auki, kuten Claude iOS -äpissä.
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner, .list, .sound]
-    }
-
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        guard let nimi = response.notification.request.content.userInfo["skooppi"] as? String else { return }
-        await MainActor.run { avaa?(nimi) }
-    }
-}
 
 // Asetusten Ilmoitukset-alavalikko (NOTIFICATIONS-ASETUKSET 14.10.2026). Kytkimet ja raja tallennetaan
-// juurinäkymän Tallenna-painikkeella kuten muut asetukset, jotta Peru toimii.
+// juurinäkymän Tallenna-painikkeella kuten muut asetukset, jotta Peru toimii; Tallenna vie ne myös palvelimelle.
 struct IlmoitusAsetukset: View {
     @Binding var raja: Int
     @Binding var paalla: [IlmoitusLaji: Bool]
-    @Environment(\.scenePhase) private var vaihe
-    @State private var lupa = UNAuthorizationStatus.notDetermined
+    @EnvironmentObject private var asetukset: Asetukset
     @State private var koeTulos: String?
 
     var body: some View {
         Form {
             Section {
-                Text(lupaTeksti).accessibilityIdentifier("ilmoituslupa")
-                if lupa == .denied {
-                    Button("Avaa iOS-asetukset") {
-                        if let url = URL(string: UIApplication.openNotificationSettingsURLString) { UIApplication.shared.open(url) }
-                    }
-                }
-            } header: { Text("Lupa") } footer: {
-                Text("Ilmoitus syntyy, kun äppi on auki tai enintään noin 30 s taustalla.")
+                Text("Home Assistant -äppi").accessibilityIdentifier("ilmoituskanava")
+            } header: { Text("Kanava") } footer: {
+                Text("Palvelin lähettää ilmoitukset Home Assistant -äpin kautta, joten ne tulevat myös lukitulle näytölle. Napautus avaa skoopin tässä äpissä.")
             }
             Section("Ilmoita") {
                 ForEach(IlmoitusLaji.allCases, id: \.self) { l in
@@ -215,8 +98,10 @@ struct IlmoitusAsetukset: View {
             Section {
                 Button("Lähetä koeilmoitus") {
                     Task {
-                        koeTulos = await Ilmoittaja.jaettu.koe() ? "Lähetetty" : "Ei lupaa ilmoituksiin"
-                        await paivitaLupa()
+                        do {
+                            _ = try await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).koeIlmoitus()
+                            koeTulos = "Lähetetty"
+                        } catch { koeTulos = "Ei lähetetty: \(error.localizedDescription)" }
                     }
                 }
                 .accessibilityIdentifier("koeilmoitus")
@@ -224,20 +109,6 @@ struct IlmoitusAsetukset: View {
             } footer: { Text("Napautus avaa skoopin scopes.") }
         }
         .navigationTitle("Ilmoitukset")
-        .task { await paivitaLupa() }
-        .onChange(of: vaihe) { _, v in if v == .active { Task { await paivitaLupa() } } }
-    }
-
-    private func paivitaLupa() async {
-        lupa = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
-    }
-
-    private var lupaTeksti: String {
-        switch lupa {
-        case .authorized, .provisional, .ephemeral: return "Sallittu"
-        case .denied: return "Estetty iOS-asetuksissa"
-        default: return "Ei vielä kysytty"
-        }
     }
 }
 #endif

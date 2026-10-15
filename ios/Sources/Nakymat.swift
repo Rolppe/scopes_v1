@@ -373,6 +373,13 @@ struct AsetuksetView: View {
                 osoite = asetukset.osoite
                 avain = asetukset.avain
             }
+            // Palvelimen arvot ohittavat välimuistin (NOTIFICATIONS-HA-PUSH); ilman yhteyttä näkyy paikallinen kopio.
+            .task {
+                guard asetukset.valmis,
+                      let a = try? await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).ilmoitusAsetukset() else { return }
+                raja = a.raja
+                paalla = a.paalla
+            }
         }
         .onDisappear { if !tallennettu { Ulkoasu.jaettu.tila = ulkoasuAlku } }
     }
@@ -385,6 +392,10 @@ struct AsetuksetView: View {
                 asetukset.avain = avain
                 tallennaIlmoitusRaja(raja)
                 for (l, p) in paalla { tallennaIlmoitusPaalla(l, p) }
+                // Vahti lukee arvot palvelimelta (NOTIFICATIONS-HA-PUSH); paikallinen kopio on välimuisti.
+                let arvot = IlmoitusArvot(raja: raja, paalla: paalla)
+                let asiakas = Asiakas(osoite: osoite, avain: avain)
+                Task { _ = try? await asiakas.asetaIlmoitukset(arvot) }
                 tallennettu = true
                 sulje()
             }

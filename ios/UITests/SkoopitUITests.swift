@@ -597,28 +597,18 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertFalse(app.buttons["chat-yhdista"].exists, "uudelleenyhdistys jäi näkyviin")
     }
 
-    // Paikallinen ilmoitus (NOTIFICATIONS-SIMULAATTORI): koeilmoitus näkyy bannerina äpin ollessa auki, ja napautus avaa
-    // skoopin viestit. Skooppi: SCOPES_KOE_ILMOITUS (oletus "scopes notifications").
-    func testIlmoitusBanneriJaNapautus() throws {
+    // HA-ilmoituksen napautus (NOTIFICATIONS-HA-PUSH 15.10.2026): skoopit://skooppi/<nimi> avaa skoopin viestit.
+    // Skooppi: SCOPES_KOE_ILMOITUS (oletus "scopes notifications").
+    func testSyvalinkkiAvaaSkoopin() throws {
         let ymp = ProcessInfo.processInfo.environment
         let avain = try XCTUnwrap(ymp["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
         let skooppi = ymp["SCOPES_KOE_ILMOITUS"] ?? "scopes notifications"
-        let app = kaynnista(avain: avain, lisa: ["SCOPES_ILMOITUKSET": "1", "SCOPES_KOEILMOITUS": skooppi])
-        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        // Lupa kysytään vain ensimmäisellä kerralla; simulaattori muistaa vastauksen.
-        let salli = springboard.alerts.buttons.matching(NSPredicate(format: "label IN {'Allow', 'Salli'}")).firstMatch
-        let banneri = springboard.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Koeilmoitus'")).firstMatch
-        let loppu = Date().addingTimeInterval(20)
-        while Date() < loppu, !banneri.exists {
-            if salli.exists { salli.tap() }
-            usleep(300_000)
-        }
-        XCTAssertTrue(banneri.exists, "koeilmoituksen banneri ei näkynyt")
-        kuva("ilmoitus-banneri")
-        banneri.tap()
+        let app = kaynnista(avain: avain)
+        let polku = try XCTUnwrap(skooppi.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed))
+        app.open(try XCTUnwrap(URL(string: "skoopit://skooppi/\(polku)")))
         let skoopissa = app.staticTexts.matching(NSPredicate(format: "identifier IN {'viestit-istunto', 'pakattu', 'ei-auki'}")).firstMatch
-        XCTAssertTrue(skoopissa.waitForExistence(timeout: 15), "napautus ei avannut skooppia \(skooppi)")
-        kuva("ilmoitus-napautus")
+        XCTAssertTrue(skoopissa.waitForExistence(timeout: 15), "linkki ei avannut skooppia \(skooppi)")
+        kuva("syvalinkki")
     }
 
     // Kontekstirajan säätö Asetusten Ilmoitukset-alavalikossa (NOTIFICATIONS-SIMULAATTORI, NOTIFICATIONS-ASETUKSET):
@@ -661,7 +651,7 @@ final class SkoopitUITests: XCTestCase {
         takaisin(app, "Tietoja")
         app.buttons["asetukset-ilmoitukset"].tap()
         let vika = app.switches["ilmoitus-vika"]
-        XCTAssertTrue(app.staticTexts["ilmoituslupa"].waitForExistence(timeout: 5), "luparivi puuttuu")
+        XCTAssertTrue(app.staticTexts["ilmoituskanava"].waitForExistence(timeout: 5), "kanavarivi puuttuu")
         XCTAssertTrue(nakyviin(app, vika), "lajikytkimet puuttuvat")
         XCTAssertEqual(vika.value as? String, "1")
         kytke(vika)
