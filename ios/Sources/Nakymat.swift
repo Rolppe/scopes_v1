@@ -82,6 +82,11 @@ struct SkooppiNakymaView: View {
             }
             Section {
                 Button("Pura uuteen istuntoon") { vahvista = .pura }.accessibilityIdentifier("toiminto-pura")
+                // Mallivapaa testipurku (PURA-MALLITON T3): vain scopes/-rekisterin skoopeille, kuten palvelun raja
+                // (toiminnot.mjs 'pura-testi'); päärekisteri on skoopin rekisterilistan ensimmäinen.
+                if scopesSkooppi {
+                    Button("Testipurku (malliton)") { vahvista = .puraTesti }.accessibilityIdentifier("toiminto-pura-testi")
+                }
                 // Pakkaus ja siirto lähetetään auki olevaan istuntoon: ilman sitä napit ovat lukossa eivätkä odota
                 // palvelun hylkäystä (DESIGN-UX-A U4).
                 Button("Pakkaa istunto") { vahvista = .pakkaa }
@@ -110,7 +115,7 @@ struct SkooppiNakymaView: View {
                     Text("\(j.komento) odottaa vuoroa: lähtee, kun istunto vapautuu.")
                         .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("toiminto-jonossa")
                 }
-                if let k = kaynnissa { ProgressView(k == .pura ? "Avataan istuntoa…" : "Lähetetään \(komento(k))…") }
+                if let k = kaynnissa { ProgressView(k == .pura || k == .puraTesti ? "Avataan istuntoa…" : "Lähetetään \(komento(k))…") }
                 if let toimintoVirhe { Text(toimintoVirhe).foregroundStyle(.red).accessibilityIdentifier("toiminto-virhe") }
                 if let tulos { ToimintoTulos(tulos: tulos, skooppi: nimi) }
             } header: { Text("Toiminnot") } footer: {
@@ -147,6 +152,8 @@ struct SkooppiNakymaView: View {
         switch t {
         case .pura: ("Avataanko skoopille uusi istunto?",
                      "Uusi Claude-istunto käynnistyy ja lukee skoopin tilanteen rekisteristä.", "Pura")
+        case .puraTesti: ("Avataanko skoopille testipurku?",
+                          "Uusi Claude-istunto käynnistyy valmiista purkutiedostosta ilman siirtäjämallia (testi).", "Pura")
         case .pakkaa: ("Pakataanko istunto?",
                        "Istunto kirjaa tehdyn työn ja seuraavan paketin skoopin rekisteriin ja jää auki.", "Pakkaa")
         case .automaattisiirto: ("Siirretäänkö työ uuteen istuntoon?",
@@ -156,6 +163,8 @@ struct SkooppiNakymaView: View {
     }
 
     // Kytkin näyttää skoopin auki olevan istunnon herätystilan; ilman istuntoa se on pois ja lukittu.
+    // Sama perhe kuin palvelun raja: päärekisteri scopes/-hakemistossa. Ennen latausta rekisteriä ei tunneta, jolloin nappi on piilossa.
+    private var scopesSkooppi: Bool { nakyma?.rekisterit.first?.hasPrefix("scopes/") == true }
     private var avoinIstunto: Istunto? { nakyma?.istunnot.first { $0.pakattu != true } }
     // Jonossa odottava /sa tai /sa pois näyttää jo valitun asennon (V-294).
     private var hereilla: Bool {
@@ -179,6 +188,7 @@ struct SkooppiNakymaView: View {
     private func komento(_ t: Toiminto) -> String {
         switch t {
         case .pura: "/pura"
+        case .puraTesti: "testipurku"
         case .pakkaa: "/pakkaa"
         case .automaattisiirto: "/automaattisiirto"
         case .herata: "/sa"
@@ -193,7 +203,7 @@ struct SkooppiNakymaView: View {
         do {
             tulos = try await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).toiminto(t, nimi)
             // Pakkaus ja purku laukaisevat rekisterisynkan (LOCALREGISTER V4).
-            if t == .pakkaa || t == .pura { Lr.jaettu.laukaise(.toiminto) }
+            if t == .pakkaa || t == .pura || t == .puraTesti { Lr.jaettu.laukaise(.toiminto) }
             await lataa()
         } catch {
             toimintoVirhe = error.localizedDescription
