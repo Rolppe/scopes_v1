@@ -313,7 +313,8 @@ test('rekisterit: tiedosto kerran skooppeineen, raja 40 000 tai lähtötaso; osa
   ]);
   writeFileSync(join(a.juuri, 'claude/siirto/state/rekisteri-katto.json'), JSON.stringify({ 'a/R.md': 50000 }));
   assert.deepEqual(rekisterit(a).map((x) => x.raja), [50000, null]);
-  assert.deepEqual(yksi('a', a).konteksti.ryhmat.map((x) => x.raja), [50000, null]);
+  // Kontekstiluku ei sisällä HISTORIA.md:tä, vaikka kattosivu sisältää (V-399).
+  assert.deepEqual(yksi('a', a).konteksti.ryhmat.map((x) => [x.laji, x.raja]), [['rekisteri', 50000]]);
   assert.deepEqual(rekisterinOsat('a/HISTORIA.md', a).osat.map((o) => o.otsikko), ['Alku', 'Luku']);
   assert.equal(rekisterinOsat('../etc/passwd', a), null);
 });

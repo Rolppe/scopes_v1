@@ -434,9 +434,12 @@ export function rekisterinOsat(polku, asetukset) {
   return { polku, osat: osiin(lueTeksti(asetukset.juuri, polku)) };
 }
 
+// HISTORIA.md ja ARKISTO.md eivät kuulu skoopin kontekstilukuun: pura ei lue niitä (V-399, 15.10.2026). Rekisterien
+// kattosivulla (rekisterit) ne pysyvät, koska niillä on kirjattu lähtötaso.
+const EI_LADATA = new Set(['historia', 'arkisto']);
 export function skoopinKonteksti(nimi, { juuri, rekisterit, istunnot: skoopinIstunnot }) {
   const mitta = katto(juuri);
-  const ryhmat = kontekstiTiedostot(nimi, rekisterit, juuri).map(({ laji, polku }) => {
+  const ryhmat = kontekstiTiedostot(nimi, rekisterit, juuri).filter(({ laji }) => !EI_LADATA.has(laji)).map(({ laji, polku }) => {
     const teksti = lueTeksti(juuri, polku);
     const osat = osiin(teksti);
     return { laji, polku, tokenit: osat.reduce((s, o) => s + o.tokenit, 0), ...mitta(laji, polku, teksti), osat };
