@@ -13,6 +13,7 @@ actor Reitti {
 
     private var valittu: (perus: String, tehtava: Task<String, Never>)?
     private(set) var tila = Tila.tuntematon
+    private var avaaPortti = false
     private let pakota = ProcessInfo.processInfo.environment["SCOPES_TUNNELI"] == "pakota"
 
     // Osoite, johon pyyntö lähetetään: `perus` kotiverkossa, muuten tunnelin paikallinen portti.
@@ -23,7 +24,13 @@ actor Reitti {
         return await t.value
     }
 
-    func unohda() { valittu = nil }
+    // Katkos unohtaa reitin. -1004 tunnelin portissa tarkoittaa, että iOS otti jäädytetyn äpin kuuntelijan eikä Accept
+    // ole vielä huomannut sitä: portti avataan uudelleen ennen seuraavaa pyyntöä. Ajastetut haut laukeavat ennen
+    // heraa()-kutsua, ja uusinta sai muuten saman kuolleen portin (V-487 todennus 15.10.2026).
+    func unohda(_ virhe: Error? = nil) {
+        if tila == .tunneli, (virhe as? URLError)?.code == .cannotConnectToHost { avaaPortti = true }
+        valittu = nil
+    }
 
     // Etualalle palatessa verkko on voinut vaihtua: UDP-pistoke ja DDNS-nimi uudelleen, reitti valitaan uudelleen.
     func heraa() {
@@ -43,6 +50,10 @@ actor Reitti {
             return perus
         }
         // gomobilen vapaat funktiot eivät muunnu Swiftin throwsiksi: virhe tulee NSError-osoittimeen.
+        if avaaPortti {
+            avaaPortti = false
+            TunneliPaivita(nil)
+        }
         var portti = 0
         var virhe: NSError?
         guard TunneliKaynnista(asetus, "\(isanta):\(url.port ?? 80)", &portti, &virhe) else {
