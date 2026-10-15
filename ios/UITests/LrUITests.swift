@@ -434,8 +434,11 @@ final class LrUITests: XCTestCase {
         print("TESTIPURKU: vahvistettu \(String(format: "%.1f", Date().timeIntervalSince(tallennettu))) s tallennuksesta")
         let tulos = app.staticTexts["toiminto-tulos"]
         let virhe = app.staticTexts["toiminto-virhe"]
+        // Tulos- ja virherivi ovat Toiminnot-osion lopussa kytkinten alla, näytön alareunan ohi: listan näkymätön
+        // rivi ei ole saavutettavuuspuussa, joten odotus vierittää alas (ajo 3 15.10.2026: palvelu avasi istunnon
+        // ~35 s:ssa, mutta rivi ei näkynyt 240 s:ssa).
         let loppu = Date().addingTimeInterval(240)
-        while !tulos.exists && !virhe.exists && Date() < loppu { sleep(2) }
+        while !tulos.exists && !virhe.exists && Date() < loppu { app.swipeUp(); sleep(2) }
         kuva("testipurku-tulos")
         XCTAssertFalse(virhe.exists, virhe.exists ? virhe.label : "")
         XCTAssertTrue(tulos.exists, "testipurku ei avannut istuntoa 240 s:ssa")
@@ -443,7 +446,15 @@ final class LrUITests: XCTestCase {
         let tuloste = try XCTUnwrap(try pyynto("/api/lr/teksti/" + polku, nil)["teksti"] as? String)
         XCTAssertTrue(tuloste.components(separatedBy: "\n").contains(uusiRivi), "koerivi ei ole palvelun LR:ssä")
 
-        // Koerivi pois: Infra → paikallinen rekisteri → rivi → Poista rivi.
+        // Koerivi pois: Infra → paikallinen rekisteri → rivi → Poista rivi. Skoopin näkymässä on vain takaisin-nuoli,
+        // sivupalkin nuoli juuren työkalupalkissa (ajo 4 15.10.2026: tap kaatui heti tuloksen jälkeen).
+        for _ in 0..<4 where !(nuoli.exists && nuoli.isHittable) {
+            let takaisin = app.navigationBars.buttons.element(boundBy: 0)
+            guard takaisin.exists else { break }
+            takaisin.tap()
+            _ = nuoli.waitForExistence(timeout: 2)
+        }
+        XCTAssertTrue(nuoli.waitForExistence(timeout: 10), "sivupalkin nuoli puuttuu tuloksen jälkeen")
         nuoli.tap()
         let infra = app.buttons["sivupalkki-infra"]
         XCTAssertTrue(infra.waitForExistence(timeout: 5))
