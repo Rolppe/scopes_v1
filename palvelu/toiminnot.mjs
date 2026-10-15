@@ -3,6 +3,8 @@
 // lippua tai vapaata tekstiä mihinkään komentoriviin.
 //   pura   — olemassa olevalle skoopille uusi Remote Control -istunto tmuxiin, ensimmäinen viesti `/pura <skooppi>`;
 //            skoopin pakatut tmux-istunnot suljetaan ensin `/exit`illä (pakkaamaton istunto estää purun)
+//   pura-testi — kuten pura, mutta mallivapaa: pura-malliton.mjs kirjoittaa purkutiedoston ja uuden istunnon ensimmäinen
+//            viesti käskee lukemaan sen (vain scopes/-skoopeille; PURA-MALLITON, scopes context purascript, T2)
 //   pakkaa — skoopin ainoaan vapaaseen tmux-istuntoon kirjoitetaan `/pakkaa`; jos istunto odottaa vastausta auki
 //            olevaan kysymykseen, Escape sulkee sen ensin (käyttäjä 14.10.2026: Pakkaa sai 409:n juuri silloin)
 //   automaattisiirto, herata, herata-pois — samoin `/automaattisiirto` (pakkaus ja sessionvaihto), `/sa` ja `/sa pois`
@@ -24,6 +26,9 @@ import { keskustelu } from './viestit.mjs';
 
 // 1–12 sanaa (SIIRTO-SYVAT-ALASKOOPIT 13.10.2026: alaskoopit vähintään 10 sanan syvyyteen).
 export const UUSI_NIMI = /^[a-z0-9][a-z0-9-]{0,23}( [a-z0-9][a-z0-9-]{0,23}){0,11}$/;
+
+// Purkutiedoston nimi: sama sääntö kuin pura-malliton.mjs:n `slug` (testi tarkistaa yhtäläisyyden).
+export const mallitonSlug = (skooppi) => skooppi.trim().replace(/\s+/g, '-');
 
 export class Hylatty extends Error {
   constructor(koodi, viesti) { super(viesti); this.koodi = koodi; }
@@ -71,6 +76,7 @@ const kelpaaJonoon = (j) => j && typeof j.nimi === 'string' && typeof j.istunto 
 
 export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toimintoloki, jonoVali = 5_000, jonoTiedosto = oletusJonotiedosto(asetukset) } = {}) {
   const autovaihto = join(asetukset.juuri, 'claude/siirto/tools/autovaihto.sh');
+  const malliton = join(asetukset.juuri, 'claude/siirto/tools/pura-malliton.mjs');
   let kaynnissa = null;
   const jono = new Map(); // `${skooppi}\n${ryhmä}` → { nimi, istunto, komento, toiminto, aika }
   let ajastin = null;
@@ -211,6 +217,26 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
       if (varattu) throw new Hylatty(409, `pakattu istunto on vielä varattu (${varattu.tila ?? 'tila tuntematon'}); yritä vuoron jälkeen`);
       for (const i of suljettavat) { await tarkistaRuutu(i); await kirjoita(i, '/exit'); }
       return { ...await avaaIstunto(nimi, `/pura ${nimi}`), suljettiin: suljettavat.map((i) => i.id) };
+    },
+    // Mallivapaa purku (PURA-MALLITON T2): samat estot kuin purussa, lisäksi vain scopes/-alkuisen rekisterin skoopit
+    // (pura-malliton.mjs:n testiraja). Tiedosto kirjoitetaan ennen kuin mitään suljetaan, joten virhe ei jätä skooppia ilman istuntoa.
+    async 'pura-testi'(nimi) {
+      const skoopit = lueSkoopit(asetukset.juuri);
+      if (!Object.hasOwn(skoopit, nimi)) throw new Hylatty(404, 'tuntematon skooppi');
+      if (!String(skoopit[nimi]?.[0] ?? '').startsWith('scopes/')) throw new Hylatty(400, 'testipurku vain scopes-skoopeille');
+      const omat = skoopinIstunnot(nimi, skoopit);
+      if (omat.some((i) => !i.pakattu)) throw new Hylatty(409, 'skoopissa on jo käynnissä oleva istunto');
+      const suljettavat = omat.filter((i) => i.ruutu);
+      const varattu = omat.find((i) => i.tila !== 'idle');
+      if (varattu) throw new Hylatty(409, `pakattu istunto on vielä varattu (${varattu.tila ?? 'tila tuntematon'}); yritä vuoron jälkeen`);
+      const r = await aja('node', [malliton, nimi, '--kohde', 'claude']);
+      if (r.koodi !== 0 && r.koodi !== 4) {
+        throw new Hylatty(500, (r.stderr.trim().split('\n').filter(Boolean).pop() ?? `pura-malliton exit ${r.koodi}`).slice(0, 300));
+      }
+      const tiedosto = join(homedir(), '.local/state/pura', `${mallitonSlug(nimi)}.md`);
+      for (const i of suljettavat) { await tarkistaRuutu(i); await kirjoita(i, '/exit'); }
+      const tulos = await avaaIstunto(nimi, `Malliton purku: lue ${tiedosto} ja noudata sitä.`);
+      return { ...tulos, suljettiin: suljettavat.map((i) => i.id), tiedosto, ...(r.koodi === 4 ? { varoitus: true } : {}) };
     },
     pakkaa: (nimi) => istuntoon(nimi, '/pakkaa', 'pakkaa'),
     automaattisiirto: (nimi) => istuntoon(nimi, '/automaattisiirto', 'automaattisiirto'),

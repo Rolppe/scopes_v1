@@ -8,6 +8,7 @@
 //   GET /api/skoopit          skooppilista tiivistettynä
 //   GET /api/skoopit/<nimi>   yhden skoopin rekisteri (seuraava, avoimet, viat) ja istunnot
 //   POST /api/skoopit/<nimi>/pura     uusi istunto, ensimmäinen viesti /pura <nimi> → { osoite }
+//   POST /api/skoopit/<nimi>/pura-testi   mallivapaa purku (vain scopes/-skoopit): pura-malliton.mjs + istunto → { osoite, tiedosto, varoitus? }
 //   POST /api/skoopit/<nimi>/pakkaa   /pakkaa skoopin vapaaseen tmux-istuntoon → { istunto, komento }
 //   POST /api/skoopit/<nimi>/automaattisiirto | herata | herata-pois   samoin /automaattisiirto, /sa, /sa pois
 //            varatulle istunnolle jonoon → { istunto, komento, jonossa: true }; GET-näkymän jonossa: [{ komento, aika }]
@@ -179,7 +180,7 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         }
         const kp = polku.match(/^\/api\/skoopit\/([^/]+)\/kysymys-pois$/);
         if (kp) return vastaa(200, await viestit.suljeKysymys(decodeURIComponent(kp[1])));
-        const t = polku.match(/^\/api\/skoopit\/([^/]+)\/(pura|pakkaa|automaattisiirto|herata|herata-pois)$/);
+        const t = polku.match(/^\/api\/skoopit\/([^/]+)\/(pura|pura-testi|pakkaa|automaattisiirto|herata|herata-pois)$/);
         if (t) return vastaa(200, await suorita(t[2], decodeURIComponent(t[1])));
         return vastaa(404, { virhe: 'tuntematon toiminto' });
       }
