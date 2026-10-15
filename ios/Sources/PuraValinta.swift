@@ -3,7 +3,8 @@ import SwiftUI
 // Purun mallivalinta (SCOPES-PURA-MALLI 15.10.2026; käyttäjä: "varmistusviestin yhteydessä pitää olla malli valinta.
 // Tässä pitää olla myös agy ja paikalliset mallit saatavilla claude agenttien lisäksi"). Vahvistus on arkki, koska
 // confirmationDialog ei voi sisältää valitsimia. Purkaja ajaa purkuvaiheen (Claude, siirtaja-sonnet-agentti, agy tai
-// palvelimen paikallinen malli); istunnon malli on uuden Claude Code -istunnon malli. Lista tulee palvelulta
+// palvelimen paikallinen malli); istunnon malli on uuden Claude Code -istunnon malli, Claude tai paikallinen (käyttäjä
+// 15.10.2026: "Paikalliset mallit pitää saada myös keskustelun ajoon"; ilman Remote Controlia). Lista tulee palvelulta
 // (GET /api/purkajat, scopes/palvelu/purkajat.mjs), joka hyväksyy vain omat tunnuksensa. Ilman listaa (vanha palvelu,
 // ei yhteyttä) tarjolla on vain oletus, ja Pura toimii kuten ennen.
 
@@ -16,6 +17,8 @@ struct PurkajaVaihtoehto: Decodable, Hashable {
 struct IstunnonMalli: Decodable, Hashable {
     let nimi: String
     let kuvaus: String
+    // "Claude" tai "Paikalliset"; puuttuu vanhalta palvelulta (= Claude).
+    let ryhma: String?
 }
 
 struct PurkuValinnat: Decodable {
@@ -48,6 +51,14 @@ struct PuraValintaView: View {
             return osat.isEmpty ? nil : (r, osat)
         }
     }
+    private var malliRyhmat: [(String, [IstunnonMalli])] {
+        let m = valinnat?.mallit ?? []
+        return ["Claude", "Paikalliset"].compactMap { r in
+            let osat = m.filter { ($0.ryhma ?? "Claude") == r }
+            return osat.isEmpty ? nil : (r, osat)
+        }
+    }
+    private var paikallinenValittu: Bool { valinnat?.mallit.first { $0.nimi == malli }?.ryhma == "Paikalliset" }
     private var oletusPurkaja: String { valinnat?.purkajat.first { $0.ryhma == "oletus" }?.kuvaus ?? "Oletus" }
     private var oletusMalli: String {
         let m = valinnat.flatMap { v in v.mallit.first { $0.nimi == v.oletusMalli }?.kuvaus } ?? "palvelun oletus"
@@ -78,11 +89,17 @@ struct PuraValintaView: View {
                 Section {
                     Picker("Istunnon malli", selection: $malli) {
                         Text(oletusMalli).tag("")
-                        ForEach(valinnat?.mallit ?? [], id: \.nimi) { Text($0.kuvaus).tag($0.nimi) }
+                        ForEach(malliRyhmat, id: \.0) { r in
+                            Section(r.0) { ForEach(r.1, id: \.nimi) { Text($0.kuvaus).tag($0.nimi) } }
+                        }
                     }
+                    .pickerStyle(.navigationLink)
                     .accessibilityIdentifier("pura-malli")
                 } header: { Text("Istunto") } footer: {
-                    Text("Malli, joka tekee työn purun jälkeen. Istunto on aina Claude Code.")
+                    Text(paikallinenValittu
+                         ? "Paikallinen malli ajaa Claude Code -istuntoa palvelimella. Istunto näkyy vain tämän äpin chatissa, ei Claudessa, ja vastaukset ovat hitaita."
+                         : "Malli, joka tekee työn purun jälkeen. Istunto on Claude Code; paikalliset mallit näkyvät, kun palvelin on päällä.")
+                        .accessibilityIdentifier("pura-malli-selite")
                 }
             }
             .navigationTitle("Pura: \(skooppi)")

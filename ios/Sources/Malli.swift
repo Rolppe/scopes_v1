@@ -194,6 +194,8 @@ struct ToimintoVastaus: Decodable, Hashable {
     let toiminto: String
     let nimi: String
     let osoite: String?
+    // Paikallisen mallin istunto (ei Remote Controlia): tmux-istunnon nimi osoitteen tilalla.
+    let tmux: String?
     let istunto: String?
     let komento: String?
     // true: istunto oli varattu, komento lähtee palvelun jonosta, kun istunto vapautuu (V-294).

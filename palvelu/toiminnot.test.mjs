@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { projektiNimi } from './lahteet.mjs';
 import { kasittelija } from './palvelin.mjs';
 import { slug } from '../../claude/siirto/tools/pura-malliton.mjs';
-import { Hylatty, istuntoOsoite, luoToiminnot, mallitonSlug, oletusJonotiedosto, UUSI_NIMI } from './toiminnot.mjs';
+import { Hylatty, istuntoOsoite, luoToiminnot, mallitonSlug, oletusJonotiedosto, paikallinenTmux, UUSI_NIMI } from './toiminnot.mjs';
 
 const URL_OK = 'OK: https://claude.ai/code/session_abc123';
 
@@ -298,6 +298,16 @@ test('pura-testi: pura-malliton exit 4 → ok + varoitus', async () => {
 test('istuntoOsoite: vain OK-rivin claude.ai-osoite', () => {
   assert.equal(istuntoOsoite(`x\n${URL_OK}\nSULKU`), 'https://claude.ai/code/session_abc123');
   assert.equal(istuntoOsoite('OK: https://example.com/x'), null);
+  assert.equal(paikallinenTmux('UUSI: …\nOK: paikallinen tmux siirto-b-120000\n'), 'siirto-b-120000');
+  assert.equal(paikallinenTmux('OK: paikallinen tmux x;y'), null);
+});
+
+test('pura: paikallisen mallin istunto palauttaa tmux-nimen osoitteen tilalla', async () => {
+  const a = ymparisto();
+  const v = vaarennos({ autovaihto: { koodi: 0, stdout: 'UUSI: …\nOK: paikallinen tmux siirto-b-120000\n', stderr: '' } });
+  const r = await luoToiminnot(a, { aja: v.aja })('pura', 'b', { malli: 'palvelin/qwen/qwen3-coder-30b' });
+  assert.deepEqual(r, { ok: true, toiminto: 'pura', nimi: 'b', tmux: 'siirto-b-120000', suljettiin: [], malli: 'palvelin/qwen/qwen3-coder-30b' });
+  assert.deepEqual(v.kutsut.at(-1), ['bash', join(a.juuri, 'claude/siirto/tools/autovaihto.sh'), 'vaihda', 'b', '--ei-sulje', '--model', 'palvelin/qwen/qwen3-coder-30b', '--viesti', '/pura b']);
 });
 
 test('palvelin: POST-reitit vaativat avaimen ja ohjautuvat toimintoihin', async () => {

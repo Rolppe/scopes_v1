@@ -61,6 +61,8 @@ export function ajaKomento(komento, argumentit, { aikaraja = 150_000, syote = nu
 
 // autovaihto.sh:n tulosteesta Remote Control -osoite (OK: <url>).
 export const istuntoOsoite = (stdout) => /^OK: (https:\/\/claude\.ai\/code\/session_[A-Za-z0-9]+)$/m.exec(stdout)?.[1] ?? null;
+// Paikallisen mallin istunnolla ei ole Remote Controlia (autovaihto.sh, 15.10.2026): OK-rivi nimeää tmux-istunnon.
+export const paikallinenTmux = (stdout) => /^OK: paikallinen tmux (siirto-[a-z0-9-]+)$/m.exec(stdout)?.[1] ?? null;
 
 // Jonotettavat komennot ryhmittäin: ryhmän uusin korvaa vanhemman (kytkin pois ja päälle → vain /sa), ja herätys lähtee
 // ennen siirtoa, koska /automaattisiirto päättää istunnon.
@@ -125,11 +127,12 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
   async function avaaIstunto(skooppi, viesti, malli = null) {
     const t = await aja('bash', [autovaihto, 'vaihda', skooppi, '--ei-sulje', ...(malli ? ['--model', malli] : []), '--viesti', viesti]);
     const osoite = istuntoOsoite(t.stdout);
-    if (t.koodi !== 0 || !osoite) {
+    const tmux = paikallinenTmux(t.stdout);
+    if (t.koodi !== 0 || !(osoite || tmux)) {
       const syy = (t.stderr.trim().split('\n').filter(Boolean).pop() ?? `autovaihto exit ${t.koodi}`).slice(0, 300);
       throw new Hylatty(502, `istunto ei käynnistynyt: ${syy}`);
     }
-    return { osoite };
+    return osoite ? { osoite } : { tmux };
   }
 
   // Istunnon viimeinen viesti on vastaamaton monivalinta (AskUserQuestion).
