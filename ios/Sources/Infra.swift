@@ -10,6 +10,8 @@ struct InfraView: View {
     // Kontekstitiedostot katon täyttöasteineen (SCOPES-INFRA-REKISTERIT); nil = vanha palvelu tai lataus epäonnistui.
     @State private var tiedostot: [RekisteriTiedosto]?
     @State private var virhe: String?
+    // palvelimen tila (SCOPES-LINUX-NAPIT); nil = vanha palvelu tai lataus epäonnistui, jolloin osio piilotetaan.
+    @State private var linux: LinuxTila?
     @State private var auki: Set<String> = []
     @State private var polku = NavigationPath()
     /// Pääskooppien järjestys rivinvaihdoin erotettuna; uudet skoopit tulevat loppuun palvelun järjestyksessä.
@@ -28,6 +30,7 @@ struct InfraView: View {
                 Section {
                     NavigationLink { LrView() } label: { LrYhteenveto() }.accessibilityIdentifier("infra-lr")
                 }
+                if linux != nil { LinuxServerOsio(tila: $linux) }
                 // Jokainen pääskooppi on oma korttinsa, ja sen alaskoopit avautuvat saman kortin sisään (käyttäjä 14.10.2026).
                 // Kortti on yksi listarivi, jotta pitkä painallus irrottaa sen ja .onMove siirtää sen toiseen kohtaan
                 // (SCOPES-INFRA-JARJESTYS 14.10.2026; Sectionia ei voi siirtää). Nosto vaatii, ettei sivuttaisveto
@@ -85,8 +88,10 @@ struct InfraView: View {
         do {
             let asiakas = Asiakas(osoite: asetukset.osoite, avain: asetukset.avain)
             async let t = try? asiakas.rekisterit()
+            async let l = try? asiakas.linuxServer()
             skoopit = try await asiakas.skoopit()
             tiedostot = await t
+            linux = await l
             virhe = nil
         } catch {
             virhe = error.localizedDescription
@@ -290,5 +295,81 @@ struct RekisterinOsatView: View {
                 virhe = nil
             } catch { virhe = error.localizedDescription }
         }
+    }
+}
+
+// palvelimen käynnistys ja sammutus (SCOPES-LINUX-NAPIT 15.10.2026). Käynnistys herättää PC:n (WoL) ja vaihtaa Windowsin
+// Linuxiin; sammutus vain, kun Linux on päällä. Molemmat vahvistetaan, ja vahvistus kertoo, mitä PC:lle tapahtuu.
+// Toiminnon jälkeen tila tulee vastauksesta (ping vastaa vielä hetken sammutuksen jälkeen); vetäminen alas lukee sen uudelleen.
+struct LinuxServerOsio: View {
+    @EnvironmentObject private var asetukset: Asetukset
+    @Binding var tila: LinuxTila?
+    @State private var vahvista: LinuxToiminto?
+    @State private var kaynnissa: LinuxToiminto?
+    @State private var viesti: String?
+    @State private var virhe: String?
+
+    private var paalla: Bool { tila?.tila == "linux" }
+
+    var body: some View {
+        Section("palvelin") {
+            LabeledContent("Tila", value: nimi(tila?.tila))
+                .accessibilityIdentifier("linux-tila")
+            Button { vahvista = .kaynnista } label: { Label("Käynnistä", systemImage: "power") }
+                .disabled(kaynnissa != nil || paalla)
+                .accessibilityIdentifier("linux-kaynnista")
+            Button(role: .destructive) { vahvista = .sammuta } label: { Label("Sammuta", systemImage: "poweroff") }
+                .disabled(kaynnissa != nil || !paalla)
+                .accessibilityIdentifier("linux-sammuta")
+            if let k = kaynnissa { ProgressView(k == .kaynnista ? "Käynnistetään… (enintään 2 min)" : "Sammutetaan…") }
+            if let viesti { Text(viesti).font(.footnote).foregroundStyle(.secondary).accessibilityIdentifier("linux-viesti") }
+            if let virhe { Text(virhe).foregroundStyle(.red).accessibilityIdentifier("linux-virhe") }
+        }
+        .confirmationDialog(vahvista.map { vahvistus($0).kysymys } ?? "",
+                            isPresented: Binding(get: { vahvista != nil }, set: { if !$0 { vahvista = nil } }),
+                            titleVisibility: .visible, presenting: vahvista) { t in
+            Button(vahvistus(t).nappi, role: t == .sammuta ? .destructive : nil) { Task { await aja(t) } }
+                .accessibilityIdentifier("linux-vahvista")
+        } message: { t in
+            Text(vahvistus(t).seuraus)
+        }
+    }
+
+    private func nimi(_ tila: String?) -> String {
+        switch tila {
+        case "linux": "Linux päällä"
+        case "windows": "Windows päällä"
+        case "sammuksissa": "Sammuksissa"
+        case "vaihtaa": "Vaihtaa Linuxiin…"
+        case "heratetty": "Herätetty"
+        case "sammuu": "Sammuu…"
+        default: "Ei tiedossa"
+        }
+    }
+
+    private func vahvistus(_ t: LinuxToiminto) -> (kysymys: String, seuraus: String, nappi: String) {
+        switch t {
+        case .kaynnista: ("Käynnistetäänkö palvelin?",
+                          tila?.tila == "windows" ? "PC:ssä on Windows päällä: se käynnistyy uudelleen Linuxiin (noin 45 s)."
+                                                  : "PC herätetään verkon yli. Jos se nousee Windowsiin, se vaihdetaan Linuxiin.",
+                          "Käynnistä")
+        case .sammuta: ("Sammutetaanko palvelin?",
+                        "PC sammuu. LM Studion paikalliset mallit ja muut palvelimen palvelut ovat poissa, kunnes se käynnistetään.",
+                        "Sammuta")
+        }
+    }
+
+    private func aja(_ t: LinuxToiminto) async {
+        kaynnissa = t
+        viesti = nil
+        virhe = nil
+        do {
+            let v = try await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).linuxServer(t)
+            tila = LinuxTila(tila: v.tila, osoite: tila?.osoite)
+            viesti = v.kuiva.map { "\(v.viesti) (kokeilu, ei ajettu: \($0))" } ?? v.viesti
+        } catch {
+            virhe = error.localizedDescription
+        }
+        kaynnissa = nil
     }
 }

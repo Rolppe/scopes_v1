@@ -84,6 +84,14 @@ struct Asiakas {
         try await hae("/api/asetukset/\(kytkin.rawValue)/\(paalle ? "paalle" : "pois")", metodi: "POST")
     }
 
+    // palvelin (SCOPES-LINUX-NAPIT): vanha palvelu vastaa 404, jolloin Infra-sivu piilottaa osion. Herätys odottaa,
+    // kunnes PC vastaa (palvelussa enintään 90 s + kertaboot), siksi pitkä aikaraja.
+    func linuxServer() async throws -> LinuxTila { try await hae("/api/palvelin") }
+
+    func linuxServer(_ toiminto: LinuxToiminto) async throws -> LinuxVastaus {
+        try await hae("/api/palvelin/\(toiminto.rawValue)", metodi: "POST", aikaraja: 150)
+    }
+
     func uusi(_ nimi: String) async throws -> ToimintoVastaus {
         try await hae("/api/uusi", metodi: "POST", runko: try JSONEncoder().encode(["nimi": nimi]), aikaraja: 150)
     }
