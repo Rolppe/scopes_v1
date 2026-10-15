@@ -91,6 +91,16 @@ func lueLahtotaso(_ d: UserDefaults = .standard) -> [SkooppiYhteenveto]? {
 }
 func tallennaLahtotaso(_ s: [SkooppiYhteenveto], _ d: UserDefaults = .standard) { d.set(try? JSONEncoder().encode(s), forKey: "lahtotaso") }
 
+// Viimeisin iOS:n herättämä taustahaku Asetusten Ilmoitukset-sivulle (NOTIFICATIONS-TAUSTA-TODENNUS 15.10.2026: käyttäjä
+// ei nähnyt, herättikö iOS äppiä lainkaan). Ilmoituksia -1 = haku epäonnistui (reitti, tunneli tai palvelu).
+func tallennaTaustahaku(_ ilmoituksia: Int, aika: Date = Date(), _ d: UserDefaults = .standard) {
+    d.set(aika, forKey: "taustahakuAika")
+    d.set(ilmoituksia, forKey: "taustahakuIlmoituksia")
+}
+func lueTaustahaku(_ d: UserDefaults = .standard) -> (aika: Date, ilmoituksia: Int)? {
+    (d.object(forKey: "taustahakuAika") as? Date).map { ($0, d.integer(forKey: "taustahakuIlmoituksia")) }
+}
+
 #if canImport(UIKit)
 import BackgroundTasks
 import SwiftUI
@@ -121,7 +131,7 @@ final class Ilmoittaja: NSObject, UNUserNotificationCenterDelegate {
             let sallittu = (try? await keskus.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
             guard sallittu, let koe else { return }
             try? await Task.sleep(for: .seconds(2))
-            laheta(Ilmoitus(skooppi: koe, laji: .odottaa, teksti: "Koeilmoitus"))
+            await laheta(Ilmoitus(skooppi: koe, laji: .odottaa, teksti: "Koeilmoitus"))
         }
         ajoita()
         silmukka?.cancel()
@@ -169,19 +179,27 @@ final class Ilmoittaja: NSObject, UNUserNotificationCenterDelegate {
         guard paalla else { return }
         ajoita()
         if edellinen == nil { edellinen = lueLahtotaso() }
-        await hae(Asetukset())
+        tallennaTaustahaku(await hae(Asetukset()) ?? -1)
     }
 
-    private func hae(_ asetukset: Asetukset) async {
+    // Palauttaa lähetettyjen ilmoitusten määrän, nil jos haku epäonnistui.
+    @discardableResult
+    private func hae(_ asetukset: Asetukset) async -> Int? {
         guard asetukset.valmis,
-              let uusi = try? await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).skoopit() else { return }
+              let uusi = try? await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).skoopit() else { return nil }
         defer {
             edellinen = uusi
             tallennaLahtotaso(uusi)
             if tilannekuva(uusi).tallenna() { WidgetCenter.shared.reloadAllTimelines() }
         }
-        guard let vanha = edellinen else { return }
-        for i in ilmoitukset(edellinen: vanha, uusi: uusi, raja: ilmoitusRaja()) where ilmoitusPaalla(i.laji) { laheta(i) }
+        // Kylmä taustakäynnistys: juurinäkymän .task voi käynnistää silmukan ennen taustahakua, ja sen ensimmäinen haku
+        // nielaisisi muutoksen lähtötasoksi. Taustalla puuttuva muistin lähtötaso luetaan siksi levyltä.
+        let taustalla = UIApplication.shared.applicationState != .active
+        guard let vanha = edellinen ?? (taustalla ? lueLahtotaso() : nil) else { return 0 }
+        let lista = ilmoitukset(edellinen: vanha, uusi: uusi, raja: ilmoitusRaja()).filter { ilmoitusPaalla($0.laji) }
+        // Odotetaan lisäys loppuun: taustahaun päätyttyä iOS keskeyttää äpin, ja kesken jäänyt lisäys voi kadota.
+        for i in lista { await laheta(i) }
+        return lista.count
     }
 
     // Asetusten koeilmoitus: kysyy luvan, jos sitä ei ole vielä kysytty; napautus avaa juuriskoopin "scopes".
@@ -189,11 +207,11 @@ final class Ilmoittaja: NSObject, UNUserNotificationCenterDelegate {
         let keskus = UNUserNotificationCenter.current()
         keskus.delegate = self
         guard (try? await keskus.requestAuthorization(options: [.alert, .sound, .badge])) == true else { return false }
-        laheta(Ilmoitus(skooppi: "scopes", laji: .odottaa, teksti: "Koeilmoitus"))
+        await laheta(Ilmoitus(skooppi: "scopes", laji: .odottaa, teksti: "Koeilmoitus"))
         return true
     }
 
-    private func laheta(_ i: Ilmoitus) {
+    private func laheta(_ i: Ilmoitus) async {
         let sisalto = UNMutableNotificationContent()
         sisalto.title = i.skooppi
         sisalto.body = i.teksti
@@ -202,7 +220,7 @@ final class Ilmoittaja: NSObject, UNUserNotificationCenterDelegate {
         sisalto.userInfo = ["skooppi": i.skooppi]
         // Sama skooppi ja laji korvaa edellisen ilmoituksen, jotta ilmoituskeskukseen ei kerry toistoja.
         let pyynto = UNNotificationRequest(identifier: "\(i.skooppi)|\(i.laji.rawValue)", content: sisalto, trigger: nil)
-        UNUserNotificationCenter.current().add(pyynto)
+        try? await UNUserNotificationCenter.current().add(pyynto)
     }
 
     // Banneri myös äpin ollessa auki, kuten Claude iOS -äpissä.
@@ -224,11 +242,13 @@ struct IlmoitusAsetukset: View {
     @Environment(\.scenePhase) private var vaihe
     @State private var lupa = UNAuthorizationStatus.notDetermined
     @State private var koeTulos: String?
+    @State private var taustahaku = lueTaustahaku()
 
     var body: some View {
         Form {
             Section {
                 Text(lupaTeksti).accessibilityIdentifier("ilmoituslupa")
+                Text(taustahakuTeksti).accessibilityIdentifier("taustahaku")
                 if lupa == .denied {
                     Button("Avaa iOS-asetukset") {
                         if let url = URL(string: UIApplication.openNotificationSettingsURLString) { UIApplication.shared.open(url) }
@@ -273,6 +293,13 @@ struct IlmoitusAsetukset: View {
 
     private func paivitaLupa() async {
         lupa = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        taustahaku = lueTaustahaku()
+    }
+
+    private var taustahakuTeksti: String {
+        guard let t = taustahaku else { return "Taustahaku: iOS ei ole vielä herättänyt äppiä" }
+        let aika = t.aika.formatted(date: .abbreviated, time: .shortened)
+        return t.ilmoituksia < 0 ? "Taustahaku \(aika): haku epäonnistui" : "Taustahaku \(aika): \(t.ilmoituksia) ilmoitusta"
     }
 
     private var lupaTeksti: String {
