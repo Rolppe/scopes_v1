@@ -734,6 +734,7 @@ final class SkoopitUITests: XCTestCase {
         let vika = app.switches["ilmoitus-vika"]
         XCTAssertTrue(app.staticTexts["ilmoituslupa"].waitForExistence(timeout: 5), "luparivi puuttuu")
         XCTAssertTrue(nakyviin(app, vika), "lajikytkimet puuttuvat")
+        XCTAssertTrue(app.switches["ilmoitus-kysely"].exists, "kyselyn kytkin puuttuu (NOTIFICATIONS-KYSELY-KYTKIN)")
         XCTAssertEqual(vika.value as? String, "1")
         kytke(vika)
         XCTAssertEqual(vika.value as? String, "0")
@@ -848,7 +849,15 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertTrue(app.buttons["pura-malli"].exists, "istunnon mallin valinta puuttuu uudesta skoopista")
         app.buttons["pura-purkaja"].tap()
         XCTAssertTrue(app.navigationBars["Purkaja"].waitForExistence(timeout: 5), "purkajalista ei auennut")
+        XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS 'siirtaja-sonnet'")).firstMatch.waitForExistence(timeout: 5), "agentti puuttuu uuden skoopin purkajista")
         kuva("uusi-purkajat")
+        app.navigationBars.buttons.firstMatch.tap()
+        // Istunnon mallit samasta lähteestä kuin purussa: Claude aina (käyttäjä 15.10.2026: "ei ole muuta vaihtoehtoja kun default").
+        let malli = app.buttons["pura-malli"]
+        XCTAssertTrue(malli.waitForExistence(timeout: 5), "mallin valinta puuttuu paluun jälkeen")
+        malli.tap()
+        XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS 'Opus 5.5'")).firstMatch.waitForExistence(timeout: 5), "Claude-malli puuttuu uuden skoopin istunnon malleista")
+        kuva("uusi-mallit")
     }
 
     // Skoopin arkistointi listasta (SCOPES-LISTA-POISTO): pito + veto vasemmalle paljastaa X:n, pelkkä veto ei; kosketus
