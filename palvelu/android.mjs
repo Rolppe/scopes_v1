@@ -75,7 +75,8 @@ export function jasennaUi(xml) {
   const solmut = [];
   for (const [, attr] of xml.matchAll(/<node\b([^>]*?)\/?>/g)) {
     const a = {};
-    for (const [, k, v] of attr.matchAll(/([\w-]+)="([^"]*)"/g)) a[k] = pura(v);
+    // Lainausmerkin sisältävä arvo tulee heittomerkeissä (Geminin koodilohko 15.10.2026: text='…"…"…').
+    for (const [, k, v, h] of attr.matchAll(/([\w-]+)=(?:"([^"]*)"|'([^']*)')/g)) a[k] = pura(v ?? h);
     const alue = (a.bounds ?? '').match(/\d+/g)?.map(Number);
     if (!alue || alue.length !== 4 || alue[2] <= alue[0] || alue[3] <= alue[1]) continue;
     solmut.push({ teksti: a.text ?? '', kuvaus: a['content-desc'] ?? '', id: (a['resource-id'] ?? '').split('/').pop(),
@@ -92,6 +93,45 @@ export function geminiKeskustelu(solmut) {
     .map((s) => ({ rooli: s.id === 'assistant_robin_text' ? 'gemini' : 'kayttaja', teksti: s.teksti }));
   return { viestit, kaynnissa: solmut.some((s) => s.kuvaus === 'Stop generating response') };
 }
+
+// Viimeisimmän vastauksen osat ruudulla ylhäältä alas (CHAT-GEMINI 15.10.2026, laitteella todennettu): vastaus on
+// RecyclerView, jonka osat ovat tekstikappaleita (assistant_robin_text) ja koodilohkoja (code_info = kieli,
+// code_impl = koodi). Osittain näkyvän osan solmussa on koko teksti; kokonaan ruudun ulkopuolella oleva osa puuttuu
+// dumpista. Ruudun viimeistä käyttäjän viestiä ylempänä olevat osat kuuluvat aiempiin vastauksiin.
+const NOLLALEVEYS = /[​‌‍﻿]/g;
+export function vastauksenOsat(solmut) {
+  const jarj = [...solmut].sort((a, b) => a.alue[1] - b.alue[1] || a.alue[0] - b.alue[0]);
+  const kayttaja = jarj.findLast((s) => s.id === 'assistant_robin_user_message_text');
+  const raja = kayttaja ? kayttaja.alue[3] : -1;
+  const osat = [];
+  let kieli = '';
+  for (const s of jarj) {
+    if (s.alue[1] < raja) continue;
+    const t = s.teksti.replace(NOLLALEVEYS, '');
+    if (s.id === 'assistant_robin_code_info') kieli = t.trim();
+    else if (s.id === 'assistant_robin_code_impl' && t.trim()) { osat.push({ laji: 'koodi', teksti: t.replace(/\n+$/, ''), kieli }); kieli = ''; }
+    else if (s.id === 'assistant_robin_text' && t.trim()) osat.push({ laji: 'teksti', teksti: t.trim() });
+  }
+  return osat;
+}
+
+// Ylöspäin vieritettäessä uusi ruudullinen (ylhäältä alas) liitetään kertyneiden alkuun päällekkäisen osan kohdalta;
+// koodilohkon kieli täydentyy, jos otsake oli aiemmin ruudun ulkopuolella.
+export function liitaAlkuun(kertyneet, uudet) {
+  if (!kertyneet.length) return [...uudet];
+  const avain = (o) => `${o.laji}\n${o.teksti}`;
+  const i = uudet.findIndex((o) => avain(o) === avain(kertyneet[0]));
+  if (i < 0) return [...uudet, ...kertyneet];
+  const tulos = [...uudet.slice(0, i), ...kertyneet];
+  uudet.slice(i).forEach((o, k) => { const v = tulos[i + k]; if (v && o.kieli && !v.kieli && avain(o) === avain(v)) tulos[i + k] = { ...v, kieli: o.kieli }; });
+  return tulos;
+}
+
+export const osatTekstiksi = (osat) => osat.map((o) => (o.laji === 'koodi' ? `\`\`\`${o.kieli ?? ''}\n${o.teksti}\n\`\`\`` : o.teksti)).join('\n\n');
+
+// Sama viesti ruudulla: välilyönnit tasattuina alun 60 merkin perusteella (pitkä viesti voi näkyä lyhennettynä).
+const tasaa = (s) => String(s ?? '').replace(NOLLALEVEYS, '').replace(/\s+/g, ' ').trim();
+export const samaViesti = (a, b) => { const x = tasaa(a).slice(0, 60), y = tasaa(b).slice(0, 60); return x.length > 0 && x === y; };
 
 const keski = ({ alue: [x1, y1, x2, y2] }) => [Math.round((x1 + x2) / 2), Math.round((y1 + y2) / 2)];
 const osuus = (v, nimi) => {
@@ -354,9 +394,77 @@ export function luoAndroid({
     return { tyyppi: tyyppi(p), data: t.stdout, nimi: basename(p) };
   }
 
+  // Gemini chat-moottorina (CHAT-GEMINI 15.10.2026, käyttäjä: Gemini mallivalintana tavallisessa chatissa).
+  // Jakointentti avaa aina uuden Gemini-chatin (laitteella todennettu: myös avoimen keskustelun päälle), eikä auki olevaan
+  // keskusteluun saa kirjoitettua ääkkösiä (`input text`), joten jokainen kysymys on oma Gemini-chattinsa ja jatkon
+  // historia kulkee tekstissä (viestit.mjs). Vastausta seurataan dumpeista: generoinnin aikana dumppi voi epäonnistua tai
+  // kestää ~10 s (ruutu ei ole levossa), joten virhe vain ohitetaan. Valmis vastaus kootaan vierittämällä (kokoaVastaus),
+  // koska ruudun ulkopuolinen osa puuttuu dumpista. Jokainen vaihe kulkee sarjaan-jonossa erikseen, jottei
+  // Android-näkymä jumitu koko vastauksen ajaksi.
+  async function kysyGeminilta({ teksti, pala = null, pysaytetty = () => false, aikaraja = 300_000, vali = 1000 } = {}) {
+    await suorita('kirjoita', { teksti, laheta: true });
+    if (kuiva) return { vastaus: '', kuiva: true };
+    let naytetty = '';
+    const nayta = (t) => { if (t.length > naytetty.length && t.startsWith(naytetty)) { pala?.(t.slice(naytetty.length)); naytetty = t; } };
+    const alku = nyt();
+    let nahty = false;
+    let edel = null;
+    let keskeytetty = false;
+    for (;;) {
+      if (pysaytetty()) {
+        keskeytetty = true;
+        await sarjaan(async () => { const s = (await lueUi()).find((n) => n.kuvaus === 'Stop generating response'); if (s) await napautaSolmu(s); }).catch(() => {});
+        break;
+      }
+      if (nyt() - alku > aikaraja) throw new Hylatty(504, `Gemini ei vastannut ${Math.round(aikaraja / 1000)} sekunnissa`);
+      let solmut;
+      try { solmut = await sarjaan(async () => { await heraa(); return lueUi(); }); } catch { await odota(vali); continue; }
+      // Vastaus luetaan vasta, kun lähetetty viesti näkyy: sitä ennen ruudulla on edellinen vastaus.
+      nahty ||= solmut.some((n) => n.id === 'assistant_robin_user_message_text' && samaViesti(n.teksti, teksti));
+      if (!nahty) {
+        if (nyt() - alku > 30_000) throw new Hylatty(502, 'lähetetty viesti ei näy Geminissä 30 sekunnin jälkeen');
+        await odota(vali);
+        continue;
+      }
+      const t = osatTekstiksi(vastauksenOsat(solmut));
+      nayta(t);
+      if (t && t === edel && !solmut.some((n) => n.kuvaus === 'Stop generating response')) break;
+      edel = t;
+      await odota(vali);
+    }
+    const vastaus = await kokoaVastaus(teksti).catch(() => edel ?? '');
+    nayta(vastaus);
+    viimeksi = nyt();
+    kirjaa({ toiminto: 'android gemini-chat', tulos: keskeytetty ? 'keskeytetty' : 'ok', merkkeja: vastaus.length, kesto: nyt() - alku });
+    return { vastaus, ...(keskeytetty && { keskeytetty: true }) };
+  }
+
+  // Koko vastaus: alas, sitten ylös ruudullinen kerrallaan, kunnes lähetetty viesti (chatin ensimmäinen) näkyy.
+  // Ruutua korkeampi osa täyttää näkymän samoin rajoin vedosta toiseen, joten "ruutu ei muuttunut" ei kerro yläreunasta
+  // (laitteella 15.10.2026 vieritys pysähtyi siihen kesken); raja on vetojen määrä. Hidas veto (800 ms) ei heitä listaa
+  // vauhdilla, ja 50 %:n siirtymä jättää ~500 px päällekkäisyyden liitaAlkuun-kutsulle (näkymä ~1760 px, osien väli ~140 px).
+  function kokoaVastaus(teksti) {
+    return sarjaan(async () => {
+      let solmut = await lueUi();
+      const alas = solmut.find((n) => n.kuvaus === 'Scroll to bottom');
+      if (alas) { await napautaSolmu(alas); await odota(1200); solmut = await lueUi(); }
+      const [w, h] = await ruudunKoko();
+      const x = Math.round(w / 2);
+      let osat = [];
+      for (let i = 0; i < 60; i++) {
+        osat = liitaAlkuun(osat, vastauksenOsat(solmut));
+        if (solmut.some((n) => n.id === 'assistant_robin_user_message_text' && samaViesti(n.teksti, teksti))) break;
+        await muuta(`input swipe ${x} ${Math.round(h * 0.25)} ${x} ${Math.round(h * 0.75)} 800`);
+        await odota(900);
+        solmut = await lueUi();
+      }
+      return osatTekstiksi(osat);
+    });
+  }
+
   const ajastin = setInterval(() => { nukutaJosHiljaista().catch(() => {}); }, 15_000);
   ajastin.unref?.();
   const lopeta = () => clearInterval(ajastin);
 
-  return { tila, ruutu, ui, suorita, liita, tuotokset, tuotos, nukutaJosHiljaista, lopeta };
+  return { tila, ruutu, ui, suorita, liita, tuotokset, tuotos, kysyGeminilta, nukutaJosHiljaista, lopeta };
 }

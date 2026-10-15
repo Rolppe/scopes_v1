@@ -520,9 +520,12 @@ struct ChatView: View {
 
     // Mallin valinta syöttökentän alla Claude-äpin tapaan: nimi ja alasnuoli; Claude-mallit ja palvelimen
     // paikalliset mallit omina osioinaan (jälkimmäinen puuttuu, kun palvelin on pois päältä; otsikko V-330).
+    // Gemini (CHAT-GEMINI 15.10.2026) on puhelinpalvelimen Android-äppi, jota palvelu ajaa ruudun kautta.
     private var mallinValinta: some View {
         Menu {
             Section("Claude") { ForEach(agentit.filter { $0.tyyppi == "malli" }) { valinta($0) } }
+            let android = agentit.filter { $0.tyyppi == "gemini" }
+            if !android.isEmpty { Section("Android") { ForEach(android) { valinta($0) } } }
             let paikalliset = agentit.filter { $0.tyyppi == "paikallinen" }
             if !paikalliset.isEmpty { Section("Paikalliset") { ForEach(paikalliset) { valinta($0) } } }
         } label: {
