@@ -8,9 +8,10 @@
 //   GET /api/skoopit          skooppilista tiivistettynä
 //   GET /api/skoopit/<nimi>   yhden skoopin rekisteri (seuraava, avoimet, viat) ja istunnot
 //   POST /api/skoopit/<nimi>/pura {"purkaja"?, "malli"?}   uusi istunto, ensimmäinen viesti /pura <nimi> [--ajaja=<purkaja>],
-//            istunnon malli --model <malli> → { osoite }; tyhjä runko = oletukset (purkajat.mjs, SCOPES-PURA-MALLI)
+//            istunnon malli --model <malli> → { osoite }; tyhjä runko = oletukset (purkajat.mjs, SCOPES-PURA-MALLI).
+//            Scopes-perhe mallitta: pura-malliton.mjs + tiedostoviesti → { osoite, tiedosto, varoitus? }; purkaja ei koske (T6b)
 //   GET /api/purkajat                 purun valinnat { purkajat: [{ tunnus, kuvaus, ryhma }], mallit, oletusMalli }
-//   POST /api/skoopit/<nimi>/pura-testi   mallivapaa purku (vain scopes/-skoopit): pura-malliton.mjs + istunto → { osoite, tiedosto, varoitus? }
+//   POST /api/skoopit/<nimi>/pura-testi   vanha testinapin reitti, sama kuin pura ilman runkoa (poistuu T6e)
 //   POST /api/skoopit/<nimi>/pakkaa   /pakkaa skoopin vapaaseen tmux-istuntoon → { istunto, komento }
 //   POST /api/skoopit/<nimi>/automaattisiirto | herata | herata-pois   samoin /automaattisiirto, /sa, /sa pois
 //            varatulle istunnolle jonoon → { istunto, komento, jonossa: true }; GET-näkymän jonossa: [{ komento, aika }]

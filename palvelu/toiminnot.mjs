@@ -3,9 +3,10 @@
 // lippua tai vapaata tekstiä mihinkään komentoriviin.
 //   pura   — olemassa olevalle skoopille uusi Remote Control -istunto tmuxiin, ensimmäinen viesti `/pura <skooppi>`
 //            (+ `--ajaja=<purkaja>` ja autovaihdon `--model`, kun äppi valitsi ne purkajat.mjs:n listalta: SCOPES-PURA-MALLI);
-//            skoopin pakatut tmux-istunnot suljetaan ensin `/exit`illä (pakkaamaton istunto estää purun)
-//   pura-testi — kuten pura, mutta mallivapaa: pura-malliton.mjs kirjoittaa purkutiedoston ja uuden istunnon ensimmäinen
-//            viesti käskee lukemaan sen (vain scopes/-skoopeille; PURA-MALLITON, scopes context purascript, T2)
+//            skoopin pakatut tmux-istunnot suljetaan ensin `/exit`illä (pakkaamaton istunto estää purun).
+//            Scopes-perhe (`pura-malliton.mjs --perhe`) puretaan mallitta: skripti kirjoittaa purkutiedoston ja uuden
+//            istunnon ensimmäinen viesti käskee lukemaan sen; purkajavalinta ei koske perhettä (PURA-MALLITON T6b)
+//   pura-testi — vanha testinapin reitti, nyt sama kuin pura; poistuu äpin napin kanssa (T6e)
 //   pakkaa — skoopin ainoaan vapaaseen tmux-istuntoon kirjoitetaan `/pakkaa`; jos istunto odottaa vastausta auki
 //            olevaan kysymykseen, Escape sulkee sen ensin (käyttäjä 14.10.2026: Pakkaa sai 409:n juuri silloin)
 //   automaattisiirto, herata, herata-pois — samoin `/automaattisiirto` (pakkaus ja sessionvaihto), `/sa` ja `/sa pois`
@@ -209,11 +210,24 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
     if (!jono.size && ajastin) { clearInterval(ajastin); ajastin = null; }
   }
 
+  // Mallivapaa purku (PURA-MALLITON T6b): purkutiedosto kirjoitetaan ennen kuin mitään suljetaan, joten skriptin virhe ei
+  // jätä skooppia ilman istuntoa eikä vaihdu mallireittiin. Suljettavat pois tiedoston ISTUNNOT-riviltä (PURASCRIPT-ISTUNNOT).
+  async function puraMallitta(nimi, suljettavat, malli) {
+    const r = await aja('node', [malliton, nimi, '--kohde', 'claude', ...(suljettavat.length ? ['--suljettavat', suljettavat.map((i) => i.id).join(',')] : [])]);
+    if (r.koodi !== 0 && r.koodi !== 4) {
+      throw new Hylatty(500, (r.stderr.trim().split('\n').filter(Boolean).pop() ?? `pura-malliton exit ${r.koodi}`).slice(0, 300));
+    }
+    const tiedosto = join(homedir(), '.local/state/pura', `${mallitonSlug(nimi)}.md`);
+    for (const i of suljettavat) { await tarkistaRuutu(i); await kirjoita(i, '/exit'); }
+    const tulos = await avaaIstunto(nimi, `Malliton purku: lue ${tiedosto} ja noudata sitä.`, malli);
+    return { ...tulos, suljettiin: suljettavat.map((i) => i.id), tiedosto, ...(malli ? { malli } : {}), ...(r.koodi === 4 ? { varoitus: true } : {}) };
+  }
+
   const toteutus = {
     // valinta = purkajat.mjs:n tarkistama { ajaja, malli } (SCOPES-PURA-MALLI); ajaja kulkee /pura-lippuna aja-siirtaja.sh:lle.
     async pura(nimi, { ajaja = null, malli = null } = {}) {
       const skoopit = lueSkoopit(asetukset.juuri);
-      if (!skoopit[nimi]) throw new Hylatty(404, 'tuntematon skooppi');
+      if (!Object.hasOwn(skoopit, nimi)) throw new Hylatty(404, 'tuntematon skooppi');
       const omat = skoopinIstunnot(nimi, skoopit);
       if (omat.some((i) => !i.pakattu)) throw new Hylatty(409, 'skoopissa on jo käynnissä oleva istunto');
       // Pakattu istunto suljetaan ennen uutta (käyttäjä 13.10.2026): äpissä skoopin keskustelu jatkuu samassa
@@ -223,31 +237,15 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
       const suljettavat = omat.filter((i) => i.ruutu);
       const varattu = omat.find((i) => i.tila !== 'idle');
       if (varattu) throw new Hylatty(409, `pakattu istunto on vielä varattu (${varattu.tila ?? 'tila tuntematon'}); yritä vuoron jälkeen`);
+      // Perhetunnistus on yksi kaikille reiteille (T6): 0 = scopes-perhe, 1 = ei; muu exit ei saa pudottaa perhettä mallireittiin.
+      const p = await aja('node', [malliton, '--perhe', nimi]);
+      if (p.koodi === 0) return puraMallitta(nimi, suljettavat, malli);
+      if (p.koodi !== 1) throw new Hylatty(500, (p.stderr.trim().split('\n').filter(Boolean).pop() ?? `pura-malliton --perhe exit ${p.koodi}`).slice(0, 300));
       for (const i of suljettavat) { await tarkistaRuutu(i); await kirjoita(i, '/exit'); }
       const tulos = await avaaIstunto(nimi, `/pura ${nimi}${ajaja ? ` --ajaja=${ajaja}` : ''}`, malli);
       return { ...tulos, suljettiin: suljettavat.map((i) => i.id), ...(ajaja ? { purkaja: ajaja } : {}), ...(malli ? { malli } : {}) };
     },
-    // Mallivapaa purku (PURA-MALLITON T2): samat estot kuin purussa, lisäksi vain scopes/-alkuisen rekisterin skoopit
-    // (pura-malliton.mjs:n testiraja). Tiedosto kirjoitetaan ennen kuin mitään suljetaan, joten virhe ei jätä skooppia ilman istuntoa.
-    async 'pura-testi'(nimi) {
-      const skoopit = lueSkoopit(asetukset.juuri);
-      if (!Object.hasOwn(skoopit, nimi)) throw new Hylatty(404, 'tuntematon skooppi');
-      if (!String(skoopit[nimi]?.[0] ?? '').startsWith('scopes/')) throw new Hylatty(400, 'testipurku vain scopes-skoopeille');
-      const omat = skoopinIstunnot(nimi, skoopit);
-      if (omat.some((i) => !i.pakattu)) throw new Hylatty(409, 'skoopissa on jo käynnissä oleva istunto');
-      const suljettavat = omat.filter((i) => i.ruutu);
-      const varattu = omat.find((i) => i.tila !== 'idle');
-      if (varattu) throw new Hylatty(409, `pakattu istunto on vielä varattu (${varattu.tila ?? 'tila tuntematon'}); yritä vuoron jälkeen`);
-      // Suljettavat pois purkutiedoston ISTUNNOT-riviltä: ne suljetaan heti tiedoston jälkeen (PURASCRIPT-ISTUNNOT).
-      const r = await aja('node', [malliton, nimi, '--kohde', 'claude', ...(suljettavat.length ? ['--suljettavat', suljettavat.map((i) => i.id).join(',')] : [])]);
-      if (r.koodi !== 0 && r.koodi !== 4) {
-        throw new Hylatty(500, (r.stderr.trim().split('\n').filter(Boolean).pop() ?? `pura-malliton exit ${r.koodi}`).slice(0, 300));
-      }
-      const tiedosto = join(homedir(), '.local/state/pura', `${mallitonSlug(nimi)}.md`);
-      for (const i of suljettavat) { await tarkistaRuutu(i); await kirjoita(i, '/exit'); }
-      const tulos = await avaaIstunto(nimi, `Malliton purku: lue ${tiedosto} ja noudata sitä.`);
-      return { ...tulos, suljettiin: suljettavat.map((i) => i.id), tiedosto, ...(r.koodi === 4 ? { varoitus: true } : {}) };
-    },
+    'pura-testi': (nimi) => toteutus.pura(nimi),
     pakkaa: (nimi) => istuntoon(nimi, '/pakkaa', 'pakkaa'),
     automaattisiirto: (nimi) => istuntoon(nimi, '/automaattisiirto', 'automaattisiirto'),
     herata: (nimi) => istuntoon(nimi, '/sa', 'herata'),
