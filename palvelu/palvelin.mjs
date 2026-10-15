@@ -14,8 +14,6 @@
 //            varatulle istunnolle jonoon → { istunto, komento, jonossa: true }; GET-näkymän jonossa: [{ komento, aika }]
 //   GET /api/asetukset                Automaattijatko- ja Autopack-kytkimet { automaattijatko, autopack } (toiminnot-asetukset.mjs)
 //   POST /api/asetukset/<automaattijatko|autopack>/<paalle|pois>   kytkimen asetus → samat kaksi arvoa (käyttäjä 14.10.2026)
-//   GET|POST /api/ilmoitukset, POST /api/ilmoitukset/koe   ilmoitusvahdin lajit ja raja, koeilmoitus HA:n kautta
-//            (NOTIFICATIONS-HA-PUSH 15.10.2026; scopes/notifications/asetukset.mjs)
 //   POST /api/uusi  {"nimi": "…"}     uusi istunto, ensimmäinen viesti /pura uusi <nimi> → { osoite }
 //   GET /api/kayttoraja               Clauden 5 h ja viikkoraja { viisiTuntia, viikko: { kaytto %, nollautuu } | null } (kayttoraja.mjs)
 //   GET /api/agentit                  chatin mallit: Claude ja palvelimen LM Studio (DEMO-SCOPES-UI)
@@ -62,7 +60,6 @@ import { luoAsetukset, OLETUS_HAKEMISTO } from './toiminnot-asetukset.mjs';
 import { Hylatty, luoToiminnot } from './toiminnot.mjs';
 import { luoViestit } from './viestit.mjs';
 import { LrVirhe, luoLr } from '../localregister/palvelu.mjs';
-import { asetukset as luoIlmoitukset } from '../notifications/asetukset.mjs';
 
 const tama = dirname(fileURLToPath(import.meta.url));
 
@@ -106,7 +103,7 @@ function runko(req, raja = 1024) {
   });
 }
 
-export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), ilmoitukset = luoIlmoitukset()) {
+export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null })) {
   // Chat suoratoistona (DEMO-SCOPES-SUORATOISTO): NDJSON-rivit {tyyppi: 'pala', teksti} …, lopuksi
   // {tyyppi: 'valmis', vastaus, keskustelu, …} tai {tyyppi: 'virhe', virhe}. Hylkäys ennen agentin käynnistystä
   // palaa tavallisena virhekoodina. Yhteyden katketessa (puhelimen näyttölukko, äpin vaihto) agentti jatkaa, ja
@@ -167,9 +164,6 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         const as = polku.match(/^\/api\/asetukset\/([^/]+)\/(paalle|pois)$/);
         if (as) return vastaa(200, kytkimet.aseta(decodeURIComponent(as[1]), as[2] === 'paalle'));
         if (polku === '/api/uusi') return vastaa(200, await suorita('uusi', (await runko(req)).nimi));
-        // Ilmoitusvahdin asetukset ja koe (NOTIFICATIONS-HA-PUSH, scopes/notifications/asetukset.mjs).
-        if (polku === '/api/ilmoitukset') return vastaa(200, ilmoitukset.aseta(await runko(req)));
-        if (polku === '/api/ilmoitukset/koe') return vastaa(200, await ilmoitukset.koe());
         if (polku === '/api/chat') return vastaa(200, await viestit.chat(await runko(req, 32_768)));
         if (polku === '/api/chat/virta') return await virtaa(res, await runko(req, 32_768));
         // Stop-nappi (CHAT-STOP): chat-vastaus katkeaa ja valmis-rivi tuo osittaisen vastauksen; skoopin istunto saa Escapen.
@@ -192,7 +186,6 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
       }
       if (polku === '/api/skoopit') return vastaa(200, lista(asetukset));
       if (polku === '/api/asetukset') return vastaa(200, kytkimet.lue());
-      if (polku === '/api/ilmoitukset') return vastaa(200, ilmoitukset.lue());
       if (polku === '/api/agentit') return vastaa(200, await viestit.agentit());
       if (polku === '/api/kayttoraja') return vastaa(200, await kayttoraja());
       // Luetaan joka pyynnöllä: avaimen vaihto ei vaadi palvelun uudelleenkäynnistystä.
