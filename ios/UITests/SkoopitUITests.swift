@@ -860,6 +860,32 @@ final class SkoopitUITests: XCTestCase {
         kuva("uusi-mallit")
     }
 
+    // Valitsin avataan ennen kuin lista on ladattu (käyttäjä 15.10.2026: "mallien valinnoissa ei ole muuta vaihtoehtoja kun
+    // default"; palvelun loki 13:38Z: haku katkesi 3,3 s:n kohdalla). Siirtymä peruu .taskin; peruttu haku ei saa jäädä
+    // virheeksi, vaan mallit näkyvät viimeistään paluun jälkeen. Toistuu vain, kun palvelun agy-välimuisti on kylmä (10 min).
+    func testUusiSkooppiMallitHeti() throws {
+        let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        let app = kaynnista(avain: avain)
+        palkki(app)
+        XCTAssertTrue(app.buttons["uusi"].waitForExistence(timeout: 15))
+        app.buttons["uusi"].tap()
+        let malli = app.buttons["pura-malli"]
+        XCTAssertTrue(malli.waitForExistence(timeout: 5), "mallin valinta puuttuu uudesta skoopista")
+        malli.tap()
+        kuva("uusi-mallit-heti")
+        if !app.buttons.containing(NSPredicate(format: "label CONTAINS 'Opus 5.5'")).firstMatch.waitForExistence(timeout: 10) {
+            app.navigationBars.buttons.firstMatch.tap()
+            XCTAssertTrue(malli.waitForExistence(timeout: 5), "mallin valinta puuttuu paluun jälkeen")
+            malli.tap()
+        }
+        XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS 'Opus 5.5'")).firstMatch.waitForExistence(timeout: 10), "mallit eivät latautuneet heti avatun valitsimen jälkeen")
+        kuva("uusi-mallit-paluu")
+        app.navigationBars.buttons.firstMatch.tap()
+        let selite = app.staticTexts["pura-purkaja-selite"]
+        XCTAssertTrue(selite.waitForExistence(timeout: 5), "purkajan selite puuttuu")
+        XCTAssertFalse(selite.label.hasPrefix("Valintoja ei saatu"), "peruttu haku jäi virheeksi")
+    }
+
     // Skoopin arkistointi listasta (SCOPES-LISTA-POISTO): pito + veto vasemmalle paljastaa X:n, pelkkä veto ei; kosketus
     // muualle palauttaa rivin. Ei vahvista: testi ajaa oikeaa palvelua vastaan, eikä skooppia arkistoida.
     func testListaArkistointiVeto() throws {
