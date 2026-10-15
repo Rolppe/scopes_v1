@@ -36,6 +36,9 @@
 //            jokainen pyyntö ja tapahtumasilmukan tukos kirjataan pyyntölokiin (diagnostiikka.mjs, SCOPES-JAATYMINEN)
 //   GET|POST /api/lr/…                rekisterisynkan kaksoiskappale (LOCALREGISTER-PROTOKOLLA 14.10.2026; polut ja
 //            ajopaikan perustelu scopes/localregister/palvelu.mjs)
+//   GET /api/palvelin             PC:n tila pingin TTL:stä { tila: linux|windows|sammuksissa, osoite? } (palvelin.mjs)
+//   POST /api/palvelin/<kaynnista|sammuta>   WoL / Windows → Linux -kertaboot tai poweroff → { tila, lahto, viesti, kuiva? }
+//            (SCOPES-LINUX-NAPIT 15.10.2026; ei runkoa; yksi kerrallaan, muuten 429)
 //   GET /api/wg-asetus                äpin oman WireGuard-tunnelin asetus { asetus } (SCOPES-ETAYHTEYS 14.10.2026);
 //            äppi hakee sen kotiverkossa ja käyttää sitä kodin ulkopuolella. 404, jos tiedostoa ei ole.
 //
@@ -46,7 +49,8 @@
 // ~/.local/state/scopes-toiminnot.loki), SCOPES_PYYNTOLOKI (oletus ~/.local/state/scopes-pyynnot.loki), SCOPES_APPILOKI
 // (oletus ~/.local/state/scopes-app.loki), SCOPES_TILA_DIR (pakkauskytkinten tilatiedostot; oletus
 // ~/.claude/skills/keskustelun-siirto/state), SCOPES_LR_VIENTI (rekisteripolun etuliite, jonka localregister vie
-// gittiin, esim. scopes/; oletus pois, LOCALREGISTER-VIENTI). Ilman avainta palvelu ei käynnisty.
+// gittiin, esim. scopes/; oletus pois, LOCALREGISTER-VIENTI), SCOPES_LINUX_KUIVA (1 = palvelimen napit eivät
+// aja herätys- eikä sammutuskomentoa, :8788-koepalvelu). Ilman avainta palvelu ei käynnisty.
 
 import { timingSafeEqual } from 'node:crypto';
 import { readFileSync, realpathSync } from 'node:fs';
@@ -58,6 +62,7 @@ import { luoDiagnostiikka } from './diagnostiikka.mjs';
 import { luoKayttoraja } from './kayttoraja.mjs';
 import { lista, lueSkoopit, rekisterinOsat, rekisterit, yksi } from './lahteet.mjs';
 import { luoLiitteet } from './liitteet.mjs';
+import { luoLinuxServer } from './palvelin.mjs';
 import { luoAsetukset, OLETUS_HAKEMISTO } from './toiminnot-asetukset.mjs';
 import { luoPurkajat } from './purkajat.mjs';
 import { Hylatty, luoToiminnot } from './toiminnot.mjs';
@@ -80,6 +85,7 @@ export function asetuksetYmparistosta(env = process.env) {
     appiloki: env.SCOPES_APPILOKI ?? join(homedir(), '.local/state/scopes-app.loki'),
     tilaDir: env.SCOPES_TILA_DIR ?? OLETUS_HAKEMISTO,
     lrVienti: env.SCOPES_LR_VIENTI || null,
+    linuxKuiva: env.SCOPES_LINUX_KUIVA === '1',
   };
 }
 
@@ -106,7 +112,7 @@ function runko(req, raja = 1024) {
   });
 }
 
-export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), purkajat = luoPurkajat({ juuri: asetukset.juuri, paikalliset: () => viestit.agentit() })) {
+export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), purkajat = luoPurkajat({ juuri: asetukset.juuri, paikalliset: () => viestit.agentit() }), linux = luoLinuxServer({ loki: asetukset.toimintoloki, kuiva: asetukset.linuxKuiva === true })) {
   // Chat suoratoistona (DEMO-SCOPES-SUORATOISTO): NDJSON-rivit {tyyppi: 'pala', teksti} …, lopuksi
   // {tyyppi: 'valmis', vastaus, keskustelu, …} tai {tyyppi: 'virhe', virhe}. Hylkäys ennen agentin käynnistystä
   // palaa tavallisena virhekoodina. Yhteyden katketessa (puhelimen näyttölukko, äpin vaihto) agentti jatkaa, ja
@@ -166,6 +172,8 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         // Pakkauskytkimet (käyttäjä 14.10.2026): vain kaksi kiinteää nimeä ja paalle/pois, kirjataan toimintolokiin.
         const as = polku.match(/^\/api\/asetukset\/([^/]+)\/(paalle|pois)$/);
         if (as) return vastaa(200, kytkimet.aseta(decodeURIComponent(as[1]), as[2] === 'paalle'));
+        const ls = polku.match(/^\/api\/palvelin\/(kaynnista|sammuta)$/);
+        if (ls) return vastaa(200, await linux.suorita(ls[1]));
         if (polku === '/api/uusi') return vastaa(200, await suorita('uusi', (await runko(req)).nimi));
         if (polku === '/api/chat') return vastaa(200, await viestit.chat(await runko(req, 32_768)));
         if (polku === '/api/chat/virta') return await virtaa(res, await runko(req, 32_768));
@@ -194,6 +202,7 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
       if (polku === '/api/asetukset') return vastaa(200, kytkimet.lue());
       if (polku === '/api/agentit') return vastaa(200, await viestit.agentit());
       if (polku === '/api/purkajat') return vastaa(200, await purkajat.lista());
+      if (polku === '/api/palvelin') return vastaa(200, await linux.tila());
       if (polku === '/api/kayttoraja') return vastaa(200, await kayttoraja());
       // Luetaan joka pyynnöllä: avaimen vaihto ei vaadi palvelun uudelleenkäynnistystä.
       if (polku === '/api/wg-asetus') {

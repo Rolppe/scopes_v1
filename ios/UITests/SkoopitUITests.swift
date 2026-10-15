@@ -344,6 +344,46 @@ final class SkoopitUITests: XCTestCase {
         kuva("rekisterin-osat")
     }
 
+    // palvelimen osio Infrassa (SCOPES-LINUX-NAPIT): tila näkyy, ja vain tilaan sopiva nappi on käytössä; nappi
+    // kysyy vahvistuksen, joka suljetaan ajamatta mitään.
+    func testLinuxServerOsio() throws {
+        let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        let app = kaynnista(avain: avain)
+        nayta(app, "sivupalkki-infra")
+        let kaynnista = app.buttons["linux-kaynnista"], sammuta = app.buttons["linux-sammuta"]
+        XCTAssertTrue(kaynnista.waitForExistence(timeout: 15), "Infrassa ei ole palvelin-osiota")
+        XCTAssertTrue(sammuta.exists)
+        XCTAssertNotEqual(kaynnista.isEnabled, sammuta.isEnabled, "täsmälleen yhden napin pitää olla käytössä")
+        kuva("linux-osio")
+        (kaynnista.isEnabled ? kaynnista : sammuta).tap()
+        XCTAssertTrue(app.buttons["linux-vahvista"].waitForExistence(timeout: 5), "vahvistus puuttuu")
+        kuva("linux-vahvistus")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
+        XCTAssertTrue(app.buttons["linux-vahvista"].waitForNonExistence(timeout: 5), "vahvistus ei sulkeutunut")
+        XCTAssertFalse(app.staticTexts["linux-viesti"].exists, "toiminto ajettiin ilman vahvistusta")
+    }
+
+    // Kirjoittava koe vain kuivaa koepalvelua vastaan (SCOPES_KOE_LINUX=1, palvelu SCOPES_LINUX_KUIVA=1): vahvistettu
+    // nappi kulkee palveluun asti, joka vastaa ajamatta herätystä tai sammutusta.
+    func testLinuxServerKuiva() throws {
+        let ymp = ProcessInfo.processInfo.environment
+        guard ymp["SCOPES_KOE_LINUX"] == "1" else { throw XCTSkip("SCOPES_KOE_LINUX puuttuu") }
+        let avain = try XCTUnwrap(ymp["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        let app = kaynnista(avain: avain)
+        nayta(app, "sivupalkki-infra")
+        let kaynnista = app.buttons["linux-kaynnista"], sammuta = app.buttons["linux-sammuta"]
+        XCTAssertTrue(kaynnista.waitForExistence(timeout: 15), "Infrassa ei ole palvelin-osiota")
+        (kaynnista.isEnabled ? kaynnista : sammuta).tap()
+        XCTAssertTrue(app.buttons["linux-vahvista"].waitForExistence(timeout: 5), "vahvistus puuttuu")
+        app.buttons["linux-vahvista"].firstMatch.tap()  // iOS 27 näyttää vahvistusnapin kahdesti sisäkkäin
+        let viesti = app.staticTexts["linux-viesti"], virhe = app.staticTexts["linux-virhe"]
+        let loppu = Date().addingTimeInterval(30)
+        while !viesti.exists && !virhe.exists && Date() < loppu { sleep(1) }
+        kuva("linux-kuiva")
+        XCTAssertFalse(virhe.exists, virhe.exists ? virhe.label : "")
+        XCTAssertTrue(viesti.label.contains("kokeilu, ei ajettu"), "palvelu ei ole kuivassa tilassa: \(viesti.label)")
+    }
+
     // Monivalinta korttina (DEMO-SCOPES-LISTA). Vastattu kortti piilotetaan, joten kortti näkyy vain, kun skoopin
     // istunto odottaa vastausta: kysymys on viimeinen viesti ja lista on vieritetty sen kohdalle. Oikea data:
     // SCOPES_KOE_KYSYMYS nimeää skoopin, jonka istunto kysyy ajon aikana; SCOPES_KOE_KORTTI_ODOTA (s) odottaa sitä.

@@ -274,6 +274,24 @@ struct LahetysVastaus: Decodable {
     let istunto: String
 }
 
+// palvelimen napit Infra-sivulla (SCOPES-LINUX-NAPIT, palvelun palvelin.mjs). Tila pingin TTL:stä:
+// linux | windows | sammuksissa; toiminnon jälkeen myös vaihtaa (Windows → Linux), heratetty (kuiva WoL) tai sammuu.
+enum LinuxToiminto: String {
+    case kaynnista, sammuta
+}
+
+struct LinuxTila: Decodable {
+    let tila: String
+    let osoite: String?
+}
+
+struct LinuxVastaus: Decodable {
+    let tila: String
+    let viesti: String
+    // Koepalvelu (SCOPES_LINUX_KUIVA=1): komento, joka olisi ajettu.
+    let kuiva: String?
+}
+
 // Chatin stop-napin kuittaus (CHAT-STOP).
 struct PysaytysVastaus: Decodable {
     let ok: Bool
