@@ -573,4 +573,23 @@ test('vaihdaMalli: /model ja /effort ruutuun vain vapaassa istunnossa, arvot lis
   ruutu = '';
   const tyhja = luoViestit({ ...a, malliTauko: 0 }, { aja: async (k, ar, v) => (k === 'tmux' && ar[0] === 'capture-pane' ? { koodi: 0, stdout: 'ei valitsinta', stderr: '' } : aja(k, ar, v)) });
   await hylkaa(tyhja.vaihdaMalli('a', { malli: 'claude-opus-5-5' }), 502);
+  // V-525: "Change effort level?" -vahvistusta ei hyväksytä; Escape sulkee sen, 409 eikä Enteriä.
+  const IKKUNA = '   Change effort level?\n   ❯ 1. Yes, switch to medium\n     2. No, go back';
+  for (const sulkeutuu of [true, false]) {
+    let nakyy = false;
+    const lahetetyt = [];
+    const ikkunallinen = luoViestit({ ...a, malliTauko: 0 }, { aja: async (k, ar, v) => {
+      if (k === 'tmux' && ar[0] === 'capture-pane') return { koodi: 0, stdout: nakyy ? IKKUNA : 'Effort', stderr: '' };
+      if (k === 'tmux' && ar[0] === 'send-keys') {
+        lahetetyt.push(ar.slice(3));
+        if (ar[3] === '-l' && ar[4] === 's') nakyy = true;
+        if (ar[3] === 'Escape' && sulkeutuu) nakyy = false;
+        if (ar[3] === '-l' && ar[4] === '2' && sulkeutuu) nakyy = false;
+      }
+      return aja(k, ar, v);
+    } });
+    await hylkaa(ikkunallinen.vaihdaMalli('a', { effort: 'medium' }), 409);
+    assert.ok(lahetetyt.some((k) => k[0] === 'Escape'), 'ikkuna suljetaan Escapella');
+    assert.ok(!lahetetyt.some((k) => k[0] === 'Enter' && lahetetyt.indexOf(k) > lahetetyt.findIndex((x) => x[1] === 's')), 'vahvistusta ei hyväksytä Enterillä');
+  }
 });
