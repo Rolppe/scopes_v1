@@ -182,10 +182,14 @@ enum Toiminto: String {
     case herataPois = "herata-pois"
 }
 
-// Globaalit pakkauskytkimet (palvelu/toiminnot-asetukset.mjs, käyttäjä 14.10.2026): koskevat kaikkia skooppeja.
+// Pakkauskytkimet (palvelu/toiminnot-asetukset.mjs, käyttäjä 14.10.2026). Skoopin reitiltä (scopes infra setting
+// 16.10.2026) ne ovat keskustelukohtaisia: `istunto` on valittu avoin istunto ja `istuntoja` avointen määrä; vanha
+// palvelu ja yhteinen reitti jättävät ne pois, jolloin kytkimet koskevat kaikkia skooppeja.
 struct PakkausKytkimet: Decodable, Hashable {
     var automaattijatko: Bool
     var autopack: Bool
+    var istunto: String?
+    var istuntoja: Int?
 }
 
 enum PakkausKytkin: String {
