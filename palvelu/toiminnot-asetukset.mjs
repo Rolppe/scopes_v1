@@ -8,6 +8,7 @@ import { appendFileSync, mkdirSync, readFileSync, renameSync, writeFileSync } fr
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { Hylatty } from './toiminnot.mjs';
+import { aseta as asetaIstuntoon, kelvollinenTunnus, lueKaikki as lueIstunnolle } from '../../claude/siirto/tools/asetus-tila.mjs';
 
 export const OLETUS_HAKEMISTO = join(homedir(), '.claude/skills/keskustelun-siirto/state');
 
@@ -49,5 +50,23 @@ export function luoAsetukset({ hakemisto = OLETUS_HAKEMISTO, loki = null } = {})
     }
   }
 
-  return { lue, aseta };
+  // Keskustelukohtaiset arvot (scopes infra setting 16.10.2026): sama tallennus kuin pakkaus- ja purkutyökaluilla
+  // (claude/siirto/tools/asetus-tila.mjs), avaimena istunnon tunnus; istunto ilman omaa arvoa näyttää yhteisen oletuksen.
+  const lueIstunto = (tunnus) => lueIstunnolle(tunnus, hakemisto);
+
+  function asetaIstunto(nimi, tunnus, arvo) {
+    try {
+      if (typeof nimi !== 'string' || !Object.hasOwn(ASETUKSET, nimi)) throw new Hylatty(404, 'tuntematon asetus');
+      if (typeof arvo !== 'boolean') throw new Hylatty(400, 'arvo: vain päällä tai pois');
+      if (!kelvollinenTunnus(tunnus)) throw new Hylatty(409, 'istunnon tunnus puuttuu');
+      try { asetaIstuntoon(nimi, tunnus, arvo, hakemisto); } catch { throw new Hylatty(500, 'asetuksen tallennus epäonnistui'); }
+      kirjaa({ toiminto: 'asetus-istunto', nimi, istunto: tunnus, arvo, tulos: 'ok' });
+      return lueIstunto(tunnus);
+    } catch (e) {
+      kirjaa({ toiminto: 'asetus-istunto', nimi: String(nimi).slice(0, 40), tulos: 'hylätty', syy: e.message });
+      throw e;
+    }
+  }
+
+  return { lue, aseta, lueIstunto, asetaIstunto };
 }
