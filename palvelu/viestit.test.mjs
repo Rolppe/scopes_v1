@@ -69,12 +69,14 @@ function vaarennos(claude = { koodi: 0, stdout: VIRTA, stderr: '' }, lms = { koo
   return { aja, kutsut };
 }
 
-// Istunto, joka ottaa viestin vastaan: Enter kirjoittaa edellisen -l-tekstin transkriptiin käyttäjän viestinä (V-305).
-function vastaanottava(polku, { aja, kutsut } = vaarennos()) {
-  let teksti = '';
+// Istunto, joka ottaa viestin vastaan: syöttökenttä kerää -l-tekstit, C-u tyhjentää sen, ja Enter kirjoittaa kentän
+// transkriptiin käyttäjän viestinä (V-305). kentta = Claude Coden kenttään palauttama perutun vuoron viesti (V-515).
+function vastaanottava(polku, { aja, kutsut } = vaarennos(), kentta = '') {
+  let teksti = kentta;
   return { kutsut, aja: async (komento, argumentit, valinnat) => {
-    if (komento === 'tmux' && argumentit[0] === 'send-keys' && argumentit[3] === '-l') teksti = argumentit[4];
-    if (komento === 'tmux' && argumentit[0] === 'send-keys' && argumentit[3] === 'Enter' && teksti) appendFileSync(polku, `\n${rivi({ type: 'user', message: { content: teksti } })}`);
+    if (komento === 'tmux' && argumentit[0] === 'send-keys' && argumentit[3] === 'C-u') teksti = '';
+    if (komento === 'tmux' && argumentit[0] === 'send-keys' && argumentit[3] === '-l') teksti += argumentit[4];
+    if (komento === 'tmux' && argumentit[0] === 'send-keys' && argumentit[3] === 'Enter' && teksti) { appendFileSync(polku, `\n${rivi({ type: 'user', message: { content: teksti } })}`); teksti = ''; }
     return aja(komento, argumentit, valinnat);
   } };
 }
@@ -289,7 +291,7 @@ test('lahetaSkooppiin: kirjaimellisesti ruutuun, rivinvaihdot välilyönneiksi',
   const { aja, kutsut } = vastaanottava(s1(a));
   const v = luoViestit(a, { aja });
   assert.deepEqual(await v.lahetaSkooppiin('a', 'eka\n toka'), { ok: true, istunto: 's1' });
-  assert.deepEqual(kutsut.slice(1).map((k) => k.argumentit), [['send-keys', '-t', '%5', '-l', 'eka toka'], ['send-keys', '-t', '%5', 'Enter']]);
+  assert.deepEqual(kutsut.slice(1).map((k) => k.argumentit), [['send-keys', '-t', '%5', 'C-u'], ['send-keys', '-t', '%5', '-l', 'eka toka'], ['send-keys', '-t', '%5', 'Enter']]);
   await hylkaa(v.lahetaSkooppiin('b', 'x'), 409);
   await hylkaa(v.lahetaSkooppiin('a', ''), 400);
   const sdk = ymparisto();
@@ -307,7 +309,15 @@ test('lahetaSkooppiin: auki oleva monivalinta suljetaan Escapella ennen tekstiä
   const { aja, kutsut } = vastaanottava(polku);
   await luoViestit({ ...a, escapeTauko: 0 }, { aja }).lahetaSkooppiin('a', 'oma vastaus');
   assert.deepEqual(kutsut.slice(1).map((k) => k.argumentit),
-    [['send-keys', '-t', '%5', 'Escape'], ['send-keys', '-t', '%5', '-l', 'oma vastaus'], ['send-keys', '-t', '%5', 'Enter']]);
+    [['send-keys', '-t', '%5', 'Escape'], ['send-keys', '-t', '%5', 'C-u'], ['send-keys', '-t', '%5', '-l', 'oma vastaus'], ['send-keys', '-t', '%5', 'Enter']]);
+});
+
+// V-515 16.10.2026: perutun vuoron viesti jäi kenttään, ja uusi liimautui perään ('Selvitä virhe/pakkaa').
+test('lahetaSkooppiin: syöttökenttään jäänyt teksti tyhjennetään ennen viestiä', async () => {
+  const a = ymparisto();
+  await luoViestit(a, { aja: vastaanottava(s1(a), vaarennos(), 'Selvitä virhe').aja }).lahetaSkooppiin('a', '/pakkaa');
+  const viimeinen = readFileSync(s1(a), 'utf8').trim().split('\n').at(-1);
+  assert.equal(JSON.parse(viimeinen).message.content, '/pakkaa');
 });
 
 // V-305 14.10.2026: viestit jäivät istunnon syöttökenttään, eikä äppi tiennyt siitä.
