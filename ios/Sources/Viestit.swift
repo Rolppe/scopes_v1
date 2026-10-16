@@ -274,6 +274,9 @@ struct KysymysKortti: View {
 
 struct Viestilista: View {
     let viestit: [Viesti]
+    // Lähetetyt, mutta palvelun listassa vielä näkymättömät viestit (CHAT-RESPONSIVITY): näkyvät heti himmeinä listan
+    // lopussa ja täyttyvät, kun palvelu palauttaa saman viestin samalle riville.
+    var himmeat: [Viesti] = []
     var odottaa = false
     var vastaa: ((String) -> Void)? = nil
     var sulje: (() -> Void)? = nil
@@ -284,9 +287,13 @@ struct Viestilista: View {
                 // vaihdossa ja uuden viestin jälkeen sisällön ohi, jolloin näkymä jäi mustaksi. Viestejä on enintään 120
                 // (palvelu/viestit.mjs), joten kaikki rivit mitataan kerralla.
                 VStack(alignment: .leading, spacing: Teema.Vali.s) {
-                    ForEach(Array(viestit.enumerated()), id: \.offset) { i, v in
-                        Viestikupla(viesti: v, vastaa: vastaa, sulje: sulje,
-                                    nayta: { nosta(vierita) }, ylos: { alkuun(vierita) }).id(i)
+                    ForEach(Array((viestit + himmeat).enumerated()), id: \.offset) { i, v in
+                        let himmea = i >= viestit.count
+                        Viestikupla(viesti: v, vastaa: himmea ? nil : vastaa, sulje: himmea ? nil : sulje,
+                                    nayta: { nosta(vierita) }, ylos: { alkuun(vierita) })
+                            .opacity(himmea ? 0.5 : 1)
+                            .animation(.easeOut(duration: 0.3), value: himmea)
+                            .id(i)
                     }
                     if odottaa { ProgressView().padding(.leading, Teema.Vali.m).id("odottaa") }
                     Color.clear.frame(height: 1).id("loppu")
@@ -301,6 +308,7 @@ struct Viestilista: View {
             .scrollDismissesKeyboard(.interactively)
             .gesture(NappaimistoPois())
             .onChange(of: viestit.count) { alkuun(vierita) }
+            .onChange(of: himmeat.count) { nosta(vierita) }
             // Suoratoistossa viimeinen kupla kasvaa ilman uutta viestiä.
             .onChange(of: viestit.last?.teksti) { nosta(vierita) }
             // Kortin lähetys tai sulku (käyttäjä 13.10.2026): kortti katoaa ja vastaus nousee näkyviin listan loppuun.
@@ -379,7 +387,7 @@ struct Syottorivi<Vasen: View>: View {
                     var t = uusi
                     t.remove(at: i)
                     teksti = t
-                    if !estetty && !tyhja { laheta() }
+                    if !estetty && !tyhja { tuntuma(); laheta() }
                 }
                 .accessibilityIdentifier("\(tunnus)-kentta")
             if !vaaka { nappirivi }
@@ -392,12 +400,18 @@ struct Syottorivi<Vasen: View>: View {
         .padding(.bottom, Teema.Vali.s)
     }
 
+    // Haptinen palaute lähetys-, stop- ja jatka-napista (CHAT-RESPONSIVITY, käyttäjä 16.10.2026): iskee napautuksen
+    // hetkellä, ei vasta palvelun vastattua.
+    private func tuntuma(_ tyyli: UIImpactFeedbackGenerator.FeedbackStyle = .medium) {
+        UIImpactFeedbackGenerator(style: tyyli).impactOccurred()
+    }
+
     private var nappirivi: some View {
         HStack(spacing: Teema.Vali.s) {
             vasen
             Spacer()
             if let stop, tyhja {
-                Button(action: stop) {
+                Button { tuntuma(.rigid); stop() } label: {
                     Image(systemName: "stop.fill")
                         .font(.caption.weight(.bold)).dynamicTypeSize(...DynamicTypeSize.xxLarge)
                         .foregroundStyle(Teema.korostusPaalla)
@@ -407,7 +421,7 @@ struct Syottorivi<Vasen: View>: View {
                 .accessibilityLabel("Pysäytä")
                 .accessibilityIdentifier("\(tunnus)-stop")
             } else if let jatka, tyhja, !estetty {
-                Button(action: jatka) {
+                Button { tuntuma(); jatka() } label: {
                     Image(systemName: "play.fill")
                         .font(.caption.weight(.bold)).dynamicTypeSize(...DynamicTypeSize.xxLarge)
                         .foregroundStyle(Teema.korostusPaalla)
@@ -417,7 +431,7 @@ struct Syottorivi<Vasen: View>: View {
                 .accessibilityLabel("Jatka")
                 .accessibilityIdentifier("\(tunnus)-jatka")
             } else {
-                Button(action: laheta) {
+                Button { tuntuma(); laheta() } label: {
                     Image(systemName: "arrow.up")
                         .font(.body.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge)
                         .foregroundStyle(estetty || tyhja ? Color.white : Teema.korostusPaalla)
@@ -488,7 +502,7 @@ struct ChatView: View {
                     Text("kirjoittaa…").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("chat-kirjoittaa")
                 }
                 Syottorivi(teksti: $teksti, estetty: odottaa || valittu == nil || vastausKesken, tunnus: "chat", laheta: { Task { await laheta() } },
-                           stop: odottaa || vastausKesken ? { Task { await pysayta() } } : nil,
+                           stop: (odottaa || vastausKesken) && !pysaytetty ? { Task { await pysayta() } } : nil,
                            jatka: pysaytetty && valittu != nil ? { Task { await laheta("jatka") } } : nil) {
                     mallinValinta
                 }
@@ -615,7 +629,10 @@ struct ChatView: View {
     // Stop: palvelu katkaisee ajon, ja virta päättyy valmis-riviin, jossa on tähän asti kirjoitettu vastaus; kenttä
     // vapautuu sen myötä. 409 = vastaus ehti valmistua tai ajo ei ollut vielä alkanut.
     private func pysayta() async {
-        do { _ = try await asiakas.pysaytaChat(); pysaytetty = true } catch {
+        // Nappi vaihtuu heti (CHAT-RESPONSIVITY); epäonnistunut pysäytys palauttaa stopin.
+        pysaytetty = true
+        do { _ = try await asiakas.pysaytaChat() } catch {
+            pysaytetty = false
             if case .palvelu(409, _)? = error as? Asiakas.Virhe { return }
             nayta(error)
         }
@@ -737,6 +754,17 @@ struct KayttorajaRenkaat: View {
     }
 }
 
+// Lähetetty viesti, jota palvelun lista ei vielä sisällä (CHAT-RESPONSIVITY): `avain` on kirjoitettu teksti, jonka
+// palvelun omaViesti-rivi sisältää, ja `pohja` on tällaisten rivien määrä lähetyshetkellä. Viesti on sovitettu,
+// kun rivejä on enemmän; 90 s jälkeen se poistuu joka tapauksessa (palvelun lista on rajattu 120 viestiin).
+private struct OdottavaViesti: Identifiable {
+    let id = UUID()
+    let viesti: Viesti
+    let avain: String
+    let pohja: Int
+    let lahetetty: Date
+}
+
 struct SkooppiViestitView: View {
     let nimi: String
     @EnvironmentObject private var asetukset: Asetukset
@@ -750,6 +778,10 @@ struct SkooppiViestitView: View {
     @State private var liitteet: [Liite] = []
     @State private var pysaytetaan = false
     @State private var pysaytetty = false
+    @State private var pysaytusAika = Date.distantPast
+    // Viestit ja nappien tila näkyvät heti napautuksesta; palvelun luku vahvistaa tai korjaa ne (CHAT-RESPONSIVITY).
+    @State private var odottavat: [OdottavaViesti] = []
+    @State private var oletettuTyo = false
     // Juuri valittu malli ja effort näkyvät, kunnes transkriptista luettu arvo muuttuu (se päivittyy vasta vastauksen jälkeen).
     @State private var malliValittu: String?
     @State private var effortValittu: String?
@@ -768,14 +800,15 @@ struct SkooppiViestitView: View {
                             .padding(.bottom, Teema.Vali.xs)
                             .accessibilityIdentifier("viestit-istunto")
                     }
-                    Viestilista(viestit: t.viestit, vastaa: t.voiLahettaa ? { v in Task { await laheta(v) } } : nil,
+                    Viestilista(viestit: t.viestit, himmeat: odottavat.map(\.viesti), vastaa: t.voiLahettaa ? { v in Task { await laheta(v) } } : nil,
                                 sulje: t.voiLahettaa ? { Task { await suljeKysymys() } } : nil)
                     // Auki oleva kysymyskortti korvaa syöttökentän (käyttäjä 13.10.2026): vapaa vastaus kulkee kortin Muu-kentästä.
                     let kysymysAuki = t.viestit.contains { !($0.kysymykset ?? []).isEmpty && $0.vastattu != true }
                     if t.voiLahettaa {
                         if !kysymysAuki {
                             if !liitteet.isEmpty { LiiteRivi(liitteet: $liitteet) }
-                            let tyossa = ["busy", "shell"].contains(t.istunto?.tila ?? "")
+                            // Stop heti lähetyksestä ja play heti pysäytyksestä, ennen kuin palvelun tila ehtii perässä.
+                            let tyossa = (["busy", "shell"].contains(t.istunto?.tila ?? "") || oletettuTyo) && !pysaytetty
                             Syottorivi(teksti: $teksti, estetty: lahettaa, tunnus: "viestit", laheta: { Task { await laheta() } },
                                        liitteita: !liitteet.isEmpty, stop: tyossa ? { Task { await pysayta() } } : nil,
                                        jatka: pysaytetty ? { Task { await laheta("jatka") } } : nil) {
@@ -848,28 +881,66 @@ struct SkooppiViestitView: View {
 
     private func lataa() async {
         do {
-            tila = try await asiakas.viestit(nimi)
+            let uusi = try await asiakas.viestit(nimi)
+            tila = uusi
             virhe = nil
         } catch {
+            sovitaOdottavat(uusi.viestit)
+            if ["busy", "shell"].contains(uusi.istunto?.tila ?? "") {
+                oletettuTyo = false
+                // Pysäytyksen jälkeen uudelleen työhön ryhtynyt istunto (esim. päätteeltä) palauttaa stopin.
+                if pysaytetty && Date().timeIntervalSince(pysaytusAika) > 6 { pysaytetty = false }
+            }
             virhe = error.localizedDescription
         }
     }
 
     private func laheta(_ kortista: String? = nil) async {
+    // Poistaa himmeistä ne viestit, jotka palvelun lista jo sisältää (rivejä enemmän kuin lähetyshetkellä), sekä vanhat.
+    private func sovitaOdottavat(_ viestit: [Viesti]) {
+        var kulutettu: [String: Int] = [:]
+        odottavat = odottavat.filter { o in
+            let nyt = viestit.filter { $0.omaViesti && $0.teksti.contains(o.avain) }.count
+            let jo = kulutettu[o.avain, default: 0]
+            if nyt > o.pohja + jo { kulutettu[o.avain] = jo + 1; return false }
+            return Date().timeIntervalSince(o.lahetetty) < 90
+        }
+    }
+
+    // Lähetys näkyy heti: viesti himmeänä listassa, kenttä tyhjänä ja stop-nappi esillä. Epäonnistunut lähetys poistaa
+    // himmeän viestin ja palauttaa kirjoitetun tekstin ja liitteet kenttään.
         lahettaa = true
         pysaytetty = false
         do {
+        let kirjoitettu = kortista ?? teksti.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lahteneet = kortista == nil ? liitteet : []
+        let pohja = tila?.viestit.filter { $0.omaViesti && $0.teksti.contains(kirjoitettu) }.count ?? 0
+        let o = OdottavaViesti(viesti: Viesti(rooli: "kayttaja", teksti: kirjoitettu.isEmpty ? "(liite)" : kirjoitettu, aika: nil),
+                               avain: kirjoitettu, pohja: pohja, lahetetty: Date())
+        odottavat.append(o)
+        if kortista == nil { teksti = ""; liitteet = [] }
+        oletettuTyo = true
+        Task {
+            try? await Task.sleep(for: .seconds(10))
+            oletettuTyo = false
+        }
             // Liitteet ensin palveluun; viesti lähtee vasta, kun kaikki polut ovat tiedossa (kortin vastaus ilman liitteitä).
             var polut: [String] = []
-            if kortista == nil { for l in liitteet { polut.append(try await asiakas.lahetaLiite(nimi, l).polku) } }
-            let viesti = kortista ?? Liite.viesti(teksti.trimmingCharacters(in: .whitespacesAndNewlines), polut: polut)
+            for l in lahteneet { polut.append(try await asiakas.lahetaLiite(nimi, l).polku) }
+            let viesti = kortista ?? Liite.viesti(kirjoitettu, polut: polut)
             _ = try await asiakas.laheta(nimi, viesti)
-            if kortista == nil { teksti = ""; liitteet = [] }
             virhe = nil
-            try? await Task.sleep(for: .seconds(1))
-            await lataa()
+            lahettaa = false
+            for tauko in [0.5, 1.0, 1.5] {
+                try? await Task.sleep(for: .seconds(tauko))
+                await lataa()
+                if !odottavat.contains(where: { $0.id == o.id }) { break }
+            }
         } catch {
             virhe = error.localizedDescription
+            odottavat.removeAll { $0.id == o.id }
+            oletettuTyo = false
+            if kortista == nil && teksti.isEmpty { teksti = kirjoitettu; liitteet = lahteneet }
         }
         lahettaa = false
     }
@@ -880,7 +951,12 @@ struct SkooppiViestitView: View {
         guard !pysaytetaan else { return }
         pysaytetaan = true
         defer { pysaytetaan = false }
-        do { _ = try await asiakas.pysayta(nimi); pysaytetty = true; virhe = nil } catch {
+        // Nappi vaihtuu playksi heti (CHAT-RESPONSIVITY); epäonnistunut pysäytys palauttaa stopin.
+        pysaytetty = true
+        pysaytusAika = Date()
+        oletettuTyo = false
+        do { _ = try await asiakas.pysayta(nimi); virhe = nil } catch {
+            pysaytetty = false
             if case .palvelu(409, _)? = error as? Asiakas.Virhe {} else { virhe = error.localizedDescription }
         }
         try? await Task.sleep(for: .seconds(2))
