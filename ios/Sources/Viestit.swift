@@ -518,6 +518,7 @@ struct ChatView: View {
             }
             .navigationTitle(valittuAgentti?.otsikko ?? "Chat")
             .navigationBarTitleDisplayMode(.inline)
+            .lapinakyvaYlapalkki()
             .toolbar {
                 Sivupalkkipainike()
                 ToolbarItem(placement: .topBarTrailing) {
@@ -817,10 +818,9 @@ struct SkooppiViestitView: View {
                 if t.auki {
                     // Istunnon tila suomeksi ja konteksti samalla merkillä kuin skoopin näkymässä (DESIGN-SKOOPPINAKYMA U8, U9).
                     if let i = t.istunto {
-                        Text(istunnonTila(i.tila) ?? "Istunto auki")
-                            .font(.caption).monospacedDigit().foregroundStyle(.secondary)
-                            .padding(.bottom, Teema.Vali.xs)
-                            .accessibilityIdentifier("viestit-istunto")
+                        // Tila näkyy aivonapin hehkuna; teksti jäi vain UI-testien ankkuriksi (ei korkeutta, ei väriä).
+                        Color.clear.frame(height: 0)
+                            .overlay { Text(istunnonTila(i.tila) ?? "Istunto auki").font(.caption).foregroundStyle(.clear).accessibilityIdentifier("viestit-istunto") }
                     }
                     Viestilista(viestit: t.viestit, himmeat: odottavat.map(\.viesti), vastaa: t.voiLahettaa ? { v in Task { await laheta(v) } } : nil,
                                 sulje: t.voiLahettaa ? { Task { await suljeKysymys() } } : nil)
@@ -867,6 +867,7 @@ struct SkooppiViestitView: View {
         }
         .navigationTitle(nimi)
         .navigationBarTitleDisplayMode(.inline)
+        .lapinakyvaYlapalkki()
         .onChange(of: tila?.istunto?.malli) { _, _ in malliValittu = nil }
         .onChange(of: tila?.istunto?.effort) { _, _ in effortValittu = nil }
         .toolbar {

@@ -245,11 +245,11 @@ extension ToolbarContent {
     }
 }
 
-/// Yläpalkin pyöreän napin koko: sama kuin käyttörajarenkaiden ulomman keltaisen renkaan (CHAT-TOPBAR 16.10.2026).
-let ylapalkkiNapinKoko: CGFloat = 32
+/// Yläpalkin pyöreän napin koko: käyttörajarenkaiden logon koko (ulompi rengas 32 pt + viiva, kehys 36 pt; CHAT-TOPBAR 16.10.2026).
+let ylapalkkiNapinKoko: CGFloat = 38
 
-/// Istunnon tilan hehku infranapin harmaassa pyöreässä taustassa: vapaa = vihreä paikallaan, työskentelee = hitaasti
-/// hengittävä sininen, odottaa käyttäjää = keltainen.
+/// Istunnon tilan hehku infranapin harmaassa pyöreässä taustassa: vapaa = vihreä, työskentelee = sininen, odottaa
+/// käyttäjää = keltainen; hehku hengittää hitaasti kaikissa tiloissa ja himmenee napin reunaa kohti.
 enum IstunnonHehku {
     case vapaa, ajossa, odottaa
     init?(tila: String?) {
@@ -271,6 +271,14 @@ enum IstunnonHehku {
 
 /// Yläpalkin pyöreä nappi: `tausta` piirtää harmaan ympyrän (infranapissa aina, sivupalkkinapissa vain Liquid Glass
 /// -tilassa), `hehku` värittää sen istunnon tilan mukaan. Järjestelmän oma kapseli piilotetaan (`kapseliPois`).
+extension View {
+    /// Yläpalkki osittain läpinäkyväksi: ohut materiaali, jonka läpi sisältö kuultaa (CHAT-TOPBAR 16.10.2026).
+    func lapinakyvaYlapalkki() -> some View {
+        toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+            .toolbarBackgroundVisibility(.visible, for: .navigationBar)
+    }
+}
+
 struct YlapalkkiPallo<Sisalto: View>: View {
     var hehku: IstunnonHehku?
     var tausta = true
@@ -281,19 +289,18 @@ struct YlapalkkiPallo<Sisalto: View>: View {
         ZStack {
             if tausta { Circle().fill(Color(.systemGray5)) }
             if let h = hehku {
-                let voima = h == .ajossa ? (hengita ? 0.9 : 0.25) : 0.7
+                let voima = hengita ? 0.95 : 0.3
                 Circle()
-                    .fill(RadialGradient(colors: [h.vari.opacity(voima), h.vari.opacity(voima * 0.35)],
+                    .fill(RadialGradient(colors: [h.vari.opacity(voima), h.vari.opacity(voima * 0.5), h.vari.opacity(0)],
                                          center: .center, startRadius: 0, endRadius: ylapalkkiNapinKoko / 2))
-                    .shadow(color: h.vari.opacity(voima * 0.8), radius: 5)
             }
-            sisalto
+            sisalto.font(.system(size: 18, weight: .medium))
         }
         .frame(width: ylapalkkiNapinKoko, height: ylapalkkiNapinKoko)
         .contentShape(Circle())
-        .task(id: hehku == .ajossa) {
+        .task(id: hehku != nil) {
             hengita = false
-            guard hehku == .ajossa else { return }
+            guard hehku != nil else { return }
             withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) { hengita = true }
         }
     }
