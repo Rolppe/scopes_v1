@@ -99,13 +99,18 @@ func lueLahtotasoAika(_ d: UserDefaults = .standard) -> Date? { d.object(forKey:
 
 // Taustahaun raporttiin (NOTIFICATIONS-LUKITUS-TODENNUS 16.10.2026): skoopit, joiden ilmoitukset()-kentät (tilaNyt,
 // seuraava, vikoja) muuttuivat lähtötasoon nähden. 0 ilmoitusta ja 0 muuttunutta = ei muutoksia; 0 ilmoitusta ja
-// muuttuneita > 0 = muutos ei ollut ilmoitettava siirtymä tai ilmoitukset()-vika.
-func muuttuneet(edellinen: [SkooppiYhteenveto], uusi: [SkooppiYhteenveto]) -> Int {
+// muuttuneita > 0 = muutos ei ollut ilmoitettava siirtymä tai ilmoitukset()-vika. Muutokset-rivit ("<skooppi>: tila a→b,
+// seuraava a→b, vikoja a→b") kertovat, kumpi (16.10.2026: 3/3 herätystä muuttuneita 1, ilmoituksia 0).
+func muutokset(edellinen: [SkooppiYhteenveto], uusi: [SkooppiYhteenveto]) -> [String] {
     let vanhat = Dictionary(edellinen.map { ($0.nimi, $0) }, uniquingKeysWith: { a, _ in a })
-    return uusi.filter { s in
-        guard let v = vanhat[s.nimi] else { return false }
-        return s.tilaNyt != v.tilaNyt || s.seuraava != v.seuraava || s.vikoja != v.vikoja
-    }.count
+    return uusi.compactMap { s in
+        guard let v = vanhat[s.nimi] else { return nil }
+        var osat: [String] = []
+        if s.tilaNyt != v.tilaNyt { osat.append("tila \(v.tilaNyt)→\(s.tilaNyt)") }
+        if s.seuraava != v.seuraava { osat.append("seuraava \(v.seuraava ?? "-")→\(s.seuraava ?? "-")") }
+        if s.vikoja != v.vikoja { osat.append("vikoja \(v.vikoja)→\(s.vikoja)") }
+        return osat.isEmpty ? nil : "\(s.nimi): " + osat.joined(separator: ", ")
+    }
 }
 
 // Viimeisin iOS:n herättämä taustahaku Asetusten Ilmoitukset-sivulle (NOTIFICATIONS-TAUSTA-TODENNUS 15.10.2026: käyttäjä
@@ -204,20 +209,23 @@ final class Ilmoittaja: NSObject, UNUserNotificationCenterDelegate {
         let ika = lueLahtotasoAika().map { Int(Date().timeIntervalSince($0)) }
         let maara = await hae(Asetukset()) ?? -1
         tallennaTaustahaku(maara)
-        let muuttui = maara < 0 ? nil : vanha.flatMap { v in edellinen.map { muuttuneet(edellinen: v, uusi: $0) } }
-        await raportoi(maara, muuttuneita: muuttui, lahtotasonIka: ika)
+        let muuttui = maara < 0 ? nil : vanha.flatMap { v in edellinen.map { muutokset(edellinen: v, uusi: $0) } }
+        await raportoi(maara, muutokset: muuttui, lahtotasonIka: ika)
     }
 
     // Lukitulta puhelimelta devicectl ei saa plistiä (CoreDevice 4016), joten herätys ja ilmoitusten määrä kirjataan myös
     // palvelun äppilokiin, josta taustahaku.sh lukee ne (NOTIFICATIONS-LUKITUS-TODENNUS 15.10.2026).
-    // muuttuneita nil = ei lähtötasoa tai haku epäonnistui; lahtotasonIka sekunteina (nil = ei tallennettua aikaa).
-    private func raportoi(_ ilmoituksia: Int, muuttuneita: Int?, lahtotasonIka: Int?) async {
+    // muutokset nil = ei lähtötasoa tai haku epäonnistui; lahtotasonIka sekunteina (nil = ei tallennettua aikaa).
+    private func raportoi(_ ilmoituksia: Int, muutokset: [String]?, lahtotasonIka: Int?) async {
         let a = Asetukset()
         guard a.valmis else { return }
         let versio = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
         var tapahtuma: [String: Any] = ["tyyppi": "taustahaku", "ilmoituksia": ilmoituksia,
                                         "aika": ISO8601DateFormatter().string(from: Date())]
-        if let muuttuneita { tapahtuma["muuttuneita"] = muuttuneita }
+        if let muutokset {
+            tapahtuma["muuttuneita"] = muutokset.count
+            tapahtuma["muutokset"] = Array(muutokset.prefix(10))
+        }
         if let lahtotasonIka { tapahtuma["lahtotasonIka"] = lahtotasonIka }
         guard let runko = try? JSONSerialization.data(withJSONObject: ["laite": ["versio": versio], "tapahtumat": [tapahtuma]])
         else { return }
