@@ -233,6 +233,18 @@ extension ToolbarContent {
     }
 }
 
+extension ToolbarContent {
+    /// Yläpalkin kohta ilman järjestelmän kapselia Liquid Glass -tilassakin.
+    @ToolbarContentBuilder
+    func kapseliPois() -> some ToolbarContent {
+        if #available(iOS 26, *) {
+            sharedBackgroundVisibility(.hidden)
+        } else {
+            self
+        }
+    }
+}
+
 // Asetukset → Ulkoasu: teema, korostusväri ja Liquid Glass. Valinta näkyy heti koko äpissä (myös tämän arkin takana);
 // AsetuksetView tallentaa tai palauttaa sen.
 struct UlkoasuAsetukset: View {
