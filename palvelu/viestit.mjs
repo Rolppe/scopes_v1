@@ -496,11 +496,14 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
       return { ok: true, istunto: i.id };
     },
 
-    // Mallinappi (MALLINAPPI 16.10.2026): /model ja /effort istunnon omaan syöttökenttään, kuten käyttäjä kirjoittaisi ne.
+    // Mallinappi (MALLINAPPI 16.10.2026): /model ja /effort istunnon omasta valitsimesta, kuten käyttäjä käyttäisi ne.
+    // Suora `/model <id>` ja `/effort <taso>` tallentavat globaalin oletuksen settings.json:iin (todettu 16.10.2026); valitsimen
+    // `s`-näppäin vaihtaa vain tälle istunnolle, joten kumpikin kulkee valitsimen kautta ja tulos tarkistetaan ruudusta.
     // Vain vapaassa istunnossa: työn aikana komento jäisi jonoon, ja kysymyskortti söisi sen. Arvot tarkistetaan listoilta.
     async vaihdaMalli(nimi, { malli, effort } = {}) {
       if (malli == null && effort == null) throw new Hylatty(400, 'malli tai effort puuttuu');
-      if (malli != null && !MALLIT.some((m) => m.nimi === malli)) throw new Hylatty(400, 'tuntematon malli');
+      const valittuMalli = malli != null ? MALLIT.find((m) => m.nimi === malli) : null;
+      if (malli != null && !valittuMalli) throw new Hylatty(400, 'tuntematon malli');
       if (effort != null && !EFFORTIT.includes(effort)) throw new Hylatty(400, 'tuntematon effort');
       const i = await tmuxIstunto(nimi);
       if (i.tila !== 'idle') throw new Hylatty(409, 'istunto ei ole vapaa');
@@ -508,13 +511,35 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
       try { transkripti = readFileSync(i.polku, 'utf8'); } catch { /* ei transkriptia */ }
       const viimeinen = keskustelu(transkripti, 1)[0];
       if (viimeinen?.rooli === 'kysymys' && !viimeinen.vastattu) throw new Hylatty(409, 'kysymys odottaa vastausta');
-      const komennot = [malli != null && `/model ${malli}`, effort != null && `/effort ${effort}`].filter(Boolean);
-      for (const k of komennot) {
-        for (const a of [['C-u'], ['-l', k], ['Enter']]) {
-          const t = await aja('tmux', ['send-keys', '-t', i.ruutu, ...a]);
-          if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
-        }
-        await new Promise((r) => setTimeout(r, asetukset.malliTauko ?? 1000));
+      const tauko = () => new Promise((r) => setTimeout(r, asetukset.malliTauko ?? 1000));
+      const nappaimet = async (...a) => {
+        const t = await aja('tmux', ['send-keys', '-t', i.ruutu, ...a]);
+        if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
+      };
+      const ruutu = async () => (await aja('tmux', ['capture-pane', '-p', '-t', i.ruutu])).stdout ?? '';
+      const avaa = async (komento) => { await nappaimet('C-u'); await nappaimet('-l', komento); await nappaimet('Enter'); await tauko(); };
+      const peru = async (syy) => { await nappaimet('Escape').catch(() => {}); throw new Hylatty(502, syy); };
+      const vahvista = async (odotus, syy) => { await nappaimet('-l', 's'); await tauko(); if (!odotus.test(await ruutu())) await peru(syy); };
+      const komennot = [];
+      if (valittuMalli) {
+        await avaa('/model');
+        const rivit = (await ruutu()).split('\n');
+        const kohde = new RegExp(`^\\s*❯?\\s*(\\d+)\\.\\s+${valittuMalli.kuvaus.replace(/\./g, '\\.')}(\\s|$)`);
+        const nyt = rivit.map((r) => /^\s*❯\s*(\d+)\./.exec(r)?.[1]).find(Boolean);
+        const haluttu = rivit.map((r) => kohde.exec(r)?.[1]).find(Boolean);
+        if (!nyt || !haluttu) await peru('mallivalitsin ei auennut tai mallia ei löydy');
+        const ero = Number(haluttu) - Number(nyt);
+        if (ero) await nappaimet(...Array(Math.abs(ero)).fill(ero > 0 ? 'Down' : 'Up'));
+        await vahvista(/for this session only/, 'mallin vaihto tälle istunnolle ei vahvistunut');
+        komennot.push(`model ${malli}`);
+      }
+      if (effort != null) {
+        await avaa('/effort');
+        // Liukusäätimen reunat pysäyttävät: vasempaan reunaan (low) ja sieltä oikealle tasoon.
+        await nappaimet(...Array(EFFORTIT.length - 1).fill('Left'));
+        if (EFFORTIT.indexOf(effort)) await nappaimet(...Array(EFFORTIT.indexOf(effort)).fill('Right'));
+        await vahvista(new RegExp(`effort level to ${effort} \\(this session only\\)`), 'effortin vaihto tälle istunnolle ei vahvistunut');
+        komennot.push(`effort ${effort}`);
       }
       kirjaa({ toiminto: 'malli', nimi, istunto: i.id, komennot });
       return { ok: true, istunto: i.id };
