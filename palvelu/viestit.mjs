@@ -518,8 +518,29 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
       };
       const ruutu = async () => (await aja('tmux', ['capture-pane', '-p', '-t', i.ruutu])).stdout ?? '';
       const avaa = async (komento) => { await nappaimet('C-u'); await nappaimet('-l', komento); await nappaimet('Enter'); await tauko(); };
-      const peru = async (syy) => { await nappaimet('Escape').catch(() => {}); throw new Hylatty(502, syy); };
-      const vahvista = async (odotus, syy) => { await nappaimet('-l', 's'); await tauko(); if (!odotus.test(await ruutu())) await peru(syy); };
+      // Välimuistivaroituksen "Change effort level?" Yes-vaihtoehto tallentaa globaalin oletuksen (V-525, 16.10.2026), joten
+      // sitä ei koskaan vahvisteta: Escape, ja jos ikkuna jäi auki, numero 2 ("No, go back"). Auki jäänyt ikkuna sanotaan virheessä.
+      const VAHVISTUS = /Change effort level\?/;
+      const suljeVahvistus = async () => {
+        await nappaimet('Escape').catch(() => {});
+        await tauko();
+        if (VAHVISTUS.test(await ruutu())) { await nappaimet('-l', '2').catch(() => {}); await tauko(); }
+        return !VAHVISTUS.test(await ruutu());
+      };
+      const peru = async (syy) => {
+        const suljettu = VAHVISTUS.test(await ruutu()) ? await suljeVahvistus() : (await nappaimet('Escape').catch(() => {}), true);
+        throw new Hylatty(502, suljettu ? syy : `${syy}; vahvistusikkuna jäi auki ruutuun`);
+      };
+      const vahvista = async (odotus, syy) => {
+        await nappaimet('-l', 's');
+        await tauko();
+        const nyt = await ruutu();
+        if (VAHVISTUS.test(nyt)) {
+          const suljettu = await suljeVahvistus();
+          throw new Hylatty(409, suljettu ? 'vaihto vaatii välimuistivahvistuksen, jota ei hyväksytä (tallentaisi globaalin oletuksen); ei vaihdettu' : 'vahvistusikkuna jäi auki ruutuun');
+        }
+        if (!odotus.test(nyt)) await peru(syy);
+      };
       const komennot = [];
       if (valittuMalli) {
         await avaa('/model');
