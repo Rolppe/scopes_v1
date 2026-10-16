@@ -354,6 +354,15 @@ struct NappaimistoPois: UIGestureRecognizerRepresentable {
     }
 }
 
+// Kirjoitettu, lähettämätön teksti säilyy kentän omistajan (skooppi tai chatin agentti) mukaan (CHAT-MAININPUT-LUONNOS
+// 16.10.2026): skoopin vaihto, näkymän uudelleenluonti ja äpin sulku eivät tyhjennä kenttää. Tyhjä teksti poistaa luonnoksen.
+enum Luonnos {
+    static func lue(_ omistaja: String, _ d: UserDefaults = .standard) -> String { d.string(forKey: "luonnos.\(omistaja)") ?? "" }
+    static func tallenna(_ teksti: String, _ omistaja: String, _ d: UserDefaults = .standard) {
+        if teksti.isEmpty { d.removeObject(forKey: "luonnos.\(omistaja)") } else { d.set(teksti, forKey: "luonnos.\(omistaja)") }
+    }
+}
+
 // Syöttökenttä Claude-äpin tyyliin (DEMO-SCOPES-UI 13.10.2026): pyöristetty kortti, teksti ylhäällä ja sen alla
 // rivi, jonka vasemmassa reunassa on valinnainen lisäosa (chatissa mallin valinta) ja oikeassa lähetyspallo.
 struct Syottorivi<Vasen: View>: View {
@@ -529,6 +538,14 @@ struct ChatView: View {
             .onChange(of: vaihe) { if vaihe == .active && katkennut && !yhdistetaan { Task { await yhdista() } } }
             .onChange(of: navigaatio.chatPyynto) { Task { await pyynto(navigaatio.chatPyynto) } }
             .onChange(of: keskustelu) { navigaatio.nykyinenChat = keskustelu }
+            // Luonnos kuuluu agentille (CHAT-MAININPUT-LUONNOS): agentin vaihto tuo kenttään sen oman tekstin. Ennen ensimmäistä
+            // valintaa kirjoitettu teksti siirtyy ensimmäiselle agentille, ellei sillä ole omaa luonnosta.
+            .onChange(of: teksti) { _, uusi in if let v = valittu { Luonnos.tallenna(uusi, "chat.\(v)") } }
+            .onChange(of: valittu) { vanha, uusi in
+                guard let uusi else { return }
+                let tallessa = Luonnos.lue("chat.\(uusi)")
+                if vanha != nil || teksti.isEmpty || !tallessa.isEmpty { teksti = tallessa } else { Luonnos.tallenna(teksti, "chat.\(uusi)") }
+            }
         }
     }
 
@@ -769,7 +786,7 @@ struct SkooppiViestitView: View {
     let nimi: String
     @EnvironmentObject private var asetukset: Asetukset
     @State private var tila: SkooppiViestit?
-    @State private var teksti = ""
+    @State private var teksti: String
     @State private var lahettaa = false
     @State private var puretaan = false
     @State private var puraValinta = false
@@ -788,6 +805,11 @@ struct SkooppiViestitView: View {
 
     private var asiakas: Asiakas { Asiakas(osoite: asetukset.osoite, avain: asetukset.avain) }
 
+    init(nimi: String) {
+        self.nimi = nimi
+        _teksti = State(initialValue: Luonnos.lue("skooppi.\(nimi)"))
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if let virhe { Text(virhe).foregroundStyle(.red).padding(.horizontal).accessibilityIdentifier("viestit-virhe") }
@@ -795,7 +817,7 @@ struct SkooppiViestitView: View {
                 if t.auki {
                     // Istunnon tila suomeksi ja konteksti samalla merkillä kuin skoopin näkymässä (DESIGN-SKOOPPINAKYMA U8, U9).
                     if let i = t.istunto {
-                        Text("\(istunnonTila(i.tila) ?? "Istunto auki")\(i.konteksti.map { Text(" · \(Image(systemName: "brain")) \(tokenit($0.tokenit))") } ?? Text(""))")
+                        Text(istunnonTila(i.tila) ?? "Istunto auki")
                             .font(.caption).monospacedDigit().foregroundStyle(.secondary)
                             .padding(.bottom, Teema.Vali.xs)
                             .accessibilityIdentifier("viestit-istunto")
@@ -851,10 +873,13 @@ struct SkooppiViestitView: View {
             // Renkaat ilman kapselia ja omana kohtanaan aivo-napin vierellä (CHAT-TOPBAR, käyttäjä 16.10.2026).
             ToolbarItem(placement: .topBarTrailing) { KayttorajaRenkaat(raja: kayttoraja) }
                 .kapseliPois()
-            // Aivo-kuvake (aiemmin kolme pistettä, käyttäjä 16.10.2026), avaa skoopin tiedot.
+            // Aivo-kuvake (aiemmin kolme pistettä, käyttäjä 16.10.2026), avaa skoopin tiedot; väri kertoo istunnon kontekstin täyttymisen.
             ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink(value: SkooppiReitti.tiedot(nimi)) { Image(systemName: "brain") }
+                NavigationLink(value: SkooppiReitti.tiedot(nimi)) {
+                    Image(systemName: "brain").foregroundStyle(kontekstiVari(tila?.istunto?.konteksti?.tokenit, raja: ilmoitusRaja()))
+                }
                     .accessibilityLabel("Skoopin tiedot")
+                    .accessibilityValue(tila?.istunto?.konteksti.map { "konteksti \(tokenit($0.tokenit))" } ?? "")
                     .accessibilityIdentifier("tiedot")
             }
             .lasiKapseli()
@@ -864,6 +889,7 @@ struct SkooppiViestitView: View {
             PuraValintaView(skooppi: nimi, perhe: nimi.split(separator: " ").first == "scopes") { v in Task { await pura(v) } }
                 .environmentObject(asetukset)
         }
+        .onChange(of: teksti) { _, uusi in Luonnos.tallenna(uusi, "skooppi.\(nimi)") }
         .task {
             // Käyttöraja minuutin välein: palvelu välimuistittaa, eikä rengas tarvitse tarkempaa.
             while !Task.isCancelled {
@@ -885,18 +911,17 @@ struct SkooppiViestitView: View {
             let uusi = try await asiakas.viestit(nimi)
             tila = uusi
             virhe = nil
-        } catch {
             sovitaOdottavat(uusi.viestit)
             if ["busy", "shell"].contains(uusi.istunto?.tila ?? "") {
                 oletettuTyo = false
                 // Pysäytyksen jälkeen uudelleen työhön ryhtynyt istunto (esim. päätteeltä) palauttaa stopin.
                 if pysaytetty && Date().timeIntervalSince(pysaytusAika) > 6 { pysaytetty = false }
             }
+        } catch {
             virhe = error.localizedDescription
         }
     }
 
-    private func laheta(_ kortista: String? = nil) async {
     // Poistaa himmeistä ne viestit, jotka palvelun lista jo sisältää (rivejä enemmän kuin lähetyshetkellä), sekä vanhat.
     private func sovitaOdottavat(_ viestit: [Viesti]) {
         var kulutettu: [String: Int] = [:]
@@ -910,9 +935,9 @@ struct SkooppiViestitView: View {
 
     // Lähetys näkyy heti: viesti himmeänä listassa, kenttä tyhjänä ja stop-nappi esillä. Epäonnistunut lähetys poistaa
     // himmeän viestin ja palauttaa kirjoitetun tekstin ja liitteet kenttään.
+    private func laheta(_ kortista: String? = nil) async {
         lahettaa = true
         pysaytetty = false
-        do {
         let kirjoitettu = kortista ?? teksti.trimmingCharacters(in: .whitespacesAndNewlines)
         let lahteneet = kortista == nil ? liitteet : []
         let pohja = tila?.viestit.filter { $0.omaViesti && $0.teksti.contains(kirjoitettu) }.count ?? 0
@@ -925,6 +950,7 @@ struct SkooppiViestitView: View {
             try? await Task.sleep(for: .seconds(10))
             oletettuTyo = false
         }
+        do {
             // Liitteet ensin palveluun; viesti lähtee vasta, kun kaikki polut ovat tiedossa (kortin vastaus ilman liitteitä).
             var polut: [String] = []
             for l in lahteneet { polut.append(try await asiakas.lahetaLiite(nimi, l).polku) }
@@ -938,10 +964,10 @@ struct SkooppiViestitView: View {
                 if !odottavat.contains(where: { $0.id == o.id }) { break }
             }
         } catch {
-            virhe = error.localizedDescription
             odottavat.removeAll { $0.id == o.id }
             oletettuTyo = false
             if kortista == nil && teksti.isEmpty { teksti = kirjoitettu; liitteet = lahteneet }
+            virhe = error.localizedDescription
         }
         lahettaa = false
     }
