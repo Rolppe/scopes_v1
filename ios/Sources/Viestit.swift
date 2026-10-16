@@ -817,7 +817,9 @@ struct SkooppiViestitView: View {
             .lasiKapseli()
         }
         .sheet(isPresented: $puraValinta) {
-            PuraValintaView(skooppi: nimi) { v in Task { await pura(v) } }.environmentObject(asetukset)
+            // Scopes-perhe puretaan skriptillä (T6E) myös skoopin viesteistä; sama nimisääntö kuin uudessa skoopissa (V-516).
+            PuraValintaView(skooppi: nimi, perhe: nimi.split(separator: " ").first == "scopes") { v in Task { await pura(v) } }
+                .environmentObject(asetukset)
         }
         .task {
             // Käyttöraja minuutin välein: palvelu välimuistittaa, eikä rengas tarvitse tarkempaa.
