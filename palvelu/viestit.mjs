@@ -450,7 +450,9 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
       const alku = Date.now();
       let koko = 0;
       try { koko = statSync(i.polku).size; } catch { /* uusi istunto ilman transkriptia */ }
-      for (const a of [['-l', rivi], ['Enter']]) {
+      // V-515 (16.10.2026): Claude Code palauttaa perutun vuoron (sa-tick, API-virhe, keskeytys) viestin syöttökenttään,
+      // ja uusi teksti liimautui sen perään. C-u tyhjentää kentän ensin (tyhjässä kentässä ei tee mitään).
+      for (const a of [['C-u'], ['-l', rivi], ['Enter']]) {
         const t = await aja('tmux', ['send-keys', '-t', i.ruutu, ...a]);
         if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
       }
