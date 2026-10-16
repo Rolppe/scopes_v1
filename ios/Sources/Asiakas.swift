@@ -84,6 +84,14 @@ struct Asiakas {
         try await hae("/api/asetukset/\(kytkin.rawValue)/\(paalle ? "paalle" : "pois")", metodi: "POST")
     }
 
+    // Keskustelukohtaiset kytkimet (scopes infra setting 16.10.2026): palvelu valitsee skoopin ainoan avoimen istunnon;
+    // vanha palvelu vastaa 404, jolloin näkymä palaa yhteisiin kytkimiin.
+    func pakkausKytkimet(skooppi: String) async throws -> PakkausKytkimet { try await hae("/api/skoopit/\(koodattu(skooppi))/asetukset") }
+
+    func aseta(_ kytkin: PakkausKytkin, paalle: Bool, skooppi: String, istunto: String) async throws -> PakkausKytkimet {
+        try await hae("/api/skoopit/\(koodattu(skooppi))/asetukset/\(kytkin.rawValue)/\(paalle ? "paalle" : "pois")?istunto=\(koodattu(istunto))", metodi: "POST")
+    }
+
     // palvelin (SCOPES-LINUX-NAPIT): vanha palvelu vastaa 404, jolloin Infra-sivu piilottaa osion. Herätys odottaa,
     // kunnes PC vastaa (palvelussa enintään 90 s + kertaboot), siksi pitkä aikaraja.
     func linuxServer() async throws -> LinuxTila { try await hae("/api/palvelin") }

@@ -97,15 +97,19 @@ struct SkooppiNakymaView: View {
                     .tint(Teema.kytkin)
                     .disabled(avoinIstunto == nil)
                     .accessibilityIdentifier("toiminto-hereilla")
-                // Automaattijatko ja Autopack ovat globaaleja eivätkä tarvitse avointa istuntoa (käyttäjä 14.10.2026).
+                // Automaattijatko ja Autopack ovat keskustelukohtaisia (scopes infra setting 16.10.2026): palvelu valitsee skoopin
+                // ainoan avoimen istunnon; vanha palvelu antaa yhteiset kytkimet, jotka koskevat kaikkia skooppeja.
                 if let k = kytkimet {
+                    let lukossa = k.istuntoja != nil && k.istunto == nil
                     Toggle("Automaattijatko", isOn: Binding(get: { k.automaattijatko }, set: { p in Task { await asetaKytkin(.automaattijatko, p) } }))
                         .tint(Teema.kytkin)
+                        .disabled(lukossa)
                         .accessibilityIdentifier("toiminto-automaattijatko")
                     Toggle("Autopack", isOn: Binding(get: { k.autopack }, set: { p in Task { await asetaKytkin(.autopack, p) } }))
                         .tint(Teema.kytkin)
+                        .disabled(lukossa)
                         .accessibilityIdentifier("toiminto-autopack")
-                    Text("Koskevat kaikkia skooppeja.").font(.caption).foregroundStyle(.secondary)
+                    Text(kytkinSelite(k)).font(.caption).foregroundStyle(.secondary)
                         .accessibilityIdentifier("toiminto-kytkimet-selite")
                 }
                 ForEach(nakyma?.jonossa ?? [], id: \.self) { j in
@@ -229,17 +233,31 @@ struct SkooppiNakymaView: View {
             virhe = error.localizedDescription
         }
         // Kytkinten puute ei ole virhe: vanha palvelu ei tunne reittiä, ja silloin kytkimet jäävät piiloon.
-        if let k = try? await asiakas.pakkausKytkimet() { kytkimet = k }
+        if let k = try? await asiakas.pakkausKytkimet(skooppi: nimi) { kytkimet = k }
+        else if let k = try? await asiakas.pakkausKytkimet() { kytkimet = k }
+    }
+
+    private func kytkinSelite(_ k: PakkausKytkimet) -> String {
+        guard let n = k.istuntoja else { return "Koskevat kaikkia skooppeja." }
+        if k.istunto != nil { return "Koskevat vain tätä keskustelua." }
+        return n == 0 ? "Skoopilla ei ole avointa keskustelua." : "Skoopissa on useita keskusteluja; kytkimet vaativat yhden."
     }
 
     // Tila päivitetään palvelun vastauksesta, joten kytkin näyttää levylle kirjoitetun arvon eikä vain napautusta.
     private func asetaKytkin(_ kytkin: PakkausKytkin, _ paalle: Bool) async {
         toimintoVirhe = nil
         do {
-            kytkimet = try await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).aseta(kytkin, paalle: paalle)
+            let asiakas = Asiakas(osoite: asetukset.osoite, avain: asetukset.avain)
+            if let istunto = kytkimet?.istunto {
+                kytkimet = try await asiakas.aseta(kytkin, paalle: paalle, skooppi: nimi, istunto: istunto)
+            } else {
+                kytkimet = try await asiakas.aseta(kytkin, paalle: paalle)
+            }
         } catch {
             toimintoVirhe = error.localizedDescription
-            if let k = try? await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).pakkausKytkimet() { kytkimet = k }
+            let asiakas = Asiakas(osoite: asetukset.osoite, avain: asetukset.avain)
+            if let k = try? await asiakas.pakkausKytkimet(skooppi: nimi) { kytkimet = k }
+            else if let k = try? await asiakas.pakkausKytkimet() { kytkimet = k }
         }
     }
 }
