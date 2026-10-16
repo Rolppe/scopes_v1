@@ -1029,6 +1029,7 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertTrue(app.buttons["pura-malli"].waitForExistence(timeout: 15), "istunnon mallin valinta puuttuu scopes-skoopin arkista")
         XCTAssertTrue(app.staticTexts["pura-malliton-selite"].exists, "mallittoman purun selite puuttuu")
         XCTAssertEqual(app.staticTexts["pura-malliton-selite"].label, "Scopes-skooppi puretaan skriptillä ilman mallia.")
+        XCTAssertTrue(app.descendants(matching: .any)["pura-purascript"].exists, "Purascript ei näy purkajana (V-516)")
         XCTAssertFalse(app.buttons["pura-purkaja"].exists, "purkajan valinta näkyy scopes-skoopin arkissa")
         XCTAssertFalse(app.staticTexts["pura-purkaja-selite"].exists, "purkajan selite näkyy scopes-skoopin arkissa")
         XCTAssertTrue(app.buttons["vahvista"].exists)

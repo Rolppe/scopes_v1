@@ -123,7 +123,11 @@ struct PurkuValitsimet: View {
                     .accessibilityIdentifier("pura-purkaja-selite")
             }
         } else {
+            // Käyttäjä 16.10.2026: "Purascript pitäisi olla oletus purku vaihtoehto" — näkyy purkajan paikalla.
             Section {
+                LabeledContent("Purkaja", value: "Purascript (oletus)")
+                    .accessibilityIdentifier("pura-purascript")
+            } header: { Text("Purkaja") } footer: {
                 Text("Scopes-skooppi puretaan skriptillä ilman mallia.")
                     .accessibilityIdentifier("pura-malliton-selite")
             }
