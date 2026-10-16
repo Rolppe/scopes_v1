@@ -876,13 +876,15 @@ struct SkooppiViestitView: View {
             // Aivo-kuvake (aiemmin kolme pistettä, käyttäjä 16.10.2026), avaa skoopin tiedot; väri kertoo istunnon kontekstin täyttymisen.
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink(value: SkooppiReitti.tiedot(nimi)) {
-                    Image(systemName: "brain").foregroundStyle(kontekstiVari(tila?.istunto?.konteksti?.tokenit, raja: ilmoitusRaja()))
+                    YlapalkkiPallo(hehku: IstunnonHehku(tila: tila?.istunto?.tila)) {
+                        Image(systemName: "brain").foregroundStyle(kontekstiVari(tila?.istunto?.konteksti?.tokenit, raja: ilmoitusRaja()))
+                    }
                 }
                     .accessibilityLabel("Skoopin tiedot")
                     .accessibilityValue(tila?.istunto?.konteksti.map { "konteksti \(tokenit($0.tokenit))" } ?? "")
                     .accessibilityIdentifier("tiedot")
             }
-            .lasiKapseli()
+            .kapseliPois()
         }
         .sheet(isPresented: $puraValinta) {
             // Scopes-perhe puretaan skriptillä (T6E) myös skoopin viesteistä; sama nimisääntö kuin uudessa skoopissa (V-516).

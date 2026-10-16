@@ -245,6 +245,60 @@ extension ToolbarContent {
     }
 }
 
+/// Yläpalkin pyöreän napin koko: sama kuin käyttörajarenkaiden ulomman keltaisen renkaan (CHAT-TOPBAR 16.10.2026).
+let ylapalkkiNapinKoko: CGFloat = 32
+
+/// Istunnon tilan hehku infranapin harmaassa pyöreässä taustassa: vapaa = vihreä paikallaan, työskentelee = hitaasti
+/// hengittävä sininen, odottaa käyttäjää = keltainen.
+enum IstunnonHehku {
+    case vapaa, ajossa, odottaa
+    init?(tila: String?) {
+        switch tila {
+        case "idle": self = .vapaa
+        case "busy", "shell": self = .ajossa
+        case "waiting": self = .odottaa
+        default: return nil
+        }
+    }
+    var vari: Color {
+        switch self {
+        case .vapaa: Color(red: 0.20, green: 0.75, blue: 0.40)
+        case .ajossa: Color(red: 0.20, green: 0.50, blue: 1.0)
+        case .odottaa: Color(red: 0.98, green: 0.80, blue: 0.10)
+        }
+    }
+}
+
+/// Yläpalkin pyöreä nappi: `tausta` piirtää harmaan ympyrän (infranapissa aina, sivupalkkinapissa vain Liquid Glass
+/// -tilassa), `hehku` värittää sen istunnon tilan mukaan. Järjestelmän oma kapseli piilotetaan (`kapseliPois`).
+struct YlapalkkiPallo<Sisalto: View>: View {
+    var hehku: IstunnonHehku?
+    var tausta = true
+    @ViewBuilder var sisalto: Sisalto
+    @State private var hengita = false
+
+    var body: some View {
+        ZStack {
+            if tausta { Circle().fill(Color(.systemGray5)) }
+            if let h = hehku {
+                let voima = h == .ajossa ? (hengita ? 0.9 : 0.25) : 0.7
+                Circle()
+                    .fill(RadialGradient(colors: [h.vari.opacity(voima), h.vari.opacity(voima * 0.35)],
+                                         center: .center, startRadius: 0, endRadius: ylapalkkiNapinKoko / 2))
+                    .shadow(color: h.vari.opacity(voima * 0.8), radius: 5)
+            }
+            sisalto
+        }
+        .frame(width: ylapalkkiNapinKoko, height: ylapalkkiNapinKoko)
+        .contentShape(Circle())
+        .task(id: hehku == .ajossa) {
+            hengita = false
+            guard hehku == .ajossa else { return }
+            withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) { hengita = true }
+        }
+    }
+}
+
 /// Aivokuvakkeen väri istunnon kontekstin mukaan (CHAT-TOPBAR 16.10.2026): sininen = minimaalinen, punainen = raja täynnä,
 /// violetti = raja pahasti yli. Raja on ilmoitusraja (Asetukset → Ilmoitukset); väli on porrastettu yhdeksään vaiheeseen.
 /// Ilman lukemaa kuvake pysyy oletusvärissä.
