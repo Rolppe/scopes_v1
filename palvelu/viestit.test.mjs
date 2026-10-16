@@ -550,9 +550,27 @@ test('vaihdaMalli: /model ja /effort ruutuun vain vapaassa istunnossa, arvot lis
   await hylkaa(v.vaihdaMalli('a', { malli: 'rm -rf; claude-opus-5-5' }), 400);
   await hylkaa(v.vaihdaMalli('a', { effort: 'ultra' }), 400);
   await hylkaa(v.vaihdaMalli('b', { effort: 'high' }), 409);
+  // Valitsin: kohdistin rivillä 4 (Sonnet 5.5), Opus 5.5 on rivillä 2; "Default"-rivin Sonnet 5.5 ei saa osua.
+  const MALLIVALITSIN = ['   Select model', '     1.  Default (recommended)  Sonnet 5.5', '     2.  Opus 5.5   For complex work', '     3.  Fable 5.1', '   ❯ 4.  Sonnet 5.5 ✔', '     5.  Haiku 5.5', '     7.  Sonnet 5'].join('\n');
+  let ruutu = '';
+  const ohjattu = async (komento, argumentit, valinnat) => {
+    if (komento === 'tmux' && argumentit[0] === 'capture-pane') return { koodi: 0, stdout: ruutu, stderr: '' };
+    if (komento === 'tmux' && argumentit.at(-1) === '-l') return aja(komento, argumentit, valinnat);
+    if (komento === 'tmux' && argumentit[3] === '-l' && argumentit[4] === '/model') ruutu = MALLIVALITSIN;
+    if (komento === 'tmux' && argumentit[3] === '-l' && argumentit[4] === '/effort') ruutu = 'Effort';
+    if (komento === 'tmux' && argumentit[3] === '-l' && argumentit[4] === 's') ruutu = ruutu === 'Effort' ? 'Set effort level to max (this session only)' : 'Set model to Opus 5.5 for this session only';
+    return aja(komento, argumentit, valinnat);
+  };
+  const w = luoViestit({ ...a, malliTauko: 0 }, { aja: ohjattu });
   const ennen = kutsut.length;
-  assert.deepEqual(await v.vaihdaMalli('a', { malli: 'claude-opus-5-5', effort: 'max' }), { ok: true, istunto: 's1' });
-  assert.deepEqual(kutsut.slice(ennen + 1).map((k) => k.argumentit), [
-    ['send-keys', '-t', '%5', 'C-u'], ['send-keys', '-t', '%5', '-l', '/model claude-opus-5-5'], ['send-keys', '-t', '%5', 'Enter'],
-    ['send-keys', '-t', '%5', 'C-u'], ['send-keys', '-t', '%5', '-l', '/effort max'], ['send-keys', '-t', '%5', 'Enter']]);
+  assert.deepEqual(await w.vaihdaMalli('a', { malli: 'claude-opus-5-5', effort: 'max' }), { ok: true, istunto: 's1' });
+  const tmux = kutsut.slice(ennen).filter((k) => k.komento === 'tmux' && k.argumentit[0] === 'send-keys').map((k) => k.argumentit.slice(3));
+  assert.deepEqual(tmux, [
+    ['C-u'], ['-l', '/model'], ['Enter'], ['Up', 'Up'], ['-l', 's'],
+    ['C-u'], ['-l', '/effort'], ['Enter'], ['Left', 'Left', 'Left', 'Left'], ['Right', 'Right', 'Right', 'Right'], ['-l', 's']]);
+  assert.ok(!tmux.some((k) => k[1]?.startsWith('/model ') || k[1]?.startsWith('/effort ')), 'suora komento tallentaisi globaalin oletuksen');
+  // Mallia ei löydy valitsimesta → Escape ja 502, ei vaihtoa.
+  ruutu = '';
+  const tyhja = luoViestit({ ...a, malliTauko: 0 }, { aja: async (k, ar, v) => (k === 'tmux' && ar[0] === 'capture-pane' ? { koodi: 0, stdout: 'ei valitsinta', stderr: '' } : aja(k, ar, v)) });
+  await hylkaa(tyhja.vaihdaMalli('a', { malli: 'claude-opus-5-5' }), 502);
 });

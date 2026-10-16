@@ -36,6 +36,9 @@ struct Istunto: Decodable, Identifiable, Hashable {
     let pakattu: Bool?
     // Välimuistin herätys (/sa) päällä; vanha palvelu ei lähetä → nil.
     let hereilla: Bool?
+    // Claude-istunnon malli ja effort viimeisestä vastauksesta (MALLINAPPI); vanha palvelu ja istunto ilman vastausta → nil.
+    let malli: String?
+    let effort: String?
 }
 
 // Rekisterin taulukkorivi: otsikkosolu → arvo. Otsikot vaihtelevat skoopeittain ("Asia", "Vika", "Tila", …).

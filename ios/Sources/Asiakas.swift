@@ -213,6 +213,14 @@ struct Asiakas {
         try await hae("/api/skoopit/\(koodattu(nimi))/stop", metodi: "POST", runko: nil)
     }
 
+    // Mallinappi (MALLINAPPI): palvelu vaihtaa Clauden mallin tai effortin vain tälle istunnolle (409, jos istunto ei ole vapaa).
+    func vaihdaMalli(_ nimi: String, malli: String?, effort: String?) async throws -> LahetysVastaus {
+        var runko: [String: String] = [:]
+        if let malli { runko["malli"] = malli }
+        if let effort { runko["effort"] = effort }
+        return try await hae("/api/skoopit/\(koodattu(nimi))/malli", metodi: "POST", runko: try JSONEncoder().encode(runko), aikaraja: 30)
+    }
+
     // Kortin X: palvelu sulkee auki olevan monivalinnan Escapella.
     func suljeKysymys(_ nimi: String) async throws -> LahetysVastaus {
         try await hae("/api/skoopit/\(koodattu(nimi))/kysymys-pois", metodi: "POST", runko: nil)

@@ -750,6 +750,9 @@ struct SkooppiViestitView: View {
     @State private var liitteet: [Liite] = []
     @State private var pysaytetaan = false
     @State private var pysaytetty = false
+    // Juuri valittu malli ja effort näkyvät, kunnes transkriptista luettu arvo muuttuu (se päivittyy vasta vastauksen jälkeen).
+    @State private var malliValittu: String?
+    @State private var effortValittu: String?
 
     private var asiakas: Asiakas { Asiakas(osoite: asetukset.osoite, avain: asetukset.avain) }
 
@@ -776,7 +779,11 @@ struct SkooppiViestitView: View {
                             Syottorivi(teksti: $teksti, estetty: lahettaa, tunnus: "viestit", laheta: { Task { await laheta() } },
                                        liitteita: !liitteet.isEmpty, stop: tyossa ? { Task { await pysayta() } } : nil,
                                        jatka: pysaytetty ? { Task { await laheta("jatka") } } : nil) {
-                                LiiteValikko(liitteet: $liitteet, virhe: $virhe)
+                                HStack(spacing: Teema.Vali.s) {
+                                    LiiteValikko(liitteet: $liitteet, virhe: $virhe)
+                                    MalliValikko(malli: malliValittu ?? t.istunto?.malli, effort: effortValittu ?? t.istunto?.effort,
+                                                 vapaa: t.istunto?.tila == "idle") { m, e in Task { await vaihdaMalli(m, e) } }
+                                }
                             }
                         }
                     } else {
@@ -805,6 +812,8 @@ struct SkooppiViestitView: View {
         }
         .navigationTitle(nimi)
         .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: tila?.istunto?.malli) { _, _ in malliValittu = nil }
+        .onChange(of: tila?.istunto?.effort) { _, _ in effortValittu = nil }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) { KayttorajaRenkaat(raja: kayttoraja) }
                 .lasiKapseli()
@@ -876,6 +885,20 @@ struct SkooppiViestitView: View {
         }
         try? await Task.sleep(for: .seconds(2))
         await lataa()
+    }
+
+    // Mallinappi: 409 = istunto ehti työhön tai kysymys odottaa; virhe näytetään, ja näytettävä arvo palaa luettuun.
+    private func vaihdaMalli(_ malli: String?, _ effort: String?) async {
+        do {
+            _ = try await asiakas.vaihdaMalli(nimi, malli: malli, effort: effort)
+            if let malli { malliValittu = malli }
+            if let effort { effortValittu = effort }
+            virhe = nil
+            try? await Task.sleep(for: .seconds(1))
+            await lataa()
+        } catch {
+            virhe = error.localizedDescription
+        }
     }
 
     private func suljeKysymys() async {
