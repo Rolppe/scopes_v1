@@ -16,6 +16,9 @@
 //            varatulle istunnolle jonoon → { istunto, komento, jonossa: true }; GET-näkymän jonossa: [{ komento, aika }]
 //   GET /api/asetukset                Automaattijatko- ja Autopack-kytkimet { automaattijatko, autopack } (toiminnot-asetukset.mjs)
 //   POST /api/asetukset/<automaattijatko|autopack>/<paalle|pois>   kytkimen asetus → samat kaksi arvoa (käyttäjä 14.10.2026)
+//   GET /api/skoopit/<nimi>/asetukset[?istunto=<tunnus>]   keskustelukohtaiset kytkimet { istunto, istuntoja, automaattijatko, autopack };
+//            yksi avoin istunto valitaan itsestään, ei istuntoa → istunto null ja yhteinen oletus
+//   POST /api/skoopit/<nimi>/asetukset/<automaattijatko|autopack>/<paalle|pois>[?istunto=<tunnus>]   istunnon kytkin; 409 ilman valittavaa istuntoa
 //   POST /api/uusi  {"nimi", "purkaja"?, "malli"?}   uusi istunto, ensimmäinen viesti /pura uusi <nimi> [--ajaja=…] → { osoite }
 //   POST /api/skoopit/<nimi>/arkistoi   skoopin arkistointi ja commit (arkistoi-skooppi.mjs) → { commit, polut }
 //   GET /api/kayttoraja               Clauden 5 h ja viikkoraja { viisiTuntia, viikko: { kaytto %, nollautuu } | null } (kayttoraja.mjs)
@@ -80,6 +83,7 @@ import { luoLiitteet } from './liitteet.mjs';
 import { luoAndroid } from './android.mjs';
 import { luoLinuxServer } from './palvelin.mjs';
 import { luoAsetukset, OLETUS_HAKEMISTO } from './toiminnot-asetukset.mjs';
+import { luoIstuntoValinta } from './istunto-asetukset.mjs';
 import { luoPurkajat } from './purkajat.mjs';
 import { Hylatty, luoToiminnot } from './toiminnot.mjs';
 import { luoViestit } from './viestit.mjs';
@@ -132,6 +136,7 @@ function runko(req, raja = 1024) {
 }
 
 export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset, { android: () => android }), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), purkajat = luoPurkajat({ juuri: asetukset.juuri, paikalliset: () => viestit.agentit() }), linux = luoLinuxServer({ loki: asetukset.toimintoloki, kuiva: asetukset.linuxKuiva === true }), android = luoAndroid({ loki: asetukset.toimintoloki, kuiva: asetukset.androidKuiva === true, ...(asetukset.androidLaite && { laite: asetukset.androidLaite }), ...(asetukset.androidDir && { tuotoksetDir: asetukset.androidDir }) })) {
+  const istuntoValinta = luoIstuntoValinta(asetukset);
   // Chat suoratoistona (DEMO-SCOPES-SUORATOISTO): NDJSON-rivit {tyyppi: 'pala', teksti} …, lopuksi
   // {tyyppi: 'valmis', vastaus, keskustelu, …} tai {tyyppi: 'virhe', virhe}. Hylkäys ennen agentin käynnistystä
   // palaa tavallisena virhekoodina. Yhteyden katketessa (puhelimen näyttölukko, äpin vaihto) agentti jatkaa, ja
@@ -196,6 +201,13 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         // Pakkauskytkimet (käyttäjä 14.10.2026): vain kaksi kiinteää nimeä ja paalle/pois, kirjataan toimintolokiin.
         const as = polku.match(/^\/api\/asetukset\/([^/]+)\/(paalle|pois)$/);
         if (as) return vastaa(200, kytkimet.aseta(decodeURIComponent(as[1]), as[2] === 'paalle'));
+        // Keskustelukohtaiset kytkimet (scopes infra setting 16.10.2026): istunto valitaan itsestään tai ?istunto=<tunnus>.
+        const ia = polku.match(/^\/api\/skoopit\/([^/]+)\/asetukset\/([^/]+)\/(paalle|pois)$/);
+        if (ia) {
+          const v = istuntoValinta(decodeURIComponent(ia[1]), url.searchParams.get('istunto'));
+          if (!v.istunto) throw new Hylatty(409, v.istuntoja ? 'skoopissa on useita istuntoja; anna ?istunto=<tunnus>' : 'skoopilla ei ole avointa istuntoa');
+          return vastaa(200, { ...v, ...kytkimet.asetaIstunto(decodeURIComponent(ia[2]), v.istunto, ia[3] === 'paalle') });
+        }
         const ls = polku.match(/^\/api\/palvelin\/(kaynnista|sammuta)$/);
         if (ls) return vastaa(200, await linux.suorita(ls[1]));
         // Android-ohjaus (SCOPES-ANDROID-GEMINI): liite tallennetaan ensin kuten skoopin liite, sitten laitteelle.
@@ -230,6 +242,11 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
       }
       if (polku === '/api/skoopit') return vastaa(200, lista(asetukset));
       if (polku === '/api/asetukset') return vastaa(200, kytkimet.lue());
+      const ig = polku.match(/^\/api\/skoopit\/([^/]+)\/asetukset$/);
+      if (ig) {
+        const v = istuntoValinta(decodeURIComponent(ig[1]), url.searchParams.get('istunto'));
+        return vastaa(200, { ...v, ...(v.istunto ? kytkimet.lueIstunto(v.istunto) : kytkimet.lue()) });
+      }
       if (polku === '/api/agentit') return vastaa(200, await viestit.agentit());
       if (polku === '/api/purkajat') return vastaa(200, await purkajat.lista());
       if (polku === '/api/palvelin') return vastaa(200, await linux.tila());
