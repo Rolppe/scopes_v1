@@ -272,9 +272,10 @@ enum IstunnonHehku {
 /// Yläpalkin pyöreä nappi: `tausta` piirtää harmaan ympyrän (infranapissa aina, sivupalkkinapissa vain Liquid Glass
 /// -tilassa), `hehku` värittää sen istunnon tilan mukaan. Järjestelmän oma kapseli piilotetaan (`kapseliPois`).
 extension View {
-    /// Yläpalkki osittain läpinäkyväksi: ohut materiaali, jonka läpi sisältö kuultaa (CHAT-TOPBAR 16.10.2026).
+    /// Yläpalkki osittain läpinäkyväksi: näkymän oma taustaväri 60 % peittävyydellä (ei harmaata materiaalia), jolloin
+    /// viestilista kuultaa palkin takaa (CHAT-TOPBAR 16.10.2026).
     func lapinakyvaYlapalkki() -> some View {
-        toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+        toolbarBackground(Color(.systemBackground).opacity(0.6), for: .navigationBar)
             .toolbarBackgroundVisibility(.visible, for: .navigationBar)
     }
 }
