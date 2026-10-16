@@ -428,10 +428,13 @@ struct Sivupalkkipainike: ToolbarContent {
     @EnvironmentObject private var navigaatio: Navigaatio
     var body: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
-            Button { withAnimation(.snappy) { navigaatio.sivupalkkiAuki = true } } label: { Image(systemName: "line.3.horizontal") }
+            Button { withAnimation(.snappy) { navigaatio.sivupalkkiAuki = true } } label: {
+                YlapalkkiPallo(tausta: Ulkoasu.jaettu.lasiKaytossa) { Image(systemName: "line.3.horizontal") }
+            }
+                .accessibilityLabel("Sivupalkki")
                 .accessibilityIdentifier("sivupalkki")
         }
-        .lasiKapseli()
+        .kapseliPois()
     }
 }
 
