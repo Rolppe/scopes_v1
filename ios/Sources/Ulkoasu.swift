@@ -245,6 +245,25 @@ extension ToolbarContent {
     }
 }
 
+/// Aivokuvakkeen väri istunnon kontekstin mukaan (CHAT-TOPBAR 16.10.2026): sininen = minimaalinen, punainen = raja täynnä,
+/// violetti = raja pahasti yli. Raja on ilmoitusraja (Asetukset → Ilmoitukset); väli on porrastettu yhdeksään vaiheeseen.
+/// Ilman lukemaa kuvake pysyy oletusvärissä.
+func kontekstiVari(_ tokenit: Int?, raja: Int) -> Color {
+    guard let t = tokenit, raja > 0 else { return .primary }
+    let osuus = Double(t) / Double(raja)
+    let portaat: [(alle: Double, vari: Color)] = [
+        (0.2, Color(red: 0.20, green: 0.45, blue: 0.95)),   // sininen
+        (0.4, Color(red: 0.10, green: 0.65, blue: 0.85)),   // syaani
+        (0.6, Color(red: 0.20, green: 0.70, blue: 0.40)),   // vihreä
+        (0.75, Color(red: 0.85, green: 0.75, blue: 0.10)),  // keltainen
+        (0.9, Color(red: 0.95, green: 0.55, blue: 0.10)),   // oranssi
+        (1.0, Color(red: 0.95, green: 0.35, blue: 0.15)),   // punaoranssi
+        (1.25, Color(red: 0.90, green: 0.15, blue: 0.15)),  // punainen: raja täynnä
+        (1.5, Color(red: 0.75, green: 0.15, blue: 0.55)),   // magenta
+    ]
+    return portaat.first { osuus < $0.alle }?.vari ?? Color(red: 0.55, green: 0.25, blue: 0.85)  // violetti: pahasti yli
+}
+
 // Asetukset → Ulkoasu: teema, korostusväri ja Liquid Glass. Valinta näkyy heti koko äpissä (myös tämän arkin takana);
 // AsetuksetView tallentaa tai palauttaa sen.
 struct UlkoasuAsetukset: View {
