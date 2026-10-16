@@ -428,7 +428,7 @@ struct Sivupalkkipainike: ToolbarContent {
     @EnvironmentObject private var navigaatio: Navigaatio
     var body: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
-            Button { withAnimation(.snappy) { navigaatio.sivupalkkiAuki = true } } label: { Image(systemName: "chevron.left") }
+            Button { withAnimation(.snappy) { navigaatio.sivupalkkiAuki = true } } label: { Image(systemName: "line.3.horizontal") }
                 .accessibilityIdentifier("sivupalkki")
         }
         .lasiKapseli()

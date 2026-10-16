@@ -724,10 +724,10 @@ struct KayttorajaRenkaat: View {
             }
         } label: {
             ZStack {
-                rengas(raja?.viisiTuntia, vari: .yellow, koko: 21)
-                rengas(raja?.viikko, vari: .red, koko: 11)
+                rengas(raja?.viisiTuntia, vari: .yellow, koko: 32)
+                rengas(raja?.viikko, vari: .red, koko: 19)
             }
-            .frame(width: 24, height: 24)
+            .frame(width: 36, height: 36)
         }
         .accessibilityLabel("Käyttöraja")
         .accessibilityValue("5 h \(prosentti(raja?.viisiTuntia)), viikko \(prosentti(raja?.viikko))")
@@ -848,11 +848,12 @@ struct SkooppiViestitView: View {
         .onChange(of: tila?.istunto?.malli) { _, _ in malliValittu = nil }
         .onChange(of: tila?.istunto?.effort) { _, _ in effortValittu = nil }
         .toolbar {
+            // Renkaat ilman kapselia ja omana kohtanaan aivo-napin vierellä (CHAT-TOPBAR, käyttäjä 16.10.2026).
             ToolbarItem(placement: .topBarTrailing) { KayttorajaRenkaat(raja: kayttoraja) }
-                .lasiKapseli()
-            // Kolme pistettä kuten Claude-äpissä (käyttäjä 13.10.2026), avaa skoopin tiedot.
+                .kapseliPois()
+            // Aivo-kuvake (aiemmin kolme pistettä, käyttäjä 16.10.2026), avaa skoopin tiedot.
             ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink(value: SkooppiReitti.tiedot(nimi)) { Image(systemName: "ellipsis") }
+                NavigationLink(value: SkooppiReitti.tiedot(nimi)) { Image(systemName: "brain") }
                     .accessibilityLabel("Skoopin tiedot")
                     .accessibilityIdentifier("tiedot")
             }
