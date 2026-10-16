@@ -32,6 +32,7 @@
 //   POST /api/skoopit/<nimi>/viesti {"teksti"}   viesti skoopin tmux-istuntoon (viestit.mjs)
 //   POST /api/skoopit/<nimi>/liite?nimi=<tiedosto>   runko = tiedoston tavut (enintään 25 Mt) → { polku, koko };
 //            äppi lisää polun viestiin, ja istunto lukee liitteen itse (liitteet.mjs, CHAT-MEDIA-SKOOPPI)
+//   POST /api/skoopit/<nimi>/malli {"malli"?, "effort"?}   /model ja /effort vapaan istunnon tmux-ruutuun (viestit.mjs)
 //   POST /api/skoopit/<nimi>/kysymys-pois         auki olevan monivalinnan sulku Escapella (kortin X)
 //   POST /api/diagnostiikka {"laite"?, "tapahtumat": [...]}   äpin jumi- ja pyyntötapahtumat äppilokiin → { kirjattu };
 //            jokainen pyyntö ja tapahtumasilmukan tukos kirjataan pyyntölokiin (diagnostiikka.mjs, SCOPES-JAATYMINEN)
@@ -210,6 +211,8 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         if (st) return vastaa(200, await viestit.pysaytaSkooppi(decodeURIComponent(st[1])));
         const v = polku.match(/^\/api\/skoopit\/([^/]+)\/viesti$/);
         if (v) return vastaa(200, await viestit.lahetaSkooppiin(decodeURIComponent(v[1]), (await runko(req, 32_768)).teksti));
+        const ml = polku.match(/^\/api\/skoopit\/([^/]+)\/malli$/);
+        if (ml) return vastaa(200, await viestit.vaihdaMalli(decodeURIComponent(ml[1]), await runko(req, 1024)));
         const l = polku.match(/^\/api\/skoopit\/([^/]+)\/liite$/);
         if (l) {
           const nimi = decodeURIComponent(l[1]);

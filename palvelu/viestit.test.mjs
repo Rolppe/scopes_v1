@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { projektiNimi } from './lahteet.mjs';
 import { kasittelija } from './palvelin.mjs';
 import { Hylatty } from './toiminnot.mjs';
-import { GEMINI_AGENTTI, geminiKehote, keskustelu, luoViestit, mallinNayttonimi, MALLIT, paikallisetMallit, transkriptissa, tyokaluRivi } from './viestit.mjs';
+import { GEMINI_AGENTTI, geminiKehote, istunnonAsetukset, keskustelu, luoViestit, mallinNayttonimi, MALLIT, paikallisetMallit, transkriptissa, tyokaluRivi } from './viestit.mjs';
 
 const ID = '38c487b9-3c36-4723-b2af-5f07b106c172';
 const rivi = (o) => JSON.stringify(o);
@@ -522,4 +522,37 @@ test('chat: Gemini (Android) — vain android-olion kanssa, historia talteen, ja
   const ilman = luoViestit(a, { aja: vaarennos().aja });
   assert.ok(!(await ilman.agentit()).some((x) => x.tyyppi === 'gemini'));
   await hylkaa(ilman.chat({ agentti: 'android/gemini', viesti: 'x' }), 400);
+});
+
+const ASETUKSET_RIVI = (malli, effort, lisa = {}) => rivi({ type: 'assistant', perTurnEffort: effort, message: { model: malli, content: [{ type: 'text', text: 'x' }] }, ...lisa });
+
+test('istunnonAsetukset: viimeisen pääketjun assistant-rivin malli ja effort (MALLINAPPI)', () => {
+  const t = [ASETUKSET_RIVI('claude-opus-5-5', 'high'), ASETUKSET_RIVI('claude-sonnet-5-5', 'max'), ASETUKSET_RIVI('claude-haiku-5-5', 'low', { isSidechain: true })].join('\n');
+  assert.deepEqual(istunnonAsetukset(t), { malli: 'claude-sonnet-5-5', effort: 'max' });
+  assert.deepEqual(istunnonAsetukset(ASETUKSET_RIVI('claude-opus-5-5', undefined)), { malli: 'claude-opus-5-5', effort: null });
+  assert.deepEqual(istunnonAsetukset(TRANSKRIPTI), { malli: null, effort: null });
+  assert.deepEqual(istunnonAsetukset(''), { malli: null, effort: null });
+  const a = ymparisto();
+  appendFileSync(s1(a), `\n${ASETUKSET_RIVI('claude-opus-5-5', 'xhigh')}`);
+  const i = luoViestit(a, { aja: vaarennos().aja }).skoopinViestit('a').istunto;
+  assert.equal(i.malli, 'claude-opus-5-5');
+  assert.equal(i.effort, 'xhigh');
+});
+
+test('vaihdaMalli: /model ja /effort ruutuun vain vapaassa istunnossa, arvot listoilta', async () => {
+  const a = ymparisto();
+  const vapaa = () => writeFileSync(join(a.istunnotDir, `${process.pid}.json`), JSON.stringify({ pid: process.pid, sessionId: 's1', cwd: '/x', name: 'a', status: 'idle', tmux: 'siirto-a-1:@1.%5' }));
+  const { aja, kutsut } = vaarennos();
+  const v = luoViestit({ ...a, malliTauko: 0 }, { aja });
+  await hylkaa(v.vaihdaMalli('a', { malli: 'claude-opus-5-5' }), 409); // busy
+  vapaa();
+  await hylkaa(v.vaihdaMalli('a', {}), 400);
+  await hylkaa(v.vaihdaMalli('a', { malli: 'rm -rf; claude-opus-5-5' }), 400);
+  await hylkaa(v.vaihdaMalli('a', { effort: 'ultra' }), 400);
+  await hylkaa(v.vaihdaMalli('b', { effort: 'high' }), 409);
+  const ennen = kutsut.length;
+  assert.deepEqual(await v.vaihdaMalli('a', { malli: 'claude-opus-5-5', effort: 'max' }), { ok: true, istunto: 's1' });
+  assert.deepEqual(kutsut.slice(ennen + 1).map((k) => k.argumentit), [
+    ['send-keys', '-t', '%5', 'C-u'], ['send-keys', '-t', '%5', '-l', '/model claude-opus-5-5'], ['send-keys', '-t', '%5', 'Enter'],
+    ['send-keys', '-t', '%5', 'C-u'], ['send-keys', '-t', '%5', '-l', '/effort max'], ['send-keys', '-t', '%5', 'Enter']]);
 });

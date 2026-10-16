@@ -20,6 +20,22 @@ export const MALLIT = [
   { nimi: 'claude-haiku-5-5', kuvaus: 'Haiku 5.5', tyyppi: 'malli' },
 ];
 export const VIESTIN_MAKSIMI = 8000;
+// Istunnon effort-tasot (/effort); sama joukko kuin claude/siirto/tools/autovaihto.sh:ssa.
+export const EFFORTIT = ['low', 'medium', 'high', 'xhigh', 'max'];
+
+// Istunnon malli ja effort transkriptin viimeiseltä pääketjun assistant-riviltä (sama lähde kuin autovaihto.sh, R7).
+// Arvo päivittyy vasta istunnon seuraavan vastauksen jälkeen; ei vielä vastausta → null.
+export function istunnonAsetukset(transkripti) {
+  const rivit = String(transkripti ?? '').split('\n');
+  for (let k = rivit.length - 1; k >= 0; k--) {
+    if (!rivit[k].includes('"assistant"')) continue;
+    let o;
+    try { o = JSON.parse(rivit[k]); } catch { continue; }
+    if (o.type !== 'assistant' || o.isSidechain || !o.message?.model) continue;
+    return { malli: o.message.model, effort: o.perTurnEffort ?? o.effort ?? null };
+  }
+  return { malli: null, effort: null };
+}
 // Puhelimen Gemini-äppi chat-mallina (CHAT-GEMINI 15.10.2026): android.mjs ajaa sen adb:llä samalla laitteella.
 export const GEMINI_AGENTTI = Object.freeze({ nimi: 'android/gemini', kuvaus: 'Gemini', tyyppi: 'gemini' });
 const GEMINI_MAKSIMI = 8000; // android.mjs TEKSTIN_MAKSIMI: jakointentin tekstikenttä
@@ -425,7 +441,7 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
       try { transkripti = readFileSync(i.polku, 'utf8'); } catch { /* uusi istunto ilman transkriptia */ }
       return {
         nimi, auki: true,
-        istunto: { id: i.id, nimi: i.nimi, tila: i.tila, konteksti: i.konteksti },
+        istunto: { id: i.id, nimi: i.nimi, tila: i.tila, konteksti: i.konteksti, ...istunnonAsetukset(transkripti) },
         voiLahettaa: Boolean(i.ruutu) && omat.filter((x) => x.ruutu).length === 1,
         viestit: keskustelu(transkripti),
       };
@@ -477,6 +493,30 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
       const t = await aja('tmux', ['send-keys', '-t', i.ruutu, 'Escape']);
       if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
       kirjaa({ toiminto: 'stop', nimi, istunto: i.id });
+      return { ok: true, istunto: i.id };
+    },
+
+    // Mallinappi (MALLINAPPI 16.10.2026): /model ja /effort istunnon omaan syöttökenttään, kuten käyttäjä kirjoittaisi ne.
+    // Vain vapaassa istunnossa: työn aikana komento jäisi jonoon, ja kysymyskortti söisi sen. Arvot tarkistetaan listoilta.
+    async vaihdaMalli(nimi, { malli, effort } = {}) {
+      if (malli == null && effort == null) throw new Hylatty(400, 'malli tai effort puuttuu');
+      if (malli != null && !MALLIT.some((m) => m.nimi === malli)) throw new Hylatty(400, 'tuntematon malli');
+      if (effort != null && !EFFORTIT.includes(effort)) throw new Hylatty(400, 'tuntematon effort');
+      const i = await tmuxIstunto(nimi);
+      if (i.tila !== 'idle') throw new Hylatty(409, 'istunto ei ole vapaa');
+      let transkripti = '';
+      try { transkripti = readFileSync(i.polku, 'utf8'); } catch { /* ei transkriptia */ }
+      const viimeinen = keskustelu(transkripti, 1)[0];
+      if (viimeinen?.rooli === 'kysymys' && !viimeinen.vastattu) throw new Hylatty(409, 'kysymys odottaa vastausta');
+      const komennot = [malli != null && `/model ${malli}`, effort != null && `/effort ${effort}`].filter(Boolean);
+      for (const k of komennot) {
+        for (const a of [['C-u'], ['-l', k], ['Enter']]) {
+          const t = await aja('tmux', ['send-keys', '-t', i.ruutu, ...a]);
+          if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
+        }
+        await new Promise((r) => setTimeout(r, asetukset.malliTauko ?? 1000));
+      }
+      kirjaa({ toiminto: 'malli', nimi, istunto: i.id, komennot });
       return { ok: true, istunto: i.id };
     },
 
