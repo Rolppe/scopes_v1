@@ -382,6 +382,10 @@ struct AsetuksetView: View {
                     Label("Yhteys", systemImage: "network")
                 }
                 .accessibilityIdentifier("asetukset-yhteys")
+                NavigationLink { AGYAsetukset().toolbar { tallennaPainike } } label: {
+                    Label("AGY-agentit", systemImage: "sparkles")
+                }
+                .accessibilityIdentifier("asetukset-agy")
                 NavigationLink { UlkoasuAsetukset().toolbar { tallennaPainike } } label: {
                     Label("Ulkoasu", systemImage: "paintpalette")
                 }
@@ -466,6 +470,67 @@ struct YhteysAsetukset: View {
 
 // Versio ja allekirjoituksen voimassaolo: ilmainen Apple ID -profiili vanhenee 7 päivässä, ja Macin agentti uusii sen
 // (DEMO-SCOPES-UUSINTA). Profiili luetaan äpin embedded.mobileprovisionista; simulaattorissa sitä ei ole.
+struct AGYAsetukset: View {
+    @AppStorage("agy_purku_ymparisto") private var purkuYmparisto = "macos"
+    @AppStorage("agy_purku_malli") private var purkuMalli = "gemini-3.8-flash-high"
+    @AppStorage("agy_siirto_ymparisto") private var siirtoYmparisto = "oneplus_linux"
+    @AppStorage("agy_siirto_malli") private var siirtoMalli = "gemini-3.8-flash-high"
+    @AppStorage("agy_pakkaus_ymparisto") private var pakkausYmparisto = "oneplus_linux"
+    @AppStorage("agy_pakkaus_malli") private var pakkausMalli = "gemini-3.8-flash-high"
+
+    private let ymparistot = [
+        ("macos", "macOS AGY (paikallinen)"),
+        ("oneplus_linux", "OnePlus Linux AGY (palvelin)")
+    ]
+
+    private let mallit = [
+        ("gemini-3.8-flash-high", "Gemini 3.8 Flash (High)"),
+        ("gemini-3.8-flash-medium", "Gemini 3.8 Flash (Medium)"),
+        ("gemini-3.8-flash-low", "Gemini 3.8 Flash (Low)"),
+        ("claude-sonnet-4-6", "Claude Sonnet 4.6 (Thinking)"),
+        ("claude-opus-4-6-thinking", "Claude Opus 4.6 (Thinking)"),
+        ("gpt-oss-120b-medium", "GPT-OSS 120B (Medium)")
+    ]
+
+    var body: some View {
+        Form {
+            Section {
+                Text("Valitse mitä AGY-moottoria ja mallia käytetään Scopes-toiminnoissa (macOS AGY vs. OnePlus Linux AGY -palvelin).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: { Text("Antigravity (AGY) -agenttiohjaus") }
+
+            Section("Purkutoiminto (Purku)") {
+                Picker("Ympäristö", selection: $purkuYmparisto) {
+                    ForEach(ymparistot, id: \.0) { Text($0.1).tag($0.0) }
+                }
+                Picker("Malli", selection: $purkuMalli) {
+                    ForEach(mallit, id: \.0) { Text($0.1).tag($0.0) }
+                }
+            }
+
+            Section("Siirtotoiminto (Siirto ja autovaihto)") {
+                Picker("Ympäristö", selection: $siirtoYmparisto) {
+                    ForEach(ymparistot, id: \.0) { Text($0.1).tag($0.0) }
+                }
+                Picker("Malli", selection: $siirtoMalli) {
+                    ForEach(mallit, id: \.0) { Text($0.1).tag($0.0) }
+                }
+            }
+
+            Section("Pakkaustoiminto (Pakkaus)") {
+                Picker("Ympäristö", selection: $pakkausYmparisto) {
+                    ForEach(ymparistot, id: \.0) { Text($0.1).tag($0.0) }
+                }
+                Picker("Malli", selection: $pakkausMalli) {
+                    ForEach(mallit, id: \.0) { Text($0.1).tag($0.0) }
+                }
+            }
+        }
+        .navigationTitle("AGY-agentit")
+    }
+}
+
 struct TietojaAsetukset: View {
     var body: some View {
         Form {

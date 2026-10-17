@@ -77,6 +77,24 @@ struct PuraValintaView: View {
 // Purkajan ja istunnon mallin valitsimet; sama osio purun vahvistuksessa ja uudessa skoopissa (SCOPES-LISTA-UUSI-VALINNAT
 // 15.10.2026, käyttäjä: "uuden skoopin aloitus pitää antaa samat valinnat"). Lataa valinnat palvelulta itse.
 struct PurkuValitsimet: View {
+    static let macAgyMallit: [IstunnonMalli] = [
+        IstunnonMalli(nimi: "gemini-3.8-flash-high", kuvaus: "Gemini 3.8 Flash (High)", ryhma: "Mac AGY"),
+        IstunnonMalli(nimi: "gemini-3.8-flash-medium", kuvaus: "Gemini 3.8 Flash (Medium)", ryhma: "Mac AGY"),
+        IstunnonMalli(nimi: "gemini-3.8-flash-low", kuvaus: "Gemini 3.8 Flash (Low)", ryhma: "Mac AGY"),
+        IstunnonMalli(nimi: "claude-sonnet-4-6", kuvaus: "Claude Sonnet 4.6 (Thinking)", ryhma: "Mac AGY"),
+        IstunnonMalli(nimi: "claude-opus-4-6-thinking", kuvaus: "Claude Opus 4.6 (Thinking)", ryhma: "Mac AGY"),
+        IstunnonMalli(nimi: "gpt-oss-120b-medium", kuvaus: "GPT-OSS 120B (Medium)", ryhma: "Mac AGY"),
+    ]
+
+    static let macAgyPurkajat: [PurkajaVaihtoehto] = [
+        PurkajaVaihtoehto(tunnus: "macos-agy:gemini-3.8-flash-high", kuvaus: "Gemini 3.8 Flash (High)", ryhma: "Mac AGY"),
+        PurkajaVaihtoehto(tunnus: "macos-agy:gemini-3.8-flash-medium", kuvaus: "Gemini 3.8 Flash (Medium)", ryhma: "Mac AGY"),
+        PurkajaVaihtoehto(tunnus: "macos-agy:gemini-3.8-flash-low", kuvaus: "Gemini 3.8 Flash (Low)", ryhma: "Mac AGY"),
+        PurkajaVaihtoehto(tunnus: "macos-agy:claude-sonnet-4-6", kuvaus: "Claude Sonnet 4.6 (Thinking)", ryhma: "Mac AGY"),
+        PurkajaVaihtoehto(tunnus: "macos-agy:claude-opus-4-6-thinking", kuvaus: "Claude Opus 4.6 (Thinking)", ryhma: "Mac AGY"),
+        PurkajaVaihtoehto(tunnus: "macos-agy:gpt-oss-120b-medium", kuvaus: "GPT-OSS 120B (Medium)", ryhma: "Mac AGY"),
+    ]
+
     @Binding var valinnat: PurkuValinnat?
     @Binding var latausVirhe: String?
     @Binding var purkaja: String
@@ -86,15 +104,15 @@ struct PurkuValitsimet: View {
     @EnvironmentObject private var asetukset: Asetukset
 
     private var ryhmat: [(String, [PurkajaVaihtoehto])] {
-        let p = (valinnat?.purkajat ?? []).filter { $0.ryhma != "oletus" }
-        return ["Claude", "agy", "Paikalliset"].compactMap { r in
+        let p = ((valinnat?.purkajat ?? []).filter { $0.ryhma != "oletus" }) + Self.macAgyPurkajat
+        return ["Claude", "Mac AGY", "agy", "Paikalliset"].compactMap { r in
             let osat = p.filter { $0.ryhma == r }
             return osat.isEmpty ? nil : (r, osat)
         }
     }
     private var malliRyhmat: [(String, [IstunnonMalli])] {
-        let m = valinnat?.mallit ?? []
-        return ["Claude", "Paikalliset"].compactMap { r in
+        let m = (valinnat?.mallit ?? []) + Self.macAgyMallit
+        return ["Claude", "Mac AGY", "Paikalliset"].compactMap { r in
             let osat = m.filter { ($0.ryhma ?? "Claude") == r }
             return osat.isEmpty ? nil : (r, osat)
         }
@@ -161,8 +179,10 @@ struct PurkuValitsimet: View {
     private func lataa() async {
         do {
             let v = try await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).purkuValinnat()
-            if !v.purkajat.contains(where: { $0.tunnus == purkaja }) { purkaja = "" }
-            if !v.mallit.contains(where: { $0.nimi == malli }) { malli = "" }
+            let yhdistetytPurkajat = v.purkajat + Self.macAgyPurkajat
+            let yhdistetytMallit = v.mallit + Self.macAgyMallit
+            if !yhdistetytPurkajat.contains(where: { $0.tunnus == purkaja }) { purkaja = "" }
+            if !yhdistetytMallit.contains(where: { $0.nimi == malli }) { malli = "" }
             valinnat = v
         } catch is CancellationError {
             return
