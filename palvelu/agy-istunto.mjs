@@ -196,7 +196,9 @@ export function ensimmainenKayttaja(polku) {
 
 // Skoopin purkutiedosto `<slug>.md` on keskustelun ensimmäisen viestin sisältö (autovaihto.sh: "Malliton purku: lue …").
 // Etsitään tmux-istunnon alun jälkeen muuttuneista tiedostoista uusin, jonka alkuviestissä se on. Löydetty tiedosto muistetaan,
-// ettei jokainen kysely avaa ehdokkaita uudelleen.
+// ettei jokainen kysely avaa ehdokkaita uudelleen. Kaikki ehdokkaat käydään läpi (ISTUNNOT-SUORITUSKYKY 18.10.2026): joutilaan
+// istunnon tiedosto jäi 12 uusimman ulkopuolelle, kun muut agy-istunnot olivat työssä, eikä Macin ssh-haku (uusi node joka
+// kerta) hyödy muistista.
 const loydetyt = new Map();
 export function loydaKeskustelu(slug, alkoiMs, hakemisto = AGY_KESKUSTELUT) {
   if (!existsSync(hakemisto)) return null;
@@ -212,7 +214,7 @@ export function loydaKeskustelu(slug, alkoiMs, hakemisto = AGY_KESKUSTELUT) {
     if (m >= alkoiMs - 5000) ehdokkaat.push({ polku, m });
   }
   ehdokkaat.sort((a, b) => b.m - a.m);
-  for (const { polku } of ehdokkaat.slice(0, 12)) {
+  for (const { polku } of ehdokkaat) {
     if ((ensimmainenKayttaja(polku) ?? '').includes(`${slug}.md`)) { loydetyt.set(avain, polku); return polku; }
   }
   return null;
@@ -671,9 +673,15 @@ export async function agyIstunnot({
   agyHakemisto = AGY_KESKUSTELUT,
   brainHakemisto = BRAIN_HAKEMISTO,
   proc = '/proc',
+  listPanes = null,
+  capturePane = null,
 } = {}) {
   let stdout = '';
-  if (aja) {
+  if (typeof listPanes === 'function') {
+    stdout = listPanes();
+  } else if (typeof listPanes === 'string') {
+    stdout = listPanes;
+  } else if (aja) {
     const t = await aja('tmux', ['list-panes', '-a', '-F', '#{session_name} #{pane_current_command} #{session_created} #{pane_pid}']);
     if (t.koodi === 0) stdout = t.stdout;
   } else {
@@ -682,7 +690,7 @@ export async function agyIstunnot({
     } catch { return []; }
   }
   if (!stdout) return [];
-  const captureFn = aja
+  const captureFn = typeof capturePane === 'function' ? capturePane : aja
     ? async (ruutu) => {
         const c = await aja('tmux', ['capture-pane', '-p', '-t', ruutu]);
         return c.koodi === 0 ? c.stdout : '';

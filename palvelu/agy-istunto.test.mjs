@@ -81,6 +81,16 @@ test('loydaKeskustelu: löytyy, vaikka alkuviesti on kaukana lopusta (pitkä kes
   } finally { rmSync(hak, { recursive: true, force: true }); }
 });
 
+test('loydaKeskustelu: joutilas istunto löytyy, vaikka yli 12 muuta keskustelua on muuttunut myöhemmin', () => {
+  const hak = mkdtempSync(join(tmpdir(), 'agy-'));
+  try {
+    const nyt = Date.now() / 1000;
+    const p = tiedosto(hak, 'joutilas', [[14, kayttaja('Malliton purku: lue /x/scopes-joutilas.md ja noudata sitä.')]], nyt - 600);
+    for (let i = 0; i < 15; i++) tiedosto(hak, `muu${i}`, [[14, kayttaja(`Malliton purku: lue /x/muu-${i}.md ja noudata sitä.`)]], nyt - i);
+    assert.equal(loydaKeskustelu('scopes-joutilas', (nyt - 3600) * 1000, hak), p);
+  } finally { rmSync(hak, { recursive: true, force: true }); }
+});
+
 test('agyRuudut: vain skoopin oma agy-ruutu, uusin ensin; claude-ruutu ja toisen skoopin ruutu ohitetaan', async () => {
   const aja = async (komento, argumentit) => {
     assert.deepEqual([komento, argumentit[0]], ['tmux', 'list-panes']);

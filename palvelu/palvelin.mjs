@@ -71,21 +71,24 @@
 // oletus ~/.local/state/scopes-android). Ilman avainta palvelu ei käynnisty.
 
 import { timingSafeEqual } from 'node:crypto';
-import { readFileSync, realpathSync } from 'node:fs';
+import { appendFileSync, readFileSync, realpathSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { luoDiagnostiikka } from './diagnostiikka.mjs';
 import { luoKayttoraja } from './kayttoraja.mjs';
+import { luoAgyKayttoraja } from './agy-kayttoraja.mjs';
 import { lista, lueSkoopit, rekisterinOsat, rekisterit, yksi } from './lahteet.mjs';
 import { luoLiitteet } from './liitteet.mjs';
 import { luoAndroid } from './android.mjs';
 import { luoLinuxServer } from './palvelin.mjs';
 import { luoAsetukset, OLETUS_HAKEMISTO } from './toiminnot-asetukset.mjs';
 import { luoIstuntoValinta } from './istunto-asetukset.mjs';
+import { luoAgyLuvat } from './agy-luvat.mjs';
 import { luoPurkajat } from './purkajat.mjs';
-import { Hylatty, luoToiminnot } from './toiminnot.mjs';
+import { ajaKomento, Hylatty, luoToiminnot } from './toiminnot.mjs';
+import { agyIstunnot } from './agy-istunto.mjs';
 import { luoViestit } from './viestit.mjs';
 import { LrVirhe, luoLr } from '../localregister/palvelu.mjs';
 
@@ -135,7 +138,7 @@ function runko(req, raja = 1024) {
   });
 }
 
-export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset, { android: () => android }), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), purkajat = luoPurkajat({ juuri: asetukset.juuri, paikalliset: () => viestit.agentit() }), linux = luoLinuxServer({ loki: asetukset.toimintoloki, kuiva: asetukset.linuxKuiva === true }), android = luoAndroid({ loki: asetukset.toimintoloki, kuiva: asetukset.androidKuiva === true, ...(asetukset.androidLaite && { laite: asetukset.androidLaite }), ...(asetukset.androidDir && { tuotoksetDir: asetukset.androidDir }) })) {
+export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset, { android: () => android }), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), purkajat = luoPurkajat({ juuri: asetukset.juuri, paikalliset: () => viestit.agentit() }), linux = luoLinuxServer({ loki: asetukset.toimintoloki, kuiva: asetukset.linuxKuiva === true }), android = luoAndroid({ loki: asetukset.toimintoloki, kuiva: asetukset.androidKuiva === true, ...(asetukset.androidLaite && { laite: asetukset.androidLaite }), ...(asetukset.androidDir && { tuotoksetDir: asetukset.androidDir }) }), agyKayttoraja = luoAgyKayttoraja()) {
   const istuntoValinta = luoIstuntoValinta(asetukset);
   // Chat suoratoistona (DEMO-SCOPES-SUORATOISTO): NDJSON-rivit {tyyppi: 'pala', teksti} …, lopuksi
   // {tyyppi: 'valmis', vastaus, keskustelu, …} tai {tyyppi: 'virhe', virhe}. Hylkäys ennen agentin käynnistystä
@@ -240,12 +243,17 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         if (t) return vastaa(200, await suorita(t[2], decodeURIComponent(t[1])));
         return vastaa(404, { virhe: 'tuntematon toiminto' });
       }
-      if (polku === '/api/skoopit') return vastaa(200, lista(asetukset));
+      if (polku === '/api/skoopit') {
+        const skoopit = lueSkoopit(asetukset.juuri);
+        const agy = await agyIstunnot({ skooppiNimet: Object.keys(skoopit), aja: asetukset.aja ?? ajaKomento, agyHakemisto: asetukset.agyHakemisto });
+        return vastaa(200, lista({ ...asetukset, ohitaAgy: true }, agy));
+      }
       if (polku === '/api/asetukset') return vastaa(200, kytkimet.lue());
       const ig = polku.match(/^\/api\/skoopit\/([^/]+)\/asetukset$/);
       if (ig) {
         const v = istuntoValinta(decodeURIComponent(ig[1]), url.searchParams.get('istunto'));
-        return vastaa(200, { ...v, ...(v.istunto ? kytkimet.lueIstunto(v.istunto) : kytkimet.lue()) });
+        const { agyluvat: _globaali, ...yhteiset } = kytkimet.lue(); // agyluvat on globaali, ei keskustelukohtainen
+        return vastaa(200, { ...v, ...(v.istunto ? kytkimet.lueIstunto(v.istunto) : yhteiset) });
       }
       if (polku === '/api/agentit') return vastaa(200, await viestit.agentit());
       if (polku === '/api/purkajat') return vastaa(200, await purkajat.lista());
@@ -255,7 +263,18 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
       if (polku === '/api/android/ui') return vastaa(200, await android.ui());
       if (polku === '/api/android/tuotokset') return vastaa(200, await android.tuotokset());
       if (polku === '/api/android/tuotos') return vastaaTavut(await android.tuotos(url.searchParams.get('polku')));
-      if (polku === '/api/kayttoraja') return vastaa(200, await kayttoraja());
+      if (polku === '/api/kayttoraja') {
+        const tyyppi = url.searchParams.get('tyyppi');
+        const agentti = url.searchParams.get('agentti');
+        const skooppi = url.searchParams.get('skooppi');
+        const ryhma = url.searchParams.get('ryhma');
+        let onAgy = tyyppi === 'agy' || tyyppi === 'gemini' || agentti === 'android/gemini' || agentti?.startsWith('agy') || agentti?.startsWith('antigravity') || agentti?.includes('gemini');
+        if (!onAgy && skooppi && tyyppi !== 'claude' && !agentti?.startsWith('claude')) {
+          onAgy = (await viestit.onkoAgy?.(skooppi)) || ((await viestit.skoopinViestit?.(skooppi))?.istunto?.tyyppi === 'agy');
+        }
+        if (onAgy) return vastaa(200, await agyKayttoraja({ ryhma: ryhma || 'gemini' }));
+        return vastaa(200, await kayttoraja());
+      }
       // Luetaan joka pyynnöllä: avaimen vaihto ei vaadi palvelun uudelleenkäynnistystä.
       if (polku === '/api/wg-asetus') {
         try { return vastaa(200, { asetus: readFileSync(asetukset.wgTiedosto, 'utf8') }); } catch { return vastaa(404, { virhe: 'tunnelin asetusta ei ole' }); }
@@ -271,11 +290,18 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         return r ? vastaa(200, r) : vastaa(404, { virhe: 'tuntematon kontekstitiedosto' });
       }
       const vv = polku.match(/^\/api\/skoopit\/([^/]+)\/viestit$/);
-      if (vv) return vastaa(200, viestit.skoopinViestit(decodeURIComponent(vv[1])));
+      if (vv) {
+        const nimi = decodeURIComponent(vv[1]);
+        const k = await viestit.skoopinViestit(nimi);
+        // Claude-istunnon puuttuessa agy-istunto (AGY-PRE-ISTUNTO) korvaa "skooppi ei ole auki" -vastauksen.
+        return vastaa(200, k.auki ? k : (await viestit.agyViestit(nimi)) ?? k);
+      }
       const m = polku.match(/^\/api\/skoopit\/(.+)$/);
       if (m) {
-        const s = yksi(decodeURIComponent(m[1]), asetukset);
-        return s ? vastaa(200, { ...s, jonossa: suorita.jono?.(decodeURIComponent(m[1])) ?? [] }) : vastaa(404, { virhe: 'tuntematon skooppi' });
+        const nimi = decodeURIComponent(m[1]);
+        const agy = await agyIstunnot({ skooppiNimet: [nimi], aja: asetukset.aja ?? ajaKomento, agyHakemisto: asetukset.agyHakemisto });
+        const s = yksi(nimi, { ...asetukset, ohitaAgy: true }, agy);
+        return s ? vastaa(200, { ...s, jonossa: suorita.jono?.(nimi) ?? [] }) : vastaa(404, { virhe: 'tuntematon skooppi' });
       }
       return vastaa(404, { virhe: 'tuntematon polku' });
     } catch (e) {
@@ -297,6 +323,12 @@ if (paaohjelma) {
   }
   const diagnostiikka = luoDiagnostiikka(asetukset);
   diagnostiikka.silmukka();
+  // "Always allow" agy-istunnoille (AGY-PRE-ISTUNTO): taustakierros vastaa lupakyselyihin, kun asetus agyluvat on päällä.
+  const luvatAsetus = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki });
+  luoAgyLuvat({
+    aja: ajaKomento, paalla: () => luvatAsetus.lue().agyluvat,
+    kirjaa: (rivi) => { try { appendFileSync(asetukset.toimintoloki, JSON.stringify({ aika: new Date().toISOString(), ...rivi }) + '\n'); } catch { /* loki ei estä vastausta */ } },
+  }).kaynnista();
   const lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null });
   lr.ajasta();
   createServer(diagnostiikka.kaari(kasittelija(asetukset, undefined, undefined, undefined, undefined, diagnostiikka, undefined, lr))).listen(portti, osoite, () =>
