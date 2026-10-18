@@ -10,8 +10,9 @@
 import { randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import { istunnot, lueSkoopit, projektiNimi, pysahdys } from './lahteet.mjs';
-import { ajaKomento, Hylatty } from './toiminnot.mjs';
+import { agyRuudut, agyViestit, haeMacAgyKeskustelu, jasennaAgyRuutu, loydaKeskustelu, ruudunTila, tyhjennaMacAgyValimuisti } from './agy-istunto.mjs';
+import { istunnotAsync, lueSkoopit, projektiNimi, pysahdys } from './lahteet.mjs';
+import { ajaKomento, Hylatty, mallitonSlug } from './toiminnot.mjs';
 
 export const MALLIT = [
   { nimi: 'claude-fable-5-1', kuvaus: 'Fable 5.1', tyyppi: 'malli' },
@@ -68,7 +69,7 @@ const PAIKALLINEN_ID = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 // Mallin vaihto: LM Studio ei mahdu lataamaan toista isoa mallia ensimmäisen rinnalle (8 GB VRAM, 30 GB RAM;
 // "insufficient system resources" 13.10.2026), joten muu ladattu malli puretaan ensin. Tunnus on tarkistettu
 // listalta ja PAIKALLINEN_ID-muodosta, joten se ei sisällä lainausmerkkejä eikä kuoren erikoismerkkejä.
-export const lmsLataa = (id) => `L=~/.lmstudio/bin/lms; $L ps --json | grep -qF '"identifier":"${id}"' || `
+export const lmsLataa = (id) => `mkdir -p ~/.lmstudio/.internal/temp; L=~/.lmstudio/bin/lms; $L ps --json | grep -qF '"identifier":"${id}"' || `
   + `{ $L unload --all >/dev/null && $L load '${id}' -y --identifier '${id}' -c 8192; }`;
 
 // Paikallisen mallin näyttönimi (CHAT-MALLINIMET, V-330): tunnuksen viimeinen osa ilman tiedosto- ja kvantisointipäätettä,
@@ -217,23 +218,161 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
     }
   }
 
+  // Viesti agy-ruutuun:
+  // - Jos ruudussa on monivalinta (kysely: true): valitaan haluttu vaihtoehto Down-näppäimillä + Enter (tai Write-in)
+  // - Tavallinen syöte: C-u tyhjentää kentän, teksti kirjaimellisesti, Enter.
+  // Perillä vasta, kun kysely poistuu ruudulta tai agy:n keskustelutiedostossa on uusi käyttäjän viesti.
+  async function lahetaAgyyn(nimi, r, teksti) {
+    const rivi = teksti.replace(/\s*\n\s*/g, ' ').trim();
+    const alku = Date.now();
+    const slug = mallitonSlug(nimi);
+    const onMac = r.onMac || (r.ruutu && (await aja('tmux', ['display-message', '-p', '-t', r.ruutu, '#{pane_current_command}'])).stdout.trim() === 'ssh');
+    let db = null;
+    let ennen = 0;
+    if (onMac) {
+      tyhjennaMacAgyValimuisti(slug);
+      const mt = await haeMacAgyKeskustelu({ slug, alkoi: r.alkoi, aja });
+      if (mt?.loytyi) {
+        db = mt.dbPolku;
+        ennen = (mt.viestit ?? []).filter((v) => v.rooli === 'kayttaja').length;
+      }
+    } else {
+      db = loydaKeskustelu(slug, r.alkoi, asetukset.agyHakemisto);
+      ennen = db ? agyViestit(db, Infinity).filter((v) => v.rooli === 'kayttaja').length : 0;
+    }
+
+    let onkoKysely = false;
+    const capt = await aja('tmux', ['capture-pane', '-p', '-t', r.ruutu]);
+    if (capt.koodi === 0) {
+      onkoKysely = jasennaAgyRuutu(capt.stdout).kysely;
+    } else if (r.kysely != null) {
+      onkoKysely = r.kysely === true;
+    }
+
+    if (onkoKysely) {
+      let vaihtoehdot = [];
+      if (db) {
+        let viestit = [];
+        if (onMac) {
+          const mt = await haeMacAgyKeskustelu({ slug, alkoi: r.alkoi, aja });
+          viestit = mt?.viestit ?? [];
+        } else {
+          viestit = agyViestit(db, 10);
+        }
+        const viimKysymys = [...viestit].reverse().find((v) => v.rooli === 'kysymys');
+        vaihtoehdot = viimKysymys?.kysymykset?.[0]?.vaihtoehdot ?? [];
+      }
+      let valittuIdx = -1;
+      const siivottu = rivi.toLowerCase().trim();
+      const numMatch = /^(\d+)[\.\)]?$/.exec(siivottu);
+      if (numMatch) {
+        const n = Number(numMatch[1]) - 1;
+        if (n >= 0 && n < vaihtoehdot.length) valittuIdx = n;
+      }
+      if (valittuIdx < 0 && vaihtoehdot.length) {
+        const ilmanNumeroa = siivottu.replace(/^\d+[\.\)]\s*/, '');
+        valittuIdx = vaihtoehdot.findIndex((v) => {
+          const vn = v.nimi.toLowerCase().trim();
+          const vnIlman = vn.replace(/^\d+[\.\)]\s*/, '');
+          return vn === siivottu || vn === ilmanNumeroa || vnIlman === siivottu || vnIlman === ilmanNumeroa;
+        });
+      }
+      if (valittuIdx >= 0) {
+        const painallukset = [];
+        for (let i = 0; i < valittuIdx; i++) painallukset.push('Down');
+        painallukset.push('Enter');
+        for (const p of painallukset) {
+          const t = await aja('tmux', ['send-keys', '-t', r.ruutu, p]);
+          if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
+        }
+      } else {
+        // Custom write-in: mennään Write-in... -kohtaan (vaihtoehdot.length), painetaan Enter, kirjoitetaan teksti
+        const painallukset = [];
+        for (let i = 0; i < (vaihtoehdot.length || 1); i++) painallukset.push('Down');
+        painallukset.push('Enter');
+        for (const p of painallukset) {
+          const t = await aja('tmux', ['send-keys', '-t', r.ruutu, p]);
+          if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
+        }
+        await new Promise((ok) => setTimeout(ok, asetukset.kirjoitaTauko ?? 300));
+        for (const a of [['C-u'], ['-l', rivi], ['Enter']]) {
+          const t = await aja('tmux', ['send-keys', '-t', r.ruutu, ...a]);
+          if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
+        }
+      }
+    } else {
+      for (const a of [['C-u'], ['-l', rivi], ['Enter']]) {
+        const t = await aja('tmux', ['send-keys', '-t', r.ruutu, ...a]);
+        if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
+      }
+    }
+
+    const raja = Date.now() + (asetukset.perillaRaja ?? 10_000);
+    let perilla = false;
+    while (!perilla) {
+      if (onkoKysely) {
+        const capt = await aja('tmux', ['capture-pane', '-p', '-t', r.ruutu]);
+        if (capt.koodi === 0 && !jasennaAgyRuutu(capt.stdout).kysely) {
+          perilla = true;
+          break;
+        }
+      }
+      if (onMac) {
+        tyhjennaMacAgyValimuisti(slug);
+        const mt = await haeMacAgyKeskustelu({ slug, alkoi: r.alkoi, aja });
+        const nytMaara = (mt?.viestit ?? []).filter((v) => v.rooli === 'kayttaja').length;
+        if (nytMaara > ennen) {
+          perilla = true;
+          break;
+        }
+      } else {
+        const d = db ?? loydaKeskustelu(slug, r.alkoi, asetukset.agyHakemisto);
+        const maara = (x) => (x ? agyViestit(x, Infinity).filter((v) => v.rooli === 'kayttaja').length : 0);
+        if (maara(d) > ennen) {
+          perilla = true;
+          break;
+        }
+      }
+      const capt = await aja('tmux', ['capture-pane', '-p', '-t', r.ruutu]);
+      if (capt.koodi === 0) {
+        const j = jasennaAgyRuutu(capt.stdout);
+        if (capt.stdout.includes(`> ${rivi}`) && (j.tila === 'busy' || !capt.stdout.trim().endsWith(`> ${rivi}`))) {
+          perilla = true;
+          break;
+        }
+      }
+      if (Date.now() >= raja) break;
+      await new Promise((ok) => setTimeout(ok, asetukset.perillaVali ?? 500));
+    }
+    const kirjaus = { toiminto: 'viesti', nimi, istunto: r.ruutu, merkkeja: rivi.length, alku: rivi.slice(0, 40), kesto: Date.now() - alku, agy: true };
+    if (!perilla) {
+      const ruutu = await aja('tmux', ['capture-pane', '-p', '-t', r.ruutu]);
+      kirjaa({ ...kirjaus, tulos: 'ei näkynyt', ruutu: ruutu.stdout.split('\n').filter((x) => x.trim()).slice(-8) });
+      throw new Hylatty(504, 'viesti ei näkynyt agy-istunnossa — se voi odottaa istunnon syöttökentässä tai kysymyksen takana; tarkista ennen uudelleenlähetystä');
+    }
+    kirjaa({ ...kirjaus, tulos: 'ok' });
+    return { ok: true, istunto: r.ruutu };
+  }
+
   // Skoopin pakkaamattomat istunnot uusin ensin: pakattu istunto ei ole enää skoopin keskustelu (käyttäjä 13.10.2026),
   // ja automaattisiirron jälkeen uusi istunto korvaa vanhan samassa näkymässä.
-  const skoopinIstunnot = (nimi) => {
+  // Asynkroninen (ISTUNNOT-SUORITUSKYKY): äppi kyselee viestejä jatkuvasti, eikä tmux-haku saa pysäyttää palvelua.
+  const skoopinIstunnot = async (nimi) => {
     const skoopit = lueSkoopit(asetukset.juuri);
     if (!skoopit[nimi]) throw new Hylatty(404, 'tuntematon skooppi');
-    return istunnot({ ...asetukset, skooppiNimet: Object.keys(skoopit) }).filter((i) => i.skooppi === nimi);
+    return (await istunnotAsync({ ...asetukset, aja, skooppiNimet: Object.keys(skoopit) })).filter((i) => i.skooppi === nimi);
   };
-  const avoimet = (nimi) => skoopinIstunnot(nimi).filter((i) => !i.pakattu).sort((a, b) => b.alkoi - a.alkoi);
+  const avoinna = (lista) => lista.filter((i) => !i.pakattu).sort((a, b) => b.alkoi - a.alkoi);
+  const avoimet = async (nimi) => avoinna(await skoopinIstunnot(nimi));
 
   // Ainoa tmux-istunto, jonka ruudun prosessi on istunnon claude tai sen vanhempi (sama sääntö kuin pakkaa).
   async function tmuxIstunto(nimi) {
-    const omat = avoimet(nimi).filter((i) => i.ruutu);
+    const omat = (await avoimet(nimi)).filter((i) => i.ruutu);
     if (omat.length !== 1) throw new Hylatty(409, omat.length ? 'skoopissa on useita tmux-istuntoja' : 'skooppi ei ole auki tmuxissa');
     const [i] = omat;
     const r = await aja('tmux', ['display-message', '-p', '-t', i.ruutu, '#{pane_pid}']);
     const ruudunPid = Number(r.stdout.trim());
-    if (r.koodi !== 0 || !(ruudunPid === i.pid || ruudunPid === i.vanhempi)) throw new Hylatty(409, 'istunnon tmux-ruutu ei täsmää');
+    if (r.koodi !== 0 || !(ruudunPid === i.pid || ruudunPid === i.vanhempi || (i.tyyppi === 'agy' && i.pid == null))) throw new Hylatty(409, 'istunnon tmux-ruutu ei täsmää');
     return i;
   }
 
@@ -433,25 +572,90 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
 
     // Skoopin istunnon viestit, uusin pakkaamaton istunto. Ei sellaista → { auki: false }, jolloin äppi tarjoaa purun;
     // pakattu: true, kun skoopissa on vain pakattuja istuntoja (keskustelu tyhjennetään, Pura sulkee ne ensin).
-    skoopinViestit(nimi) {
-      const omat = avoimet(nimi);
-      if (!omat.length) return { nimi, auki: false, pakattu: skoopinIstunnot(nimi).length > 0, istunto: null, voiLahettaa: false, viestit: [] };
+    async skoopinViestit(nimi) {
+      const kaikki = await skoopinIstunnot(nimi);
+      const omat = avoinna(kaikki);
+      if (!omat.length) return { nimi, auki: false, pakattu: kaikki.length > 0, istunto: null, voiLahettaa: false, viestit: [] };
       const [i] = omat;
+      if (i.tyyppi === 'agy') {
+        let viestit = (i.viestit && i.viestit.length) ? i.viestit : [];
+        let db = i.dbPolku ?? (i.polku?.endsWith('.db') ? i.polku : null);
+        if (!viestit.length && i.onMac) {
+          const mt = await haeMacAgyKeskustelu({ slug: mallitonSlug(nimi), alkoi: i.alkoi, aja });
+          if (mt?.loytyi) {
+            viestit = mt.viestit ?? [];
+            db = mt.dbPolku;
+          }
+        } else if (!viestit.length) {
+          db ??= loydaKeskustelu(mallitonSlug(nimi), i.alkoi, asetukset.agyHakemisto);
+          if (db) viestit = agyViestit(db);
+        }
+        return {
+          nimi, auki: true,
+          istunto: { id: i.id, nimi: i.nimi, tila: i.tila, konteksti: i.konteksti, malli: i.malli ?? null, effort: i.effort ?? null, tyyppi: 'agy' },
+          voiLahettaa: Boolean(i.ruutu) && omat.filter((x) => x.ruutu).length === 1,
+          viestit,
+        };
+      }
       let transkripti = '';
       try { transkripti = readFileSync(i.polku, 'utf8'); } catch { /* uusi istunto ilman transkriptia */ }
       return {
         nimi, auki: true,
-        istunto: { id: i.id, nimi: i.nimi, tila: i.tila, konteksti: i.konteksti, ...istunnonAsetukset(transkripti) },
+        istunto: { id: i.id, nimi: i.nimi, tila: i.tila, konteksti: i.konteksti, tyyppi: 'claude', ...istunnonAsetukset(transkripti) },
         voiLahettaa: Boolean(i.ruutu) && omat.filter((x) => x.ruutu).length === 1,
         viestit: keskustelu(transkripti),
       };
+    },
+
+    // Agy-istunto (AGY-PRE-ISTUNTO): skoopissa ei ole Claude-istuntoa, mutta tmuxissa on agy-ruutu; viestit luetaan agy:n
+    // keskustelutiedostosta (agy-istunto.mjs). null = skoopilla ei ole agy-istuntoa → äppi tarjoaa purun.
+    async agyViestit(nimi) {
+      if ((await avoimet(nimi)).length) return null;
+      const [r] = await agyRuudut(aja, nimi);
+      if (!r) return null;
+      let viestit = [];
+      let db = null;
+      if (r.onMac) {
+        const mt = await haeMacAgyKeskustelu({ slug: mallitonSlug(nimi), alkoi: r.alkoi, aja });
+        if (mt?.loytyi) {
+          viestit = mt.viestit ?? [];
+          db = mt.dbPolku;
+        }
+      } else {
+        db = loydaKeskustelu(mallitonSlug(nimi), r.alkoi, asetukset.agyHakemisto);
+        viestit = db ? agyViestit(db) : [];
+      }
+      const ruutu = await aja('tmux', ['capture-pane', '-p', '-t', r.ruutu]);
+      return {
+        nimi, auki: true,
+        istunto: { id: r.ruutu, nimi: r.ruutu, tila: ruudunTila(ruutu.stdout), konteksti: null, malli: null, effort: null, tyyppi: 'agy' },
+        voiLahettaa: true,
+        viestit,
+      };
+    },
+
+    // Nopea tarkistus: onko skoopilla käynnissä oleva agy-ruutu ilman raskasta tietokannan avausta
+    async onkoAgy(nimi) {
+      const [r] = await agyRuudut(aja, nimi);
+      return Boolean(r);
     },
 
     // Viesti skoopin istuntoon: kirjoitetaan ruutuun kirjaimellisesti, rivinvaihdot välilyönneiksi (Enter lähettäisi).
     async lahetaSkooppiin(nimi, teksti) {
       if (typeof teksti !== 'string' || !teksti.trim()) throw new Hylatty(400, 'viesti puuttuu');
       if (teksti.length > VIESTIN_MAKSIMI) throw new Hylatty(413, `viesti yli ${VIESTIN_MAKSIMI} merkkiä`);
+      const omat = await avoimet(nimi);
+      if (omat.length === 1 && omat[0].tyyppi === 'agy') {
+        return lahetaAgyyn(nimi, omat[0], teksti);
+      }
+      if (!omat.length) {
+        const [r] = await agyRuudut(aja, nimi);
+        if (r) return lahetaAgyyn(nimi, r, teksti);
+      }
       const i = await tmuxIstunto(nimi);
+      if (i.tyyppi === 'agy') {
+        return lahetaAgyyn(nimi, i, teksti);
+      }
       // Auki oleva monivalinta valitsisi Enterillä korostetun vaihtoehdon (käyttäjä 13.10.2026): Escape sulkee sen
       // ensin, jolloin teksti menee istuntoon vastauksena. Tauko, ettei Escape + kirjain tulkitu Alt-näppäimeksi.
       let transkripti = '';
@@ -488,7 +692,18 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
     // Skoopin stop-nappi (CHAT-STOP): Escape keskeyttää työskentelevän istunnon kuten Claude Coden näppäimistöllä.
     // Vain työn aikana: vapaassa istunnossa Escape tyhjentäisi kirjoitetun syötteen, kysymyksessä sulkisi kortin.
     async pysaytaSkooppi(nimi) {
-      const i = await tmuxIstunto(nimi);
+      let i;
+      try {
+        i = await tmuxIstunto(nimi);
+      } catch (e) {
+        const [r] = await agyRuudut(aja, nimi);
+        if (r) {
+          const ruutu = await aja('tmux', ['capture-pane', '-p', '-t', r.ruutu]);
+          i = { id: r.ruutu, ruutu: r.ruutu, tila: jasennaAgyRuutu(ruutu.stdout).tila };
+        } else {
+          throw e;
+        }
+      }
       if (i.tila !== 'busy' && i.tila !== 'shell') throw new Hylatty(409, 'istunto ei ole työssä');
       const t = await aja('tmux', ['send-keys', '-t', i.ruutu, 'Escape']);
       if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
@@ -568,7 +783,33 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
 
     // Kortin X (käyttäjä 13.10.2026, kuten Claude-äpissä): Escape sulkee auki olevan monivalinnan vastaamatta.
     async suljeKysymys(nimi) {
-      const i = await tmuxIstunto(nimi);
+      const omat = await avoimet(nimi);
+      let i;
+      if (omat.length === 1 && omat[0].tyyppi === 'agy') {
+        i = omat[0];
+      } else {
+        try {
+          i = await tmuxIstunto(nimi);
+        } catch (e) {
+          const [r] = await agyRuudut(aja, nimi);
+          if (r) i = { id: r.ruutu, ruutu: r.ruutu, alkoi: r.alkoi, tyyppi: 'agy' };
+          else throw e;
+        }
+      }
+      if (i.tyyppi === 'agy') {
+        let onkoKysely = false;
+        const capt = await aja('tmux', ['capture-pane', '-p', '-t', i.ruutu]);
+        if (capt.koodi === 0) {
+          onkoKysely = jasennaAgyRuutu(capt.stdout).kysely;
+        } else if (i.kysely != null) {
+          onkoKysely = i.kysely === true;
+        }
+        if (!onkoKysely) throw new Hylatty(409, 'ei auki olevaa kysymystä');
+        const t = await aja('tmux', ['send-keys', '-t', i.ruutu, 'Escape']);
+        if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
+        kirjaa({ toiminto: 'sulje-kysymys', nimi, istunto: i.id, agy: true });
+        return { ok: true, istunto: i.id };
+      }
       let transkripti = '';
       try { transkripti = readFileSync(i.polku, 'utf8'); } catch { /* ei transkriptia */ }
       const viimeinen = keskustelu(transkripti, 1)[0];

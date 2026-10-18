@@ -10,7 +10,9 @@
 //   transkriptin liitteet ja viestit            istunnon ladatut osat tekstinä (istunnonLadatut, V-400)
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
+import { agyIstunnot, agyIstunnotSync } from './agy-istunto.mjs';
 
 // "SEURAAVA PAKETTI[ [tunniste]]: ID — kuvaus — polut: … — aloitus: …" → { id, kuvaus, polut, aloitus, teksti }.
 export function jasennaSeuraava(teksti) {
@@ -176,40 +178,59 @@ function elossa(pid, procStart, proc) {
     const stat = readFileSync(join(proc, String(pid), 'stat'), 'utf8');
     const kentat = stat.slice(stat.lastIndexOf(')') + 2).split(' ');
     return procStart == null || kentat[19] === String(procStart) ? Number(kentat[1]) : null;
-  } catch { return null; }
+  } catch {
+    try {
+      process.kill(pid, 0);
+      try {
+        const ppidStr = execFileSync('ps', ['-p', String(pid), '-o', 'ppid='], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+        const ppid = Number(ppidStr);
+        return Number.isFinite(ppid) ? ppid : 1;
+      } catch {
+        return 1;
+      }
+    } catch {
+      return null;
+    }
+  }
 }
 
-// Elävät istunnot: [{ id, nimi, tila, kysely, skooppi, konteksti, pysahdys, pakattu, hereilla, alkoi, pid, vanhempi, ruutu, polku }]. polku = transkripti (viestit.mjs); alkoi = startedAt (ms). ruutu = tmux-ruutu (%26) tai null;
+// Elävät istunnot (Claude ja AGY): [{ id, nimi, tila, kysely, skooppi, konteksti, pysahdys, pakattu, hereilla, alkoi, pid, vanhempi, ruutu, polku }].
+// polku = transkripti (viestit.mjs); alkoi = startedAt (ms). ruutu = tmux-ruutu (%26 tai siirto-*) tai null;
 // pid, vanhempi ja ruutu ovat hallintatoimintoja varten (toiminnot.mjs: /pakkaa oikeaan ruutuun).
-export function istunnot({ istunnotDir, projektitDir, skooppiNimet, proc = '/proc' }) {
-  if (!existsSync(istunnotDir)) return [];
+export function istunnot({ istunnotDir, projektitDir, skooppiNimet, proc = '/proc', agyHakemisto, brainHakemisto, listPanes, capturePane, ohitaAgy = false }) {
   const tulos = [];
-  for (const tiedosto of readdirSync(istunnotDir).filter((f) => /^\d+\.json$/.test(f))) {
-    let s;
-    try { s = JSON.parse(readFileSync(join(istunnotDir, tiedosto), 'utf8')); } catch { continue; }
-    const vanhempi = s.sessionId ? elossa(s.pid, s.procStart, proc) : null;
-    if (vanhempi == null) continue;
-    const polku = join(projektitDir, projektiNimi(s.cwd ?? ''), `${s.sessionId}.jsonl`);
-    let transkripti = '';
-    try { transkripti = readFileSync(polku, 'utf8'); } catch { /* uusi istunto ilman transkriptia */ }
-    tulos.push({
-      id: s.sessionId,
-      nimi: s.name ?? null,
-      tila: s.status ?? null,
-      // Kyselykortti (AskUserQuestion) auki: waiting + waitingFor "input needed"; lupakysely on "permission prompt".
-      kysely: s.status === 'waiting' && s.waitingFor === 'input needed',
-      skooppi: istunnonSkooppi(s.name ?? '', transkripti, skooppiNimet),
-      konteksti: konteksti(transkripti),
-      pysahdys: pysahdys(transkripti),
-      pakattu: pakattu(transkripti),
-      hereilla: hereilla(transkripti),
-      alkoi: s.startedAt ?? 0,
-      pid: s.pid,
-      vanhempi,
-      // Remote Controlin SDK-ajo (entrypoint sdk-cli) perii daemonin tmux-ruudun, joten ruutu vain CLI-istunnoille.
-      ruutu: (s.entrypoint ?? 'cli') === 'cli' ? /\.(%\d+)$/.exec(s.tmux ?? '')?.[1] ?? null : null,
-      polku,
-    });
+  if (existsSync(istunnotDir)) {
+    for (const tiedosto of readdirSync(istunnotDir).filter((f) => /^\d+\.json$/.test(f))) {
+      let s;
+      try { s = JSON.parse(readFileSync(join(istunnotDir, tiedosto), 'utf8')); } catch { continue; }
+      const vanhempi = s.sessionId ? elossa(s.pid, s.procStart, proc) : null;
+      if (vanhempi == null) continue;
+      const polku = join(projektitDir, projektiNimi(s.cwd ?? ''), `${s.sessionId}.jsonl`);
+      let transkripti = '';
+      try { transkripti = readFileSync(polku, 'utf8'); } catch { /* uusi istunto ilman transkriptia */ }
+      tulos.push({
+        id: s.sessionId,
+        nimi: s.name ?? null,
+        tila: s.status ?? null,
+        // Kyselykortti (AskUserQuestion) auki: waiting + waitingFor "input needed"; lupakysely on "permission prompt".
+        kysely: s.status === 'waiting' && s.waitingFor === 'input needed',
+        skooppi: istunnonSkooppi(s.name ?? '', transkripti, skooppiNimet),
+        konteksti: konteksti(transkripti),
+        pysahdys: pysahdys(transkripti),
+        pakattu: pakattu(transkripti),
+        hereilla: hereilla(transkripti),
+        alkoi: s.startedAt ?? 0,
+        pid: s.pid,
+        vanhempi,
+        // Remote Controlin SDK-ajo (entrypoint sdk-cli) perii daemonin tmux-ruudun, joten ruutu vain CLI-istunnoille.
+        ruutu: (s.entrypoint ?? 'cli') === 'cli' ? /\.(%\d+)$/.exec(s.tmux ?? '')?.[1] ?? null : null,
+        polku,
+      });
+    }
+  }
+  if (!ohitaAgy) {
+    const agy = agyIstunnotSync({ skooppiNimet, proc, agyHakemisto, brainHakemisto, listPanes, capturePane });
+    tulos.push(...agy);
   }
   return tulos;
 }
@@ -254,10 +275,21 @@ export function skooppiTila(istunnot) {
   return auki.length ? 'odottaa' : 'pakattu';
 }
 
+// Kuten istunnot(), mutta agy-ruudut ja Mac-tiedot haetaan asynkronisesti (ISTUNNOT-SUORITUSKYKY 18.10.2026): tmux- ja
+// ssh-kutsut eivät pysäytä palvelun tapahtumasilmukkaa. aja = toiminnot.mjs:n ajaKomento tai testin väärennös.
+export async function istunnotAsync({ aja, ...asetukset }) {
+  const { skooppiNimet, proc, agyHakemisto, brainHakemisto, listPanes, capturePane } = asetukset;
+  const agy = await agyIstunnot({ skooppiNimet, aja, proc, agyHakemisto, brainHakemisto, listPanes, capturePane });
+  return [...istunnot({ ...asetukset, ohitaAgy: true }), ...agy];
+}
+
 // Skooppilista tiivistettynä: nimi, seuraava paketti, avoimien ja vikojen määrä, istuntojen suurin konteksti, aika, tila.
-export function lista(asetukset) {
+export function lista(asetukset, lisaIstunnot = []) {
   const skoopit = lueSkoopit(asetukset.juuri);
-  const kaikkiIstunnot = istunnot({ ...asetukset, skooppiNimet: Object.keys(skoopit) });
+  const ohitaAgy = asetukset.ohitaAgy ?? (lisaIstunnot != null && lisaIstunnot.length > 0);
+  const loydetyt = istunnot({ ...asetukset, skooppiNimet: Object.keys(skoopit), ohitaAgy });
+  const lisaNahdyt = new Set(lisaIstunnot.map((i) => i.id));
+  const kaikkiIstunnot = [...lisaIstunnot, ...loydetyt.filter((i) => !lisaNahdyt.has(i.id))];
   return Object.keys(skoopit).map((nimi) => {
     const s = skooppi(nimi, { juuri: asetukset.juuri, skoopit, kaikkiIstunnot });
     const tokenit = s.istunnot.map((i) => i.konteksti?.tokenit ?? 0);
@@ -556,9 +588,12 @@ export function skoopinKonteksti(nimi, { juuri, rekisterit, istunnot: skoopinIst
   };
 }
 
-export function yksi(nimi, asetukset) {
+export function yksi(nimi, asetukset, lisaIstunnot = []) {
   const skoopit = lueSkoopit(asetukset.juuri);
-  const kaikkiIstunnot = istunnot({ ...asetukset, skooppiNimet: Object.keys(skoopit) });
+  const ohitaAgy = asetukset.ohitaAgy ?? (lisaIstunnot != null && lisaIstunnot.length > 0);
+  const loydetyt = istunnot({ ...asetukset, skooppiNimet: Object.keys(skoopit), ohitaAgy });
+  const lisaNahdyt = new Set(lisaIstunnot.map((i) => i.id));
+  const kaikkiIstunnot = [...lisaIstunnot, ...loydetyt.filter((i) => !lisaNahdyt.has(i.id))];
   const s = skooppi(nimi, { juuri: asetukset.juuri, skoopit, kaikkiIstunnot });
   return s && { ...s, konteksti: skoopinKonteksti(nimi, { juuri: asetukset.juuri, rekisterit: s.rekisterit, istunnot: s.istunnot }) };
 }

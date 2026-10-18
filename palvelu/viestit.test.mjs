@@ -34,7 +34,8 @@ function ymparisto({ tmux = 'siirto-a-1:@1.%5' } = {}) {
   const projektitDir = join(d, 'projektit');
   mkdirSync(join(projektitDir, projektiNimi('/x')), { recursive: true });
   writeFileSync(join(projektitDir, projektiNimi('/x'), 's1.jsonl'), TRANSKRIPTI);
-  return { juuri, istunnotDir, projektitDir, chatDir: join(d, 'chat') };
+  // listPanes: tyhjä tmux-lista, jottei agy-haku kulje testin aja-väärennöksen kautta; agy-testit antavat omansa.
+  return { juuri, istunnotDir, projektitDir, chatDir: join(d, 'chat'), listPanes: '' };
 }
 
 // claude -p --output-format stream-json: tekstin palat stream_event-riveinä, lopuksi result-rivi.
@@ -251,15 +252,15 @@ test('chat: hylkäykset', async () => {
   await hylkaa(virhe.chat({ agentti: 'claude-opus-5-5', viesti: 'x' }), 502);
 });
 
-test('skoopinViestit: auki tai ei', () => {
+test('skoopinViestit: auki tai ei', async () => {
   const v = luoViestit(ymparisto(), { aja: vaarennos().aja });
-  const auki = v.skoopinViestit('a');
+  const auki = await v.skoopinViestit('a');
   assert.equal(auki.auki, true);
   assert.equal(auki.voiLahettaa, true);
   assert.equal(auki.istunto.id, 's1');
   assert.equal(auki.viestit.length, 4);
-  assert.deepEqual(v.skoopinViestit('b'), { nimi: 'b', auki: false, pakattu: false, istunto: null, voiLahettaa: false, viestit: [] });
-  assert.throws(() => v.skoopinViestit('c'), (e) => e.koodi === 404);
+  assert.deepEqual(await v.skoopinViestit('b'), { nimi: 'b', auki: false, pakattu: false, istunto: null, voiLahettaa: false, viestit: [] });
+  await assert.rejects(v.skoopinViestit('c'), (e) => e.koodi === 404);
 });
 
 // Käyttäjä 13.10.2026: pakkauksen jälkeen skoopin keskustelu tyhjenee ja Pura jatkaa samassa näkymässä;
@@ -270,18 +271,18 @@ test('skoopinViestit: pakattu istunto piiloon, uusin pakkaamaton näkyy', async 
   const PAKATTU = `${TRANSKRIPTI}\n${rivi({ type: 'assistant', message: { content: [{ type: 'text', text: 'PAKKAUS: vahvistettu — commit abc' }] } })}`;
   writeFileSync(join(kansio, 's1.jsonl'), PAKATTU);
   const v = luoViestit(a, { aja: vaarennos().aja });
-  assert.deepEqual(v.skoopinViestit('a'), { nimi: 'a', auki: false, pakattu: true, istunto: null, voiLahettaa: false, viestit: [] });
+  assert.deepEqual(await v.skoopinViestit('a'), { nimi: 'a', auki: false, pakattu: true, istunto: null, voiLahettaa: false, viestit: [] });
   await hylkaa(v.lahetaSkooppiin('a', 'x'), 409);
   // Uusi istunto (automaattisiirto tai Pura) samassa skoopissa: se näkyy, ja viestit menevät sen ruutuun.
   writeFileSync(join(a.istunnotDir, `${process.ppid}.json`), JSON.stringify({ pid: process.ppid, sessionId: 's2', cwd: '/x', name: 'a', status: 'idle', startedAt: 2, tmux: 'siirto-a-2:@2.%6' }));
   writeFileSync(join(kansio, 's2.jsonl'), rivi({ type: 'user', message: { content: '<command-name>/pura</command-name>\n<command-args>a --autojatko</command-args>' } }));
-  const uusi = v.skoopinViestit('a');
+  const uusi = await v.skoopinViestit('a');
   assert.equal(uusi.istunto.id, 's2');
   assert.equal(uusi.voiLahettaa, true);
   assert.deepEqual(uusi.viestit.map((x) => x.teksti), ['/pura a --autojatko']);
   // Vanha istunto ei vielä pakattu (siirron päällekkäisyys): uusin näkyy, mutta lähetys odottaa yhtä ruutua.
   writeFileSync(join(kansio, 's1.jsonl'), TRANSKRIPTI);
-  const kaksi = v.skoopinViestit('a');
+  const kaksi = await v.skoopinViestit('a');
   assert.equal(kaksi.istunto.id, 's2');
   assert.equal(kaksi.voiLahettaa, false);
 });
@@ -526,7 +527,7 @@ test('chat: Gemini (Android) — vain android-olion kanssa, historia talteen, ja
 
 const ASETUKSET_RIVI = (malli, effort, lisa = {}) => rivi({ type: 'assistant', perTurnEffort: effort, message: { model: malli, content: [{ type: 'text', text: 'x' }] }, ...lisa });
 
-test('istunnonAsetukset: viimeisen pääketjun assistant-rivin malli ja effort (MALLINAPPI)', () => {
+test('istunnonAsetukset: viimeisen pääketjun assistant-rivin malli ja effort (MALLINAPPI)', async () => {
   const t = [ASETUKSET_RIVI('claude-opus-5-5', 'high'), ASETUKSET_RIVI('claude-sonnet-5-5', 'max'), ASETUKSET_RIVI('claude-haiku-5-5', 'low', { isSidechain: true })].join('\n');
   assert.deepEqual(istunnonAsetukset(t), { malli: 'claude-sonnet-5-5', effort: 'max' });
   assert.deepEqual(istunnonAsetukset(ASETUKSET_RIVI('claude-opus-5-5', undefined)), { malli: 'claude-opus-5-5', effort: null });
@@ -534,7 +535,7 @@ test('istunnonAsetukset: viimeisen pääketjun assistant-rivin malli ja effort (
   assert.deepEqual(istunnonAsetukset(''), { malli: null, effort: null });
   const a = ymparisto();
   appendFileSync(s1(a), `\n${ASETUKSET_RIVI('claude-opus-5-5', 'xhigh')}`);
-  const i = luoViestit(a, { aja: vaarennos().aja }).skoopinViestit('a').istunto;
+  const i = (await luoViestit(a, { aja: vaarennos().aja }).skoopinViestit('a')).istunto;
   assert.equal(i.malli, 'claude-opus-5-5');
   assert.equal(i.effort, 'xhigh');
 });
@@ -592,4 +593,191 @@ test('vaihdaMalli: /model ja /effort ruutuun vain vapaassa istunnossa, arvot lis
     assert.ok(lahetetyt.some((k) => k[0] === 'Escape'), 'ikkuna suljetaan Escapella');
     assert.ok(!lahetetyt.some((k) => k[0] === 'Enter' && lahetetyt.indexOf(k) > lahetetyt.findIndex((x) => x[1] === 's')), 'vahvistusta ei hyväksytä Enterillä');
   }
+});
+
+// AGY-PRE-ISTUNTO (16.10.2026): skoopilla ei ole Claude-istuntoa mutta tmuxissa on agy-ruutu → viestit agy:n keskustelutiedostosta,
+// lähetys ruutuun ja perillä vasta, kun tiedostossa on uusi käyttäjän viesti.
+test('agy-istunto: viestit, tila ja lähetys (palvelin ei sano "skooppi ei ole auki")', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const varint = (n) => { const t = []; do { let x = n % 128; n = Math.floor(n / 128); if (n) x |= 0x80; t.push(x); } while (n); return Buffer.from(t); };
+  const num = (f, x) => Buffer.concat([varint(f * 8), varint(x)]);
+  const msg = (f, ...o) => { const b = Buffer.concat(o); return Buffer.concat([varint(f * 8 + 2), varint(b.length), b]); };
+  const str = (f, s) => msg(f, Buffer.from(s, 'utf8'));
+  const aika = msg(5, msg(1, num(1, 1792141799)));
+  const kayttaja = (t) => Buffer.concat([num(1, 14), aika, msg(19, str(2, t))]);
+  const agentti = (t) => Buffer.concat([num(1, 15), aika, msg(20, str(1, t))]);
+  const a = ymparisto();
+  a.agyHakemisto = join(a.juuri, '../agy');
+  mkdirSync(a.agyHakemisto);
+  const polku = join(a.agyHakemisto, 'k1.db');
+  const db = new DatabaseSync(polku);
+  db.exec('CREATE TABLE steps (idx integer, step_type integer NOT NULL DEFAULT 0, step_payload blob, PRIMARY KEY (idx))');
+  const lisaa = (i, t, p) => db.prepare('INSERT INTO steps VALUES (?, ?, ?)').run(i, t, p);
+  lisaa(0, 14, kayttaja('Malliton purku: lue /x/b.md ja noudata sitä.'));
+  lisaa(1, 15, agentti('Raportti. Vastaa numerolla.'));
+  const kutsut = [];
+  const aja = async (komento, argumentit) => {
+    kutsut.push([komento, ...argumentit]);
+    if (argumentit[0] === 'list-panes') return { koodi: 0, stdout: `siirto-b-120000 agy ${Math.floor(Date.now() / 1000)}\n`, stderr: '' };
+    if (argumentit[0] === 'capture-pane') return { koodi: 0, stdout: '>\n? for shortcuts   Gemini 3.8 Flash · high\n', stderr: '' };
+    if (argumentit.includes('Enter')) lisaa(2, 14, kayttaja('1'));
+    return { koodi: 0, stdout: '', stderr: '' };
+  };
+  const v = luoViestit(a, { aja, perillaVali: 5, perillaRaja: 500 });
+  const k = await v.agyViestit('b');
+  assert.equal(k.auki, true);
+  assert.equal(k.voiLahettaa, true);
+  assert.deepEqual([k.istunto.id, k.istunto.tila, k.istunto.malli], ['siirto-b-120000', 'idle', null]);
+  assert.deepEqual(k.viestit.map((x) => `${x.rooli}:${x.teksti}`), ['kayttaja:Malliton purku: lue /x/b.md ja noudata sitä.', 'agentti:Raportti. Vastaa numerolla.']);
+  assert.equal(await v.agyViestit('a'), null, 'skoopilla a on Claude-istunto, agy ei korvaa sitä');
+  assert.deepEqual(await v.lahetaSkooppiin('b', '1'), { ok: true, istunto: 'siirto-b-120000' });
+  assert.deepEqual(kutsut.filter((c) => c[1] === 'send-keys').map((c) => c.slice(4)), [['C-u'], ['-l', '1'], ['Enter']]);
+  db.close();
+});
+
+test('agy-istunto: viesti, joka ei näy keskustelutiedostossa → 504', async () => {
+  const a = ymparisto();
+  a.agyHakemisto = join(a.juuri, '../agy-tyhja');
+  mkdirSync(a.agyHakemisto);
+  const aja = async (komento, argumentit) => argumentit[0] === 'list-panes'
+    ? { koodi: 0, stdout: `siirto-b-120000 agy ${Math.floor(Date.now() / 1000)}\n`, stderr: '' } : { koodi: 0, stdout: '', stderr: '' };
+  const v = luoViestit(a, { aja, perillaVali: 5, perillaRaja: 60 });
+  await assert.rejects(v.lahetaSkooppiin('b', 'moi'), (e) => e instanceof Hylatty && e.koodi === 504);
+});
+
+test('skoopinViestit: AGY-istunto palautuu skoopinViestit-kutsusta suoraan ilman agyViestit-varareittiä', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const varint = (n) => { const t = []; do { let x = n % 128; n = Math.floor(n / 128); if (n) x |= 0x80; t.push(x); } while (n); return Buffer.from(t); };
+  const num = (f, x) => Buffer.concat([varint(f * 8), varint(x)]);
+  const msg = (f, ...o) => { const b = Buffer.concat(o); return Buffer.concat([varint(f * 8 + 2), varint(b.length), b]); };
+  const str = (f, s) => msg(f, Buffer.from(s, 'utf8'));
+  const aika = msg(5, msg(1, num(1, 1792141799)));
+  const kayttaja = (t) => Buffer.concat([num(1, 14), aika, msg(19, str(2, t))]);
+  const agentti = (t) => Buffer.concat([num(1, 15), aika, msg(20, str(1, t))]);
+
+  const a = ymparisto();
+  a.agyHakemisto = join(a.juuri, '../agy-suora');
+  mkdirSync(a.agyHakemisto);
+  const polku = join(a.agyHakemisto, 'k2.db');
+  const db = new DatabaseSync(polku);
+  db.exec('CREATE TABLE steps (idx integer, step_type integer NOT NULL DEFAULT 0, step_payload blob, PRIMARY KEY (idx))');
+  const lisaa = (i, t, p) => db.prepare('INSERT INTO steps VALUES (?, ?, ?)').run(i, t, p);
+  lisaa(0, 14, kayttaja('Malliton purku: lue /x/b.md ja noudata sitä.'));
+  lisaa(1, 15, agentti('Valmis'));
+
+  a.listPanes = () => `siirto-b-120000 agy ${Math.floor(Date.now() / 1000)} 9999\n`;
+  a.capturePane = () => '> \n? for shortcuts   Gemini 3.8 Flash · high\n';
+
+  const v = luoViestit(a);
+  const res = await v.skoopinViestit('b');
+  assert.equal(res.auki, true);
+  assert.equal(res.voiLahettaa, true);
+  assert.equal(res.istunto.id, 'siirto-b-120000');
+  assert.equal(res.istunto.tila, 'idle');
+  assert.equal(res.viestit.length, 2);
+  assert.equal(res.viestit[0].teksti, 'Malliton purku: lue /x/b.md ja noudata sitä.');
+  assert.equal(res.viestit[1].teksti, 'Valmis');
+  db.close();
+});
+
+test('agy-istunto: ask_question vastaaminen valinnalla ja write-inillä sekä suljeKysymys', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const varint = (n) => { const t = []; do { let x = n % 128; n = Math.floor(n / 128); if (n) x |= 0x80; t.push(x); } while (n); return Buffer.from(t); };
+  const num = (f, x) => Buffer.concat([varint(f * 8), varint(x)]);
+  const msg = (f, ...o) => { const b = Buffer.concat(o); return Buffer.concat([varint(f * 8 + 2), varint(b.length), b]); };
+  const str = (f, s) => msg(f, Buffer.from(s, 'utf8'));
+  const aika = msg(5, msg(1, num(1, 1792141799)));
+  const kayttaja = (t) => Buffer.concat([num(1, 14), aika, msg(19, str(2, t))]);
+  const agentti = (t) => Buffer.concat([num(1, 15), aika, msg(20, str(1, t))]);
+
+  const kyselyArgs = JSON.stringify({
+    questions: [{
+      question: 'Vahvistatko?',
+      options: ['Kyllä', 'Ei']
+    }]
+  });
+  const kyselyToolCall = (argsJson, vastausVal = null) => {
+    const f4inner = Buffer.concat([str(2, 'ask_question'), str(3, argsJson)]);
+    const f4 = msg(4, f4inner);
+    const f5 = msg(5, f4);
+    const osat = [num(1, 132), aika, f5, str(7, argsJson)];
+    if (vastausVal != null) {
+      const innerObj = Buffer.concat([str(1, 'Vahvistatko?'), str(4, String(vastausVal))]);
+      const f22 = msg(22, msg(1, innerObj));
+      const f2 = msg(2, f22);
+      const f147 = msg(147, f2);
+      osat.push(f147);
+    }
+    return Buffer.concat(osat);
+  };
+
+  const a = ymparisto();
+  a.agyHakemisto = join(a.juuri, '../agy-kysely');
+  mkdirSync(a.agyHakemisto);
+  const polku = join(a.agyHakemisto, 'k-kysely.db');
+  const db = new DatabaseSync(polku);
+  db.exec('CREATE TABLE steps (idx integer, step_type integer NOT NULL DEFAULT 0, step_payload blob, PRIMARY KEY (idx))');
+  const lisaa = (i, t, p) => db.prepare('INSERT INTO steps VALUES (?, ?, ?)').run(i, t, p);
+  lisaa(0, 14, kayttaja('Malliton purku: lue /x/b.md ja noudata sitä.'));
+  lisaa(1, 15, agentti('Kysyn varmistuksen'));
+  lisaa(2, 132, kyselyToolCall(kyselyArgs));
+
+  let ruutuTeksti = 'Question 1/1: Vahvistatko?\n> 1. Kyllä\n  2. Ei\n  ↑/↓ Navigate · enter Select · esc Skip\n';
+  const kutsut = [];
+  const aja = async (komento, argumentit) => {
+    kutsut.push([komento, ...argumentit]);
+    if (argumentit[0] === 'list-panes') return { koodi: 0, stdout: `siirto-b-120000 agy ${Math.floor(Date.now() / 1000)}\n`, stderr: '' };
+    if (argumentit[0] === 'capture-pane') return { koodi: 0, stdout: ruutuTeksti, stderr: '' };
+    if (argumentit[0] === 'display-message') return { koodi: 0, stdout: '12345\n', stderr: '' };
+    if (argumentit.includes('Enter') || argumentit.includes('Escape')) {
+      ruutuTeksti = '>\n? for shortcuts   Gemini 3.8 Flash · high\n';
+    }
+    return { koodi: 0, stdout: '', stderr: '' };
+  };
+
+  const v = luoViestit(a, { aja, perillaVali: 5, perillaRaja: 500, kirjoitaTauko: 0 });
+
+  // 1. Vastaaminen valitsemalla toinen vaihtoehto ("Ei"): painaa Down ja Enter
+  assert.deepEqual(await v.lahetaSkooppiin('b', 'Ei'), { ok: true, istunto: 'siirto-b-120000' });
+  const sendKeys1 = kutsut.filter((c) => c[1] === 'send-keys').map((c) => c.slice(4));
+  assert.deepEqual(sendKeys1, [['Down'], ['Enter']]);
+
+  // 2. Vastaaminen custom write-in -tekstillä ("Oma teksti")
+  kutsut.length = 0;
+  ruutuTeksti = 'Question 1/1: Vahvistatko?\n> 1. Kyllä\n  2. Ei\n  ↑/↓ Navigate · enter Select · esc Skip\n';
+  assert.deepEqual(await v.lahetaSkooppiin('b', 'Oma teksti'), { ok: true, istunto: 'siirto-b-120000' });
+  const sendKeys2 = kutsut.filter((c) => c[1] === 'send-keys').map((c) => c.slice(4));
+  assert.deepEqual(sendKeys2, [['Down'], ['Down'], ['Enter'], ['C-u'], ['-l', 'Oma teksti'], ['Enter']]);
+
+  // 3. suljeKysymys: Escape sulkee kyselykortin
+  kutsut.length = 0;
+  ruutuTeksti = 'Question 1/1: Vahvistatko?\n> 1. Kyllä\n  2. Ei\n  ↑/↓ Navigate · enter Select · esc Skip\n';
+  assert.deepEqual(await v.suljeKysymys('b'), { ok: true, istunto: 'siirto-b-120000' });
+  const sendKeys3 = kutsut.filter((c) => c[1] === 'send-keys').map((c) => c.slice(4));
+  assert.deepEqual(sendKeys3, [['Escape']]);
+
+  // 4. suljeKysymys hylkää 409, jos kysymys ei ole auki
+  ruutuTeksti = '>\n? for shortcuts   Gemini 3.8 Flash · high\n';
+  await hylkaa(v.suljeKysymys('b'), 409);
+
+  db.close();
+});
+
+
+// ISTUNNOT-SUORITUSKYKY: viestinäkymän istuntohaku kulkee asynkronisen ajajan kautta (ei execFileSync-tmuxia).
+test('skoopinViestit: agy-ruudut haetaan aja-ajajalla', async () => {
+  const a = ymparisto();
+  delete a.listPanes;
+  a.agyHakemisto = join(a.juuri, '../agy-aja');
+  mkdirSync(a.agyHakemisto);
+  const kutsut = [];
+  const aja = async (komento, argumentit) => {
+    kutsut.push([komento, argumentit[0]]);
+    if (argumentit[0] === 'list-panes') return { koodi: 0, stdout: `siirto-b-120000 agy ${Math.floor(Date.now() / 1000)} 4242\n`, stderr: '' };
+    if (argumentit[0] === 'capture-pane') return { koodi: 0, stdout: '> \n? for shortcuts\n', stderr: '' };
+    return { koodi: 0, stdout: '', stderr: '' };
+  };
+  const res = await luoViestit(a, { aja }).skoopinViestit('b');
+  assert.deepEqual([res.auki, res.istunto.id, res.istunto.tyyppi, res.istunto.tila], [true, 'siirto-b-120000', 'agy', 'idle']);
+  assert.deepEqual(kutsut, [['tmux', 'list-panes'], ['tmux', 'capture-pane']]);
 });
