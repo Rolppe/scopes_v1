@@ -24,6 +24,7 @@ import { execFile } from 'node:child_process';
 import { appendFileSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { agyRuudut } from './agy-istunto.mjs';
 import { istunnot, lueSkoopit } from './lahteet.mjs';
 import { keskustelu } from './viestit.mjs';
 
@@ -64,7 +65,12 @@ export function ajaKomento(komento, argumentit, { aikaraja = 150_000, syote = nu
 // autovaihto.sh:n tulosteesta Remote Control -osoite (OK: <url>).
 export const istuntoOsoite = (stdout) => /^OK: (https:\/\/claude\.ai\/code\/session_[A-Za-z0-9]+)$/m.exec(stdout)?.[1] ?? null;
 // Paikallisen mallin istunnolla ei ole Remote Controlia (autovaihto.sh, 15.10.2026): OK-rivi nimeää tmux-istunnon.
-export const paikallinenTmux = (stdout) => /^OK: paikallinen tmux (siirto-[a-z0-9-]+)$/m.exec(stdout)?.[1] ?? null;
+// Agy-istunto (AGY-PRE-ISTUNTO 16.10.2026) on samanlainen: tmux, ei Remote Controlia.
+export const paikallinenTmux = (stdout) => /^OK: (?:paikallinen|agy|mac-agy) tmux (siirto-[a-z0-9-]+)$/m.exec(stdout)?.[1] ?? null;
+export const MAC_AGY_MALLI = 'mac-agy/';
+// Istunnon malli `agy/<agy-mallin tunnus>` ajaa istunnon agy:llä (autovaihto.sh); agy ei aja Clauden /pura-taitoa, joten se
+// kuuluu vain scopes-perheelle, jonka purku on skripti (pura-malliton.mjs --kohde neutraali).
+export const AGY_MALLI = 'agy/';
 
 // Jonotettavat komennot ryhmittäin: ryhmän uusin korvaa vanhemman (kytkin pois ja päälle → vain /sa), ja herätys lähtee
 // ennen siirtoa, koska /automaattisiirto päättää istunnon.
@@ -128,7 +134,8 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
   }
 
   async function avaaIstunto(skooppi, viesti, malli = null) {
-    const t = await aja('bash', [autovaihto, 'vaihda', skooppi, '--ei-sulje', ...(malli ? ['--model', malli] : []), '--viesti', viesti]);
+    // viesti null = autovaihto.sh kirjoittaa purkutiedoston itse (agy-uusi skooppi).
+    const t = await aja('bash', [autovaihto, 'vaihda', skooppi, '--ei-sulje', ...(malli ? ['--model', malli] : []), ...(viesti ? ['--viesti', viesti] : [])]);
     const osoite = istuntoOsoite(t.stdout);
     const tmux = paikallinenTmux(t.stdout);
     if (t.koodi !== 0 || !(osoite || tmux)) {
@@ -152,11 +159,24 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
     const skoopit = lueSkoopit(asetukset.juuri);
     if (!skoopit[nimi]) throw new Hylatty(404, 'tuntematon skooppi');
     const omat = skoopinIstunnot(nimi, skoopit).filter((i) => i.ruutu && !i.pakattu);
-    if (omat.length !== 1) throw new Hylatty(409, omat.length ? 'skoopissa on useita tmux-istuntoja' : `skoopilla ei ole tmux-istuntoa, johon ${komento} voi lähettää`);
+    if (omat.length !== 1) {
+      if (omat.length === 0) {
+        const agy = await agyRuudut(aja, nimi);
+        if (agy.length === 1) {
+          const [r] = agy;
+          for (const a of [['-l', komento], ['Enter']]) {
+            const t = await aja('tmux', ['send-keys', '-t', r.ruutu, ...a]);
+            if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
+          }
+          return { istunto: r.ruutu, komento };
+        }
+      }
+      throw new Hylatty(409, omat.length ? 'skoopissa on useita tmux-istuntoja' : `skoopilla ei ole tmux-istuntoa, johon ${komento} voi lähettää`);
+    }
     const [i] = omat;
     const ryhma = JONO_RYHMA[komento];
     if (ryhma && jono.delete(`${nimi}\n${ryhma}`)) tallennaJono();
-    if (i.tila === 'waiting' && komento === '/pakkaa' && kysymysAuki(i)) {
+    if (i.tila === 'waiting' && (komento === '/pakkaa' || komento === '/automaattisiirto') && (i.kysely || kysymysAuki(i))) {
       // Kuten viestin lähetys (viestit.mjs): Enter valitsisi korostetun vaihtoehdon, joten Escape ensin ja tauko,
       // ettei Escape + kirjain tulkitu Alt-näppäimeksi.
       await tarkistaRuutu(i);
@@ -191,12 +211,18 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
         kirjaa({ toiminto: j.toiminto, nimi: j.nimi, tulos: 'hylätty', syy: 'jonossa ollut istunto päättyi', istunto: j.istunto });
         continue;
       }
-      if (i.tila !== 'idle') continue;
+      const kysymys = (j.komento === '/pakkaa' || j.komento === '/automaattisiirto') && i.tila === 'waiting' && (i.kysely || kysymysAuki(i));
+      if (i.tila !== 'idle' && !kysymys) continue;
       jono.delete(avain);
       tallennaJono();
       kaynnissa = j.toiminto;
       try {
         await tarkistaRuutu(i);
+        if (kysymys) {
+          const t = await aja('tmux', ['send-keys', '-t', i.ruutu, 'Escape']);
+          if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
+          await new Promise((r) => setTimeout(r, asetukset.escapeTauko ?? 800));
+        }
         await kirjoita(i, j.komento);
         kirjaa({ toiminto: j.toiminto, nimi: j.nimi, tulos: 'ok', istunto: i.id, komento: j.komento, jonosta: true });
       } catch (e) {
@@ -212,14 +238,37 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
   // Mallivapaa purku (PURA-MALLITON T6b): purkutiedosto kirjoitetaan ennen kuin mitään suljetaan, joten skriptin virhe ei
   // jätä skooppia ilman istuntoa eikä vaihdu mallireittiin. Suljettavat pois tiedoston ISTUNNOT-riviltä (PURASCRIPT-ISTUNNOT).
   async function puraMallitta(nimi, suljettavat, malli) {
-    const r = await aja('node', [malliton, nimi, '--kohde', 'claude', ...(suljettavat.length ? ['--suljettavat', suljettavat.map((i) => i.id).join(',')] : [])]);
+    const r = await aja('node', [malliton, nimi, '--kohde', (malli?.startsWith(AGY_MALLI) || malli?.startsWith(MAC_AGY_MALLI)) ? 'neutraali' : 'claude', ...(suljettavat.length ? ['--suljettavat', suljettavat.map((i) => i.id).join(',')] : [])]);
     if (r.koodi !== 0 && r.koodi !== 4) {
       throw new Hylatty(500, (r.stderr.trim().split('\n').filter(Boolean).pop() ?? `pura-malliton exit ${r.koodi}`).slice(0, 300));
     }
     const tiedosto = join(homedir(), '.local/state/pura', `${mallitonSlug(nimi)}.md`);
+    if (malli?.startsWith(MAC_AGY_MALLI) && process.platform !== 'darwin') {
+      const json = join(homedir(), '.local/state/pura', `${mallitonSlug(nimi)}.json`);
+      await aja('scp', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', tiedosto, json, 'mac:~/.local/state/pura/']).catch(() => {});
+    }
+    const viestiTiedosto = malli?.startsWith(MAC_AGY_MALLI) ? `~/.local/state/pura/${mallitonSlug(nimi)}.md` : tiedosto;
     for (const i of suljettavat) { await tarkistaRuutu(i); await kirjoita(i, '/exit'); }
-    const tulos = await avaaIstunto(nimi, `Malliton purku: lue ${tiedosto} ja noudata sitä.`, malli);
-    return { ...tulos, suljettiin: suljettavat.map((i) => i.id), tiedosto, ...(malli ? { malli } : {}), ...(r.koodi === 4 ? { varoitus: true } : {}) };
+    const tulos = await avaaIstunto(nimi, `Malliton purku: lue ${viestiTiedosto} ja noudata sitä.`, malli);
+    return { ...tulos, suljettiin: suljettavat.map((i) => i.id), tiedosto: viestiTiedosto, ...(malli ? { malli } : {}), ...(r.koodi === 4 ? { varoitus: true } : {}) };
+  }
+
+  // Uusi skooppi agy-istunnolla (AGY-PRE-ISTUNTO): /pura uusi on Clauden taito, joten vaiheet 0 (luonti, asennus, commit) tehdään
+  // tässä samoin kuin taito ne tekisi, ja autovaihto.sh avaa agy-istunnon neutraalilla purkutiedostolla. Vain scopes-perhe.
+  async function uusiAgy(nimi, malli) {
+    if (!nimi.startsWith('scopes ')) throw new Hylatty(400, 'agy-istunto kuuluu vain scopes-perheen skoopeille: nimi alkaa sanalla scopes');
+    const luonti = await aja('node', [join(asetukset.juuri, 'claude/siirto/tools/luo-skooppi.mjs'), nimi], { cwd: asetukset.juuri });
+    if (luonti.koodi !== 0 && luonti.koodi !== 4) {
+      throw new Hylatty(500, (luonti.stderr.trim().split('\n').filter(Boolean).pop() ?? `luo-skooppi exit ${luonti.koodi}`).slice(0, 300));
+    }
+    const polut = [...luonti.stdout.matchAll(/^KIRJOITETTU: (.+)$/gm)].map((m) => m[1]);
+    const asennus = await aja('bash', [join(asetukset.juuri, 'Infra/skills/install.sh')], { cwd: asetukset.juuri });
+    const git = (...a) => aja('git', a, { cwd: asetukset.juuri });
+    const lisays = await git('add', '--', ...polut);
+    const commit = lisays.koodi === 0 ? await git('commit', '-q', '-m', `feat(siirto): uusi skooppi ${nimi} (Scopes-äppi)`, '--', ...polut) : lisays;
+    if (commit.koodi !== 0) throw new Hylatty(500, `skooppi luotu, mutta commit epäonnistui: ${(commit.stderr.trim() || commit.stdout.trim()).slice(0, 240)}`);
+    const tulos = await avaaIstunto(nimi, null, malli);
+    return { ...tulos, malli, luotu: polut, ...(asennus.koodi !== 0 ? { varoitus: true } : {}), ...(luonti.koodi === 4 ? { varoitus: true } : {}) };
   }
 
   const toteutus = {
@@ -229,6 +278,10 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
       if (!Object.hasOwn(skoopit, nimi)) throw new Hylatty(404, 'tuntematon skooppi');
       const omat = skoopinIstunnot(nimi, skoopit);
       if (omat.some((i) => !i.pakattu)) throw new Hylatty(409, 'skoopissa on jo käynnissä oleva istunto');
+      const agyTmux = await agyRuudut(aja, nimi);
+      if (agyTmux.some((r) => !omat.some((i) => i.ruutu === r.ruutu && i.pakattu))) {
+        throw new Hylatty(409, 'skoopissa on jo käynnissä oleva agy-istunto');
+      }
       // Pakattu istunto suljetaan ennen uutta (käyttäjä 13.10.2026): äpissä skoopin keskustelu jatkuu samassa
       // näkymässä uudella istunnolla. Remote Control -istuntoa ilman ruutua ei voi sulkea; se jää piiloon.
       // Varattu estää myös ilman ruutua (SIIRTO-PURA-PAINIKE 14.10.2026): puhelimesta avattu istunto voi olla pakattu,
@@ -239,6 +292,7 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
       // Perhetunnistus on yksi kaikille reiteille (T6): 0 = scopes-perhe, 1 = ei; muu exit ei saa pudottaa perhettä mallireittiin.
       const p = await aja('node', [malliton, '--perhe', nimi]);
       if (p.koodi === 0) return puraMallitta(nimi, suljettavat, malli);
+      if ((malli?.startsWith(AGY_MALLI) || malli?.startsWith(MAC_AGY_MALLI)) && p.koodi === 1) throw new Hylatty(400, 'agy-istunto kuuluu vain scopes-perheen skoopeille');
       if (p.koodi !== 1) throw new Hylatty(500, (p.stderr.trim().split('\n').filter(Boolean).pop() ?? `pura-malliton --perhe exit ${p.koodi}`).slice(0, 300));
       for (const i of suljettavat) { await tarkistaRuutu(i); await kirjoita(i, '/exit'); }
       const tulos = await avaaIstunto(nimi, `/pura ${nimi}${ajaja ? ` --ajaja=${ajaja}` : ''}`, malli);
@@ -254,6 +308,7 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
       if (typeof nimi !== 'string' || !UUSI_NIMI.test(nimi)) throw new Hylatty(400, 'nimi: 1–4 sanaa pienaakkosia, numeroita tai viivoja');
       const skoopit = lueSkoopit(asetukset.juuri);
       if (skoopit[nimi]) throw new Hylatty(409, 'skooppi on jo olemassa');
+      if (malli?.startsWith(AGY_MALLI) || malli?.startsWith(MAC_AGY_MALLI)) return uusiAgy(nimi, malli);
       const tulos = await avaaIstunto(nimi, `/pura uusi ${nimi}${ajaja ? ` --ajaja=${ajaja}` : ''}`, malli);
       return { ...tulos, ...(ajaja ? { purkaja: ajaja } : {}), ...(malli ? { malli } : {}) };
     },
