@@ -23,7 +23,8 @@ function ymparisto({ tila = 'idle', tmux = 'siirto-a-1:@1.%5', skoopit = { a: ['
   writeFileSync(join(istunnotDir, `${process.pid}.json`), JSON.stringify({ pid: process.pid, sessionId: 's1', cwd: '/x', name: 'a', status: tila, tmux }));
   const projektitDir = join(d, 'projektit');
   mkdirSync(join(projektitDir, projektiNimi('/x')), { recursive: true });
-  return { juuri, istunnotDir, projektitDir, toimintoloki: join(d, 'loki/t.loki') };
+  // listPanes: tyhjä tmux-lista, jottei agy-haku kulje testin aja-väärennöksen kautta.
+  return { juuri, istunnotDir, projektitDir, toimintoloki: join(d, 'loki/t.loki'), listPanes: '' };
 }
 
 // Kirjaa kutsut; tmux display-message palauttaa oman pidin, autovaihto OK-rivin. perhe = `pura-malliton.mjs --perhe`:n
@@ -31,7 +32,7 @@ function ymparisto({ tila = 'idle', tmux = 'siirto-a-1:@1.%5', skoopit = { a: ['
 function vaarennos({ autovaihto = { koodi: 0, stdout: `UUSI: …\n${URL_OK}\n`, stderr: '' }, ruudunPid = process.pid, malliton = { koodi: 0, stdout: 'KIRJOITETTU: x\n', stderr: '' }, perhe = false } = {}) {
   const kutsut = [];
   const aja = async (komento, argumentit) => {
-    kutsut.push([komento, ...argumentit]);
+    if (komento !== 'tmux' || argumentit[0] !== 'list-panes') kutsut.push([komento, ...argumentit]);
     if (komento === 'tmux' && argumentit[0] === 'display-message') return { koodi: 0, stdout: `${ruudunPid}\n`, stderr: '' };
     if (komento === 'tmux') return { koodi: 0, stdout: '', stderr: '' };
     if (komento === 'node' && argumentit[1] === '--perhe') return typeof perhe === 'object' ? perhe : { koodi: perhe ? 0 : 1, stdout: `PERHE: ${perhe ? 'kyllä' : 'ei'}\n`, stderr: '' };
@@ -269,7 +270,8 @@ test('arkistoi: työkalun hylkäys (alaskooppeja) → 409 eikä committia', asyn
 test('yksi toiminto kerrallaan; jokainen yritys lokiin', async () => {
   const a = ymparisto();
   let vapauta;
-  const aja = (_k, argumentit) => argumentit[1] === '--perhe' ? Promise.resolve({ koodi: 1, stdout: '', stderr: '' })
+  const aja = (_k, argumentit) => _k === 'tmux' ? Promise.resolve({ koodi: 0, stdout: '', stderr: '' })
+    : argumentit[1] === '--perhe' ? Promise.resolve({ koodi: 1, stdout: '', stderr: '' })
     : new Promise((ok) => { vapauta = () => ok({ koodi: 0, stdout: URL_OK, stderr: '' }); });
   const suorita = luoToiminnot(a, { aja });
   const eka = suorita('pura', 'b');
@@ -376,6 +378,13 @@ test('pura: paikallisen mallin istunto palauttaa tmux-nimen osoitteen tilalla', 
   assert.deepEqual(v.kutsut.at(-1), ['bash', join(a.juuri, 'claude/siirto/tools/autovaihto.sh'), 'vaihda', 'b', '--ei-sulje', '--model', 'palvelin/qwen/qwen3-coder-30b', '--viesti', '/pura b']);
 });
 
+test('pura: mac-agy mallin istunto palauttaa tmux-nimen osoitteen tilalla', async () => {
+  const a = ymparisto({ skoopit: { 'scopes test': ['R.md'] } });
+  const v = vaarennos({ perhe: true, autovaihto: { koodi: 0, stdout: 'UUSI: …\nOK: mac-agy tmux siirto-scopes-test-120000\n', stderr: '' } });
+  const r = await luoToiminnot(a, { aja: v.aja })('pura', 'scopes test', { malli: 'mac-agy/gemini-3.8-flash-high' });
+  assert.deepEqual(r, { ok: true, toiminto: 'pura', nimi: 'scopes test', tmux: 'siirto-scopes-test-120000', suljettiin: [], tiedosto: '~/.local/state/pura/scopes-test.md', malli: 'mac-agy/gemini-3.8-flash-high' });
+});
+
 test('palvelin: POST-reitit vaativat avaimen ja ohjautuvat toimintoihin', async () => {
   const avain = 'k'.repeat(32);
   const kutsut = [];
@@ -415,4 +424,17 @@ test('palvelin: POST-reitit vaativat avaimen ja ohjautuvat toimintoihin', async 
     assert.deepEqual(valinnat, [{ ajaja: null, malli: null }, { ajaja: null, malli: null }, { ajaja: null, malli: null }, { ajaja: null, malli: 'claude-sonnet-5-5' },
       { ajaja: null, malli: 'claude-sonnet-5-5' }]);
   } finally { srv.close(); }
+});
+
+// ISTUNNOT-SUORITUSKYKY: istuntohaku on asynkroninen, joten päällekkäiset jonokierrokset eivät saa lähettää samaa komentoa kahdesti.
+test('jono: kaksi samanaikaista kierrosta lähettää jonossa olevan komennon kerran', async () => {
+  const a = ymparisto({ tila: 'busy' });
+  const v = vaarennos();
+  const suorita = luoToiminnot(a, { aja: v.aja, jonoVali: 0 });
+  assert.equal((await suorita('herata', 'a')).jonossa, true);
+  writeFileSync(join(a.istunnotDir, `${process.pid}.json`),
+    JSON.stringify({ pid: process.pid, sessionId: 's1', cwd: '/x', name: 'a', status: 'idle', tmux: 'siirto-a-1:@1.%5' }));
+  await Promise.all([suorita.puraJono(), suorita.puraJono()]);
+  assert.deepEqual(v.kutsut.filter((k) => k[1] === 'send-keys').map((k) => k.at(-1)), ['/sa', 'Enter']);
+  assert.deepEqual(suorita.jono('a'), []);
 });
