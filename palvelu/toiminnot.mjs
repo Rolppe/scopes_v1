@@ -66,7 +66,7 @@ export function ajaKomento(komento, argumentit, { aikaraja = 150_000, syote = nu
 export const istuntoOsoite = (stdout) => /^OK: (https:\/\/claude\.ai\/code\/session_[A-Za-z0-9]+)$/m.exec(stdout)?.[1] ?? null;
 // Paikallisen mallin istunnolla ei ole Remote Controlia (autovaihto.sh, 15.10.2026): OK-rivi nimeää tmux-istunnon.
 // Agy-istunto (AGY-PRE-ISTUNTO 16.10.2026) on samanlainen: tmux, ei Remote Controlia.
-export const paikallinenTmux = (stdout) => /^OK: (?:paikallinen|agy|mac-agy) tmux (siirto-[a-z0-9-]+)$/m.exec(stdout)?.[1] ?? null;
+export const paikallinenTmux = (stdout) => /^OK: (?:paikallinen|agy|mac-agy|nebius) tmux (siirto-[a-z0-9-]+)$/m.exec(stdout)?.[1] ?? null;
 export const MAC_AGY_MALLI = 'mac-agy/';
 // Istunnon malli `agy/<agy-mallin tunnus>` ajaa istunnon agy:llä (autovaihto.sh); agy ei aja Clauden /pura-taitoa, joten se
 // kuuluu vain scopes-perheelle, jonka purku on skripti (pura-malliton.mjs --kohde neutraali).

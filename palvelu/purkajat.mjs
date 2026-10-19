@@ -8,7 +8,8 @@
 //             istunto ei saa Remote Controlia, joten se näkyy vain äpin skoopin viesteissä.
 // Turvamalli (toiminnot.mjs): puhelin lähettää vain tunnuksen, jonka on oltava tämän listan jäsen; muu on 400.
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { ajaKomento, Hylatty } from './toiminnot.mjs';
 import { MALLIT, PAIKALLINEN } from './viestit.mjs';
@@ -23,7 +24,20 @@ export function agyMallit(stdout) {
     .map(([id, nimi]) => ({ id, nimi: nimi.trim() }));
 }
 
-export function luoPurkajat({ juuri, paikalliset = async () => [], aja = ajaKomento, nyt = Date.now } = {}) {
+// Nebius Token Factory -istuntomallit (autovaihto.sh --model nebius/<id>, nebius-valitys.mjs; käyttäjä 18.10.2026). Valikoitu
+// lista Nebiuksen /v1/models-listasta (28 mallia 18.10.2026): Claude Code -agenttitesti piilotesteineen 14/14 läpi, järjestys
+// hinta-laatusuhteen mukaan (NEBIUS-MALLIT 18.10.2026). Pois: Qwen3-30B ja Qwen3.8-27B (jumiutuivat), Qwen3-235B ja Gemma 3.
+// Näkyy vain, kun avain on annettu (äpin Asetukset → Nebius).
+export const NEBIUS_MALLI = 'nebius/';
+export const NEBIUS_MALLIT = [
+  { id: 'deepseek-ai/DeepSeek-V4-Flash-0731', kuvaus: 'DeepSeek V4 Flash · Nebius (edullisin)' },
+  { id: 'deepseek-ai/DeepSeek-V4.1-Flash', kuvaus: 'DeepSeek V4.1 Flash · Nebius' },
+  { id: 'MiniMaxAI/MiniMax-M3', kuvaus: 'MiniMax M3 · Nebius' },
+  { id: 'moonshotai/Kimi-K2.7-Code', kuvaus: 'Kimi K2.7 Code · Nebius' },
+  { id: 'deepseek-ai/DeepSeek-V4-Pro-0813', kuvaus: 'DeepSeek V4 Pro · Nebius (vaativa)' },
+];
+
+export function luoPurkajat({ juuri, paikalliset = async () => [], aja = ajaKomento, nyt = Date.now, nebiusTiedosto = join(homedir(), '.config/scopes/nebius-avain') } = {}) {
   // Vanhentunut agy-lista palautetaan heti ja päivitetään taustalla; vain ensimmäinen haku odottaa. Kylmä välimuisti
   // odotutti koko listaa, myös istunnon malleja, joihin agy ei kuulu (käyttäjä 15.10.2026: "Näkyy mutta tuli viiveellä";
   // pyyntöloki 14:05Z /api/purkajat 6 538 ms, lämpimänä 0–3 ms).
@@ -59,7 +73,8 @@ export function luoPurkajat({ juuri, paikalliset = async () => [], aja = ajaKome
       ...lms.map((m) => ({ tunnus: `paikallinen:${m.nimi.slice(PAIKALLINEN.length)}`, kuvaus: m.kuvaus, ryhma: 'Paikalliset' })),
     ];
     const mallit = [...MALLIT.map(({ nimi, kuvaus }) => ({ nimi, kuvaus, ryhma: 'Claude' })),
-      ...lms.map(({ nimi, kuvaus }) => ({ nimi, kuvaus, ryhma: 'Paikalliset' }))];
+      ...lms.map(({ nimi, kuvaus }) => ({ nimi, kuvaus, ryhma: 'Paikalliset' })),
+      ...(existsSync(nebiusTiedosto) ? NEBIUS_MALLIT.map((m) => ({ nimi: `${NEBIUS_MALLI}${m.id}`, kuvaus: m.kuvaus, ryhma: 'Nebius' })) : [])];
     return { purkajat, mallit, oletusMalli: 'claude-opus-5-5' };
   }
 

@@ -57,6 +57,8 @@
 //   GET /api/android/tuotos?polku=    tiedoston tavut (kopio palvelimelle ~/.local/state/scopes-android/laitteelta/)
 //   GET /api/wg-asetus                äpin oman WireGuard-tunnelin asetus { asetus } (SCOPES-ETAYHTEYS 14.10.2026);
 //            äppi hakee sen kotiverkossa ja käyttää sitä kodin ulkopuolella. 404, jos tiedostoa ei ole.
+//   GET /api/nebius-avain             Nebius Token Factory -avaimen tila { asetettu, merkkeja }; avainta ei palauteta (nebius-avain.mjs)
+//   POST /api/nebius-avain {"avain"}  tallentaa avaimen palvelimen tiedostoon (600) → { asetettu, merkkeja }
 //
 // Ympäristö: SCOPES_JUURI (projektijuuri; oletus kaksi hakemistoa tämän tiedoston yläpuolella),
 // SCOPES_OSOITE (oletus 127.0.0.1), SCOPES_PORTTI (oletus 8787), CLAUDE_ISTUNNOT_DIR, CLAUDE_PROJEKTIT_DIR,
@@ -81,6 +83,7 @@ import { luoKayttoraja } from './kayttoraja.mjs';
 import { luoAgyKayttoraja } from './agy-kayttoraja.mjs';
 import { lista, lueSkoopit, rekisterinOsat, rekisterit, yksi } from './lahteet.mjs';
 import { luoLiitteet } from './liitteet.mjs';
+import { luoNebiusAvain } from './nebius-avain.mjs';
 import { luoAndroid } from './android.mjs';
 import { luoLinuxServer } from './palvelin.mjs';
 import { luoAsetukset, OLETUS_HAKEMISTO } from './toiminnot-asetukset.mjs';
@@ -101,6 +104,7 @@ export function asetuksetYmparistosta(env = process.env) {
     projektitDir: env.CLAUDE_PROJEKTIT_DIR ?? join(homedir(), '.claude/projects'),
     avainTiedosto: env.SCOPES_AVAIN_TIEDOSTO ?? join(homedir(), '.config/scopes/avain'),
     wgTiedosto: env.SCOPES_WG_TIEDOSTO ?? join(homedir(), '.config/scopes/wg.conf'),
+    nebiusTiedosto: env.SCOPES_NEBIUS_TIEDOSTO ?? join(homedir(), '.config/scopes/nebius-avain'),
     toimintoloki: env.SCOPES_TOIMINTOLOKI ?? join(homedir(), '.local/state/scopes-toiminnot.loki'),
     chatDir: env.SCOPES_CHAT_DIR ?? join(homedir(), '.local/state/scopes-chat'),
     liitteetDir: env.SCOPES_LIITTEET_DIR ?? join(homedir(), '.local/state/scopes-liitteet'),
@@ -140,6 +144,7 @@ function runko(req, raja = 1024) {
 
 export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset, { android: () => android }), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), purkajat = luoPurkajat({ juuri: asetukset.juuri, paikalliset: () => viestit.agentit() }), linux = luoLinuxServer({ loki: asetukset.toimintoloki, kuiva: asetukset.linuxKuiva === true }), android = luoAndroid({ loki: asetukset.toimintoloki, kuiva: asetukset.androidKuiva === true, ...(asetukset.androidLaite && { laite: asetukset.androidLaite }), ...(asetukset.androidDir && { tuotoksetDir: asetukset.androidDir }) }), agyKayttoraja = luoAgyKayttoraja()) {
   const istuntoValinta = luoIstuntoValinta(asetukset);
+  const nebius = luoNebiusAvain({ tiedosto: asetukset.nebiusTiedosto ?? join(homedir(), '.config/scopes/nebius-avain') });
   // Chat suoratoistona (DEMO-SCOPES-SUORATOISTO): NDJSON-rivit {tyyppi: 'pala', teksti} …, lopuksi
   // {tyyppi: 'valmis', vastaus, keskustelu, …} tai {tyyppi: 'virhe', virhe}. Hylkäys ennen agentin käynnistystä
   // palaa tavallisena virhekoodina. Yhteyden katketessa (puhelimen näyttölukko, äpin vaihto) agentti jatkaa, ja
@@ -217,6 +222,7 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         if (polku === '/api/android/liite') return vastaa(200, await android.liita((await liitteet('android', url.searchParams.get('nimi'), req)).polku, url.searchParams.get('teksti')));
         const an = polku.match(/^\/api\/android\/([a-z]+)$/);
         if (an) return vastaa(200, await android.suorita(an[1], await runko(req, 32_768)));
+        if (polku === '/api/nebius-avain') return vastaa(200, nebius.tallenna((await runko(req)).avain));
         if (polku === '/api/uusi') { const r = await runko(req); return vastaa(200, await suorita('uusi', r.nimi, await purkajat.tarkista(r))); }
         if (polku === '/api/chat') return vastaa(200, await viestit.chat(await runko(req, 32_768)));
         if (polku === '/api/chat/virta') return await virtaa(res, await runko(req, 32_768));
@@ -276,6 +282,7 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         return vastaa(200, await kayttoraja());
       }
       // Luetaan joka pyynnöllä: avaimen vaihto ei vaadi palvelun uudelleenkäynnistystä.
+      if (polku === '/api/nebius-avain') return vastaa(200, nebius.tila());
       if (polku === '/api/wg-asetus') {
         try { return vastaa(200, { asetus: readFileSync(asetukset.wgTiedosto, 'utf8') }); } catch { return vastaa(404, { virhe: 'tunnelin asetusta ei ole' }); }
       }

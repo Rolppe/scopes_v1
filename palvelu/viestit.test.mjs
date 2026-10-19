@@ -35,7 +35,7 @@ function ymparisto({ tmux = 'siirto-a-1:@1.%5' } = {}) {
   mkdirSync(join(projektitDir, projektiNimi('/x')), { recursive: true });
   writeFileSync(join(projektitDir, projektiNimi('/x'), 's1.jsonl'), TRANSKRIPTI);
   // listPanes: tyhjä tmux-lista, jottei agy-haku kulje testin aja-väärennöksen kautta; agy-testit antavat omansa.
-  return { juuri, istunnotDir, projektitDir, chatDir: join(d, 'chat'), listPanes: '' };
+  return { juuri, istunnotDir, projektitDir, chatDir: join(d, 'chat'), listPanes: '', nebiusTiedosto: join(d, 'ei-nebius-avainta') };
 }
 
 // claude -p --output-format stream-json: tekstin palat stream_event-riveinä, lopuksi result-rivi.
@@ -780,4 +780,33 @@ test('skoopinViestit: agy-ruudut haetaan aja-ajajalla', async () => {
   const res = await luoViestit(a, { aja }).skoopinViestit('b');
   assert.deepEqual([res.auki, res.istunto.id, res.istunto.tyyppi, res.istunto.tila], [true, 'siirto-b-120000', 'agy', 'idle']);
   assert.deepEqual(kutsut, [['tmux', 'list-panes'], ['tmux', 'capture-pane']]);
+});
+
+// Nebius-chat (käyttäjä 18.10.2026): avain stdinin ensimmäisellä rivillä palvelimen kautta, SSE-palat ja kustannus käytöstä.
+test('chat: Nebius-malli palvelimen kautta, avain stdinissä, kustannus käytöstä', async () => {
+  const a = ymparisto();
+  a.nebiusTiedosto = join(a.juuri, 'nebius-avain');
+  writeFileSync(a.nebiusTiedosto, 'koeavain-nebius-1\n');
+  const kutsut = [];
+  const aja = async (komento, argumentit, valinnat = {}) => {
+    if (valinnat.syote == null) return { koodi: 0, stdout: '{"data":[]}', stderr: '' }; // LM Studion mallilista
+    kutsut.push({ komento, argumentit, syote: valinnat.syote });
+    for (const r of ['data: {"choices":[{"delta":{"content":"Hei"}}]}', 'data: {"choices":[{"delta":{"content":"!"}}]}',
+      'data: {"choices":[],"usage":{"prompt_tokens":1000000,"completion_tokens":1000000}}', 'data: [DONE]']) valinnat.riville?.(r);
+    return { koodi: 0, stdout: '', stderr: '' };
+  };
+  const v = luoViestit(a, { aja });
+  assert.ok((await v.agentit()).some((m) => m.nimi === 'nebius/deepseek-ai/DeepSeek-V4-Flash-0731' && m.tyyppi === 'nebius'));
+  const r = await v.chat({ agentti: 'nebius/deepseek-ai/DeepSeek-V4-Flash-0731', viesti: 'moi' });
+  assert.equal(r.vastaus, 'Hei!');
+  assert.ok(Math.abs(r.kustannus - 0.42) < 1e-9, `kustannus ${r.kustannus}`);
+  const [k] = kutsut;
+  assert.equal(k.komento, 'ssh');
+  assert.ok(!k.argumentit.join(' ').includes('koeavain-nebius-1'), 'avain ei saa näkyä komentorivillä');
+  const [avain, runko] = k.syote.split('\n');
+  assert.equal(avain, 'koeavain-nebius-1');
+  assert.equal(JSON.parse(runko).model, 'deepseek-ai/DeepSeek-V4-Flash-0731');
+  const jatko = await v.chat({ agentti: 'nebius/deepseek-ai/DeepSeek-V4-Flash-0731', viesti: 'entä nyt', keskustelu: r.keskustelu });
+  assert.deepEqual(JSON.parse(kutsut[1].syote.split('\n')[1]).messages.map((m) => m.role), ['user', 'assistant', 'user']);
+  assert.equal(jatko.keskustelu, r.keskustelu);
 });

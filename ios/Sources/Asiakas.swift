@@ -84,6 +84,14 @@ struct Asiakas {
         try await hae("/api/asetukset/\(kytkin.rawValue)/\(paalle ? "paalle" : "pois")", metodi: "POST")
     }
 
+    // Nebius Token Factory -avain (palvelu/nebius-avain.mjs, käyttäjä 18.10.2026): palvelu kertoo vain, onko avain annettu;
+    // vanha palvelu ilman reittiä vastaa 404, jolloin näkymä kertoo palvelun olevan vanha.
+    func nebiusAvain() async throws -> NebiusAvainTila { try await hae("/api/nebius-avain") }
+
+    func tallennaNebiusAvain(_ avain: String) async throws -> NebiusAvainTila {
+        try await hae("/api/nebius-avain", metodi: "POST", runko: try JSONEncoder().encode(["avain": avain]))
+    }
+
     // Keskustelukohtaiset kytkimet (scopes infra setting 16.10.2026): palvelu valitsee skoopin ainoan avoimen istunnon;
     // vanha palvelu vastaa 404, jolloin näkymä palaa yhteisiin kytkimiin.
     func pakkausKytkimet(skooppi: String) async throws -> PakkausKytkimet { try await hae("/api/skoopit/\(koodattu(skooppi))/asetukset") }
