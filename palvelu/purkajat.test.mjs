@@ -9,14 +9,16 @@ import { Hylatty } from './toiminnot.mjs';
 
 const AGY = 'Fetching available models...\ngemini-3.8-flash-medium\tGemini 3.8 Flash (Medium)\ngpt-oss-120b-medium\tGPT-OSS 120B (Medium)\n';
 
-function purkajat({ agy = { koodi: 0, stdout: AGY, stderr: '' }, lms = [{ nimi: 'palvelin/qwen/qwen3.6-35b-a3b', kuvaus: 'Qwen3.6 35B A3B', tyyppi: 'paikallinen' }], aja: ajaKorvaava, nyt } = {}) {
+function purkajat({ agy = { koodi: 0, stdout: AGY, stderr: '' }, lms = [{ nimi: 'palvelin/qwen/qwen3.6-35b-a3b', kuvaus: 'Qwen3.6 35B A3B', tyyppi: 'paikallinen' }], aja: ajaKorvaava, nyt, nebius = false } = {}) {
   const juuri = mkdtempSync(join(tmpdir(), 'purkajat-'));
   mkdirSync(join(juuri, 'claude/siirto'), { recursive: true });
   writeFileSync(join(juuri, 'claude/siirto/ajaja.json'), JSON.stringify({ pura: { moottori: 'claude-cli', malli: 'claude-haiku-5-5' } }));
   const kutsut = [];
   const aja = async (k, a) => { kutsut.push([k, ...a]); return ajaKorvaava ? ajaKorvaava() : agy; };
   const paikalliset = async () => [{ nimi: 'claude-opus-5-5', kuvaus: 'Opus 5.5', tyyppi: 'malli' }, ...lms];
-  return { p: luoPurkajat({ juuri, paikalliset, aja, ...(nyt && { nyt }) }), kutsut };
+  const nebiusTiedosto = join(juuri, 'nebius-avain');
+  if (nebius) writeFileSync(nebiusTiedosto, 'koeavain-123456');
+  return { p: luoPurkajat({ juuri, paikalliset, aja, nebiusTiedosto, ...(nyt && { nyt }) }), kutsut };
 }
 
 test('agyMallit: otsikkorivi pois, tunnus ja nimi talteen', () => {
@@ -74,4 +76,14 @@ test('tarkista: vain listan jäsenet, tyhjä = oletus', async () => {
   await hylkaa({ malli: 'palvelin/muu' });
   await hylkaa({ malli: 'gpt-4' });
   await hylkaa({ malli: 5 });
+});
+
+// Nebius-mallit (käyttäjä 18.10.2026): näkyvät vain avaimen kanssa, ja tarkistus hyväksyy ne istunnon malliksi.
+test('lista: Nebius-ryhmä vain, kun avain on annettu', async () => {
+  const ilman = await purkajat().p.lista();
+  assert.equal(ilman.mallit.some((m) => m.ryhma === 'Nebius'), false);
+  const { p } = purkajat({ nebius: true });
+  const l = await p.lista();
+  assert.ok(l.mallit.some((m) => m.ryhma === 'Nebius' && m.nimi === 'nebius/deepseek-ai/DeepSeek-V4.1-Flash'));
+  assert.deepEqual(await p.tarkista({ malli: 'nebius/deepseek-ai/DeepSeek-V4.1-Flash' }), { ajaja: null, malli: 'nebius/deepseek-ai/DeepSeek-V4.1-Flash' });
 });

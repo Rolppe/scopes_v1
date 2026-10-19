@@ -394,6 +394,10 @@ struct AsetuksetView: View {
                     Label("Ilmoitukset", systemImage: "bell.badge")
                 }
                 .accessibilityIdentifier("asetukset-ilmoitukset")
+                NavigationLink { NebiusAsetukset() } label: {
+                    Label("Nebius", systemImage: "key")
+                }
+                .accessibilityIdentifier("asetukset-nebius")
                 NavigationLink { TietojaAsetukset() } label: {
                     Label("Tietoja", systemImage: "info.circle")
                 }
@@ -424,6 +428,54 @@ struct AsetuksetView: View {
                 sulje()
             }
         }
+    }
+}
+
+// Nebius Token Factory -avain palvelimelle (käyttäjä 18.10.2026: "Tee äppiin syöttökenttä"). Avain kulkee vain palvelimelle
+// eikä jää äppiin: kenttä tyhjenee tallennuksen jälkeen, ja tila kertoo palvelimen tiedoston pituuden.
+struct NebiusAsetukset: View {
+    @EnvironmentObject private var asetukset: Asetukset
+    @State private var syote = ""
+    @State private var tila: NebiusAvainTila?
+    @State private var virhe: String?
+    @State private var tallentaa = false
+
+    var body: some View {
+        Form {
+            Section {
+                SecureField("Nebius API key", text: $syote)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .accessibilityIdentifier("nebius-kentta")
+                Button(tallentaa ? "Tallennetaan…" : "Tallenna palvelimelle") { Task { await tallenna() } }
+                    .disabled(tallentaa || syote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .accessibilityIdentifier("nebius-tallenna")
+            } header: { Text("Nebius Token Factory") } footer: {
+                Text(tilaTeksti).accessibilityIdentifier("nebius-tila")
+            }
+        }
+        .navigationTitle("Nebius")
+        .task {
+            do { tila = try await asiakas.nebiusAvain() } catch { virhe = "Tilaa ei saatu palvelulta: \(error.localizedDescription)" }
+        }
+    }
+
+    private var asiakas: Asiakas { Asiakas(osoite: asetukset.osoite, avain: asetukset.avain) }
+
+    private var tilaTeksti: String {
+        if let virhe { return virhe }
+        guard let tila else { return "Haetaan tilaa…" }
+        let alku = tila.asetettu ? "Avain on palvelimella (\(tila.merkkeja) merkkiä)." : "Avainta ei ole annettu."
+        return "\(alku) Tallennetaan palvelimen tiedostoon ~/.config/scopes/nebius-avain (vain omistaja voi lukea). Uusi avain korvaa vanhan."
+    }
+
+    private func tallenna() async {
+        tallentaa = true
+        defer { tallentaa = false }
+        do {
+            tila = try await asiakas.tallennaNebiusAvain(syote.trimmingCharacters(in: .whitespacesAndNewlines))
+            syote = ""
+            virhe = nil
+        } catch { virhe = "Avain ei tallentunut: \(error.localizedDescription)" }
     }
 }
 

@@ -10,6 +10,7 @@
 import { randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
+import { homedir } from 'node:os';
 import { agyRuudut, agyViestit, haeMacAgyKeskustelu, jasennaAgyRuutu, loydaKeskustelu, ruudunTila, tyhjennaMacAgyValimuisti } from './agy-istunto.mjs';
 import { istunnotAsync, lueSkoopit, projektiNimi, pysahdys } from './lahteet.mjs';
 import { ajaKomento, Hylatty, mallitonSlug } from './toiminnot.mjs';
@@ -20,6 +21,18 @@ export const MALLIT = [
   { nimi: 'claude-sonnet-5-5', kuvaus: 'Sonnet 5.5', tyyppi: 'malli' },
   { nimi: 'claude-haiku-5-5', kuvaus: 'Haiku 5.5', tyyppi: 'malli' },
 ];
+// Nebius Token Factory -chat (käyttäjä 18.10.2026: "parhaat mallit ... eri tehtäviin ... asenna ne äppiin"). Kutsu kulkee
+// palvelimen kautta (OnePlus ei saa yhteyttä Nebiukseen), avain stdinissä eikä komentorivillä. Ei Claude Codea välissä,
+// joten viesti maksaa vain omat tokeninsa. Valinta ja hinnat ($/M syöte, tuloste) mittauksesta 18.10.2026 (NEBIUS-MALLIT).
+export const NEBIUS = 'nebius/';
+export const NEBIUS_CHAT_MALLIT = [
+  { nimi: 'nebius/deepseek-ai/DeepSeek-V4-Flash-0731', kuvaus: 'DeepSeek V4 Flash · Nebius', tyyppi: 'nebius', hinta: [0.14, 0.28] },
+  { nimi: 'nebius/Qwen/Qwen3-30B-A3B-Instruct-2507', kuvaus: 'Qwen3 30B (nopea) · Nebius', tyyppi: 'nebius', hinta: [0.10, 0.30] },
+  { nimi: 'nebius/deepseek-ai/DeepSeek-V4.1-Flash', kuvaus: 'DeepSeek V4.1 Flash · Nebius', tyyppi: 'nebius', hinta: [0.30, 1.20] },
+];
+// Reitti Nebiukseen: palvelin, sen ollessa pois Mac (kumpikin pääsee Nebiukseen, OnePlus ei; 19.10.2026).
+const NEBIUS_REITIT = ['palvelin', 'mac'];
+const NEBIUS_CHAT = 'read -r K; curl -sN -m 300 -H "Authorization: Bearer $K" -H \'Content-Type: application/json\' --data-binary @- https://api.tokenfactory.nebius.com/v1/chat/completions';
 export const VIESTIN_MAKSIMI = 8000;
 // Istunnon effort-tasot (/effort); sama joukko kuin claude/siirto/tools/autovaihto.sh:ssa.
 export const EFFORTIT = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -391,7 +404,9 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
     paikalliset = { aika: Date.now(), mallit: t.koodi === 0 ? paikallisetMallit(t.stdout) : [] };
     return paikalliset.mallit;
   }
-  const kaikkiMallit = async () => [...MALLIT, ...(android ? [GEMINI_AGENTTI] : []), ...await haePaikalliset()];
+  const nebiusAvain = () => asetukset.nebiusTiedosto ?? join(homedir(), '.config/scopes/nebius-avain');
+  const nebiusMallit = () => (existsSync(nebiusAvain()) ? NEBIUS_CHAT_MALLIT : []);
+  const kaikkiMallit = async () => [...MALLIT, ...(android ? [GEMINI_AGENTTI] : []), ...await haePaikalliset(), ...nebiusMallit()];
 
   // Paikallisen mallin keskustelu talletetaan itse (LM Studio ei pidä historiaa): chatDir/paikalliset/<uuid>.json.
   // Samaan kansioon menevät Gemini-keskustelut, koska Geminin oma historia on joka kysymykselle eri chat.
@@ -433,6 +448,47 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
     mkdirSync(paikallisetDir(), { recursive: true });
     writeFileSync(join(paikallisetDir(), `${id}.json`), JSON.stringify(k));
     return { vastaus, keskustelu: id, agentti: valittu.nimi, kustannus: 0, ...(pysaytetty() ? { keskeytetty: true } : {}) };
+  }
+
+  async function nebiusChat(valittu, viesti, jatko, { pala, alku, signal, pysaytetty }) {
+    const k = jatko ? luePaikallinen(jatko) : { agentti: valittu.nimi, viestit: [] };
+    if (!k) throw new Hylatty(404, 'tuntematon keskustelu');
+    if (k.agentti !== valittu.nimi) throw new Hylatty(409, 'keskustelu kuuluu toiselle mallille');
+    let avain;
+    try { avain = readFileSync(nebiusAvain(), 'utf8').trim(); } catch { throw new Hylatty(409, 'Nebius-avain puuttuu (Asetukset → Nebius)'); }
+    k.viestit.push({ rooli: 'kayttaja', teksti: viesti, aika: new Date().toISOString() });
+    const runko = JSON.stringify({ model: valittu.nimi.slice(NEBIUS.length), stream: true, stream_options: { include_usage: true }, max_tokens: 8192,
+      messages: k.viestit.map((v) => ({ role: v.rooli === 'kayttaja' ? 'user' : 'assistant', content: v.teksti })) });
+    alku?.();
+    let vastaus = '';
+    let syy = null;
+    let kaytto = null;
+    // SSE-rivit kuten paikallisella mallilla; ajattelu (reasoning_content) jää pois, käyttö kustannusta varten.
+    const riville = (r) => {
+      let e;
+      try { e = JSON.parse(r.replace(/^data: /, '')); } catch { return; }
+      if (e.detail || e.error) syy = e.error?.message ?? String(e.detail ?? e.error);
+      if (e.usage) kaytto = e.usage;
+      const d = e.choices?.[0]?.delta?.content;
+      if (d) { vastaus += d; pala?.(d); }
+    };
+    // ssh:n koodi 255 = yhteys ei auennut, jolloin kokeillaan seuraavaa reittiä; muu virhe on Nebiuksen vastaus.
+    let t = null;
+    for (const kone of NEBIUS_REITIT) {
+      if (pysaytetty()) break;
+      t = await aja('ssh', ['-o', 'ConnectTimeout=3', '-o', 'BatchMode=yes', kone, NEBIUS_CHAT], { syote: `${avain}\n${runko}`, aikaraja: 300_000, riville, signal, puskuri: 32 << 20 });
+      if (t.koodi !== 255) break;
+    }
+    if (!pysaytetty() && (t.koodi !== 0 || !vastaus)) {
+      throw new Hylatty(502, `Nebius ei vastannut: ${(syy ?? t.stderr.trim().split('\n').filter(Boolean).pop() ?? `ssh exit ${t.koodi}`).slice(0, 300)}`);
+    }
+    vastaus = vastaus.trim();
+    if (vastaus) k.viestit.push({ rooli: 'agentti', teksti: vastaus, aika: new Date().toISOString() });
+    const id = jatko ?? randomUUID();
+    mkdirSync(paikallisetDir(), { recursive: true });
+    writeFileSync(join(paikallisetDir(), `${id}.json`), JSON.stringify(k));
+    const kustannus = kaytto ? (kaytto.prompt_tokens * valittu.hinta[0] + kaytto.completion_tokens * valittu.hinta[1]) / 1e6 : null;
+    return { vastaus, keskustelu: id, agentti: valittu.nimi, kustannus, ...(pysaytetty() ? { keskeytetty: true } : {}) };
   }
 
   async function geminiChat(valittu, viesti, jatko, { pala, alku, pysaytetty }) {
@@ -504,6 +560,7 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
     // `signal` katkaisee ajon, kun puhelin sulkee yhteyden.
     async chat({ agentti, viesti, keskustelu: jatko } = {}, { pala, alku, signal } = {}) {
       const valittu = MALLIT.find((a) => a.nimi === agentti)
+        ?? nebiusMallit().find((a) => a.nimi === agentti)
         ?? (android && agentti === GEMINI_AGENTTI.nimi ? GEMINI_AGENTTI : undefined)
         ?? (typeof agentti === 'string' && agentti.startsWith(PAIKALLINEN) ? (await haePaikalliset()).find((a) => a.nimi === agentti) : undefined);
       if (!valittu) throw new Hylatty(400, 'tuntematon agentti');
@@ -516,6 +573,7 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
       const pysaytetty = () => pysaytin.signal.aborted;
       signal = signal ? AbortSignal.any([signal, pysaytin.signal]) : pysaytin.signal;
       try {
+        if (valittu.tyyppi === 'nebius') return await nebiusChat(valittu, viesti, jatko, { pala, alku, signal, pysaytetty });
         if (valittu.tyyppi === 'paikallinen') return await paikallinenChat(valittu, viesti, jatko, { pala, alku, signal, pysaytetty });
         if (valittu.tyyppi === 'gemini') return await geminiChat(valittu, viesti, jatko, { pala, alku, pysaytetty });
         mkdirSync(asetukset.chatDir, { recursive: true });

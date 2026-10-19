@@ -396,3 +396,9 @@ func isoPaiva(_ iso: String?) -> Date? {
 
 // 228100 → "228 k"
 func tokenit(_ n: Int) -> String { n >= 1000 ? "\(n / 1000) k" : "\(n)" }
+
+// Nebius-avaimen tila (GET/POST /api/nebius-avain): itse avainta palvelu ei palauta.
+struct NebiusAvainTila: Decodable {
+    let asetettu: Bool
+    let merkkeja: Int
+}
