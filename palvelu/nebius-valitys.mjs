@@ -6,11 +6,15 @@
 // `ssh <kone> curl` -komennolla NEBIUS_REITIT-koneilla järjestyksessä (oletus palvelin, sitten Mac; avain stdinissä).
 // ssh-tunneli (-L) ei käy: Macin palomuuri päästää curlin mutta ei sshd:n omaa yhteyttä Nebiukseen (19.10.2026).
 // NEBIUS_YLAVIRTA (https://…) ohittaa reitit ja kutsuu suoraan; TLS tarkistetaan Nebiuksen nimellä myös 127.0.0.1:n kautta.
+// Kustannuskatto (V-557: mittaus ilman kattoa kulutti ~7,10 $): ennen jokaista kutsua lasketaan päivän (paikallinen pvm) ja
+// istunnon kulutus tokenilokista Nebiuksen omilla hinnoilla (/v1/models?verbose=true, pricing $/token). Jos kulutus + kutsun
+// pahin arvio (syöte merkkeinä/3 + max_tokens tuotoksena) ylittää katon, kutsu katkaistaan virheeseen eikä Nebiusta kutsuta.
+// Tuntematon hinta tai lukukelvoton katto = ei kutsua. Katto: NEBIUS_KATTO_TIEDOSTO (JSON { istunto, paiva } dollareina).
 //   node nebius-valitys.mjs     NEBIUS_PORTTI (oletus 11240), NEBIUS_REITIT (oletus palvelin,mac), NEBIUS_YLAVIRTA,
-//                               NEBIUS_AVAIN_TIEDOSTO, NEBIUS_LOKI (pyyntöjen tokenit, ei sisältöä)
+//                               NEBIUS_AVAIN_TIEDOSTO, NEBIUS_LOKI (pyyntöjen tokenit, ei sisältöä), NEBIUS_KATTO_TIEDOSTO
 
 import { spawn } from 'node:child_process';
-import { appendFileSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { request as httpsPyynto } from 'node:https';
 import { request as httpPyynto } from 'node:http';
@@ -19,6 +23,55 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const NEBIUS_NIMI = 'api.tokenfactory.nebius.com';
+export const KATTO_OLETUS = { istunto: 0.5, paiva: 2 };
+const HINNAT_MS = 3_600_000;
+
+// /v1/models?verbose=true → Map(malli → { syote, tuotos }) $/token; mallit ilman hintaa pois.
+export function hinnasto(lista) {
+  const h = new Map();
+  for (const m of lista?.data ?? []) {
+    const syote = Number(m.pricing?.prompt), tuotos = Number(m.pricing?.completion);
+    if (m.id && Number.isFinite(syote) && Number.isFinite(tuotos) && m.pricing?.prompt != null) h.set(m.id, { syote, tuotos });
+  }
+  return h;
+}
+
+export const kustannus = (hinta, k) => (k.input_tokens ?? 0) * hinta.syote + (k.output_tokens ?? 0) * hinta.tuotos;
+export const paivays = (aika) => new Date(aika).toLocaleDateString('sv');
+
+// Tokenilokin kulutus annetulle päivälle ja istunnolle. Vanhat rivit ilman kustannus-kenttää hinnoitellaan mallin mukaan.
+export function kulutus(lokiTeksti, { paiva, istunto, hinnat }) {
+  const tulos = { paiva: 0, istunto: 0 };
+  for (const r of String(lokiTeksti ?? '').split('\n')) {
+    let o;
+    try { o = JSON.parse(r); } catch { continue; }
+    const hinta = hinnat.get(o.malli);
+    const k = o.kustannus ?? (hinta ? kustannus(hinta, o) : 0);
+    if (paivays(o.aika) === paiva) tulos.paiva += k;
+    if (istunto && o.istunto === istunto) tulos.istunto += k;
+  }
+  return tulos;
+}
+
+// Claude Coden istunto: X-Claude-Code-Session-Id-otsake, muuten metadata.user_id:n session_<uuid>.
+export function istuntoTunnus(otsakkeet, a) {
+  return otsakkeet['x-claude-code-session-id'] || /session_([0-9a-f-]+)/i.exec(a.metadata?.user_id ?? '')?.[1] || null;
+}
+
+// Kutsun pahin arvio: syöte merkkeinä/3 (tokeni on yleensä ≥ 3 merkkiä) ja koko max_tokens tuotoksena.
+export function pahinArvio(hinta, a) {
+  const merkit = JSON.stringify(a.system ?? '').length + JSON.stringify(a.messages ?? []).length + JSON.stringify(a.tools ?? []).length;
+  return kustannus(hinta, { input_tokens: Math.ceil(merkit / 3), output_tokens: a.max_tokens ?? 32_000 });
+}
+
+// null = saa kutsua; muuten syy, miksi kutsu katkaistaan.
+export function katonYlitys({ katto, kulunut, arvio, istunto }) {
+  const $ = (x) => `${x.toFixed(4)} $`;
+  if (!(katto?.paiva >= 0) || !(katto?.istunto >= 0)) return 'kustannuskatto puuttuu tai on virheellinen';
+  if (kulunut.paiva + arvio > katto.paiva) return `päivän katto ${$(katto.paiva)}: kulunut ${$(kulunut.paiva)} + kutsun arvio ${$(arvio)}`;
+  if (istunto && kulunut.istunto + arvio > katto.istunto) return `istunnon katto ${$(katto.istunto)}: kulunut ${$(kulunut.istunto)} + kutsun arvio ${$(arvio)}`;
+  return null;
+}
 
 // Anthropic-pyyntö → OpenAI chat/completions -runko.
 export function openaiRunko(a) {
@@ -140,9 +193,24 @@ function sshKutsu(reitit, polku, metodi, avain, data) {
   return yritys(0);
 }
 
-export function luoValitys({ ylavirta = null, reitit = ['palvelin', 'mac'], avainTiedosto, loki = null } = {}) {
+export function luoValitys({ ylavirta = null, reitit = ['palvelin', 'mac'], avainTiedosto, loki = null, kattoTiedosto = null, nyt = Date.now } = {}) {
   const yla = new URL(ylavirta ?? `https://${NEBIUS_NIMI}`);
   const avain = () => readFileSync(avainTiedosto, 'utf8').trim();
+  // Katto luetaan joka kutsulla, joten muutos tulee voimaan heti; puuttuva tiedosto = oletus, rikkinäinen = ei kutsuja.
+  const katto = () => {
+    if (!kattoTiedosto || !existsSync(kattoTiedosto)) return KATTO_OLETUS;
+    try { return { ...KATTO_OLETUS, ...JSON.parse(readFileSync(kattoTiedosto, 'utf8')) }; } catch { return null; }
+  };
+  const lueLoki = () => { try { return loki ? readFileSync(loki, 'utf8') : ''; } catch { return ''; } };
+  let hinnat = { aika: -Infinity, kartta: new Map() };
+  async function haeHinnat() {
+    if (nyt() - hinnat.aika < HINNAT_MS) return hinnat.kartta;
+    const v = await nebius('/v1/models?verbose=true', 'GET');
+    const teksti = await lueKaikki(v);
+    if (v.statusCode !== 200) throw new Error(`hinnasto ${v.statusCode}`);
+    hinnat = { aika: nyt(), kartta: hinnasto(JSON.parse(teksti)) };
+    return hinnat.kartta;
+  }
   const kirjaa = (rivi) => { if (loki) try { appendFileSync(loki, JSON.stringify({ aika: new Date().toISOString(), ...rivi }) + '\n'); } catch { /* loki ei estä */ } };
 
   // Pyyntö Nebiukselle; tunnelin kautta host on 127.0.0.1, mutta TLS-nimi ja Host-otsake ovat Nebiuksen.
@@ -183,17 +251,27 @@ export function luoValitys({ ylavirta = null, reitit = ['palvelin', 'mac'], avai
       }
       if (req.method !== 'POST' || polku !== '/v1/messages') return virhe(res, 404, `tuntematon polku ${polku}`);
       const a = JSON.parse(await lueKaikki(req));
+      const istunto = istuntoTunnus(req.headers, a);
+      const hinta = (await haeHinnat()).get(a.model);
+      if (!hinta) return virhe(res, 400, `kustannuskatto: mallille ${a.model} ei ole hintaa Nebiuksen hinnastossa, kutsua ei tehty`);
+      const arvio = pahinArvio(hinta, a);
+      const syy = katonYlitys({ katto: katto(), kulunut: kulutus(lueLoki(), { paiva: paivays(nyt()), istunto, hinnat: hinnat.kartta }), arvio, istunto });
+      if (syy) {
+        kirjaa({ malli: a.model, istunto, katkaistu: syy });
+        return virhe(res, 400, `kustannuskatto ylittyisi, kutsua ei tehty (${syy}). Katto: ${kattoTiedosto}`);
+      }
+      const hinnoittele = (k) => ({ istunto, ...k, kustannus: Number(kustannus(hinta, k).toFixed(6)) });
       const alku = Date.now();
       const v = await nebius('/v1/chat/completions', 'POST', openaiRunko(a));
       if (v.statusCode !== 200) {
         const teksti = await lueKaikki(v);
-        kirjaa({ malli: a.model, koodi: v.statusCode, virhe: teksti.slice(0, 300) });
+        kirjaa({ malli: a.model, istunto, koodi: v.statusCode, virhe: teksti.slice(0, 300) });
         return virhe(res, v.statusCode, `Nebius ${v.statusCode}: ${teksti.slice(0, 500)}`);
       }
       if (!a.stream) {
         const o = JSON.parse(await lueKaikki(v));
         const vastaus = anthropicVastaus(o, a.model);
-        kirjaa({ malli: a.model, ...vastaus.usage, kesto: Date.now() - alku });
+        kirjaa({ malli: a.model, ...hinnoittele(vastaus.usage), kesto: Date.now() - alku });
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify(vastaus));
       }
@@ -210,8 +288,8 @@ export function luoValitys({ ylavirta = null, reitit = ['palvelin', 'mac'], avai
           try { k.pala(JSON.parse(t)); } catch { /* rikkinäinen pala ohitetaan */ }
         }
       });
-      v.on('end', () => { const kaytto = k.valmis(); kirjaa({ malli: a.model, ...kaytto, kesto: Date.now() - alku, virta: true }); res.end(); });
-      v.on('error', (e) => { kirjaa({ malli: a.model, virhe: e.message }); res.end(); });
+      v.on('end', () => { const kaytto = k.valmis(); kirjaa({ malli: a.model, ...hinnoittele(kaytto), kesto: Date.now() - alku, virta: true }); res.end(); });
+      v.on('error', (e) => { kirjaa({ malli: a.model, istunto, virhe: e.message }); res.end(); });
     } catch (e) {
       if (!res.headersSent) virhe(res, 502, `välityspalvelin: ${e.message}`);
       else res.end();
@@ -227,6 +305,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     reitit: (env.NEBIUS_REITIT ?? 'palvelin,mac').split(',').filter(Boolean),
     avainTiedosto: env.NEBIUS_AVAIN_TIEDOSTO ?? join(homedir(), '.config/scopes/nebius-avain'),
     loki: env.NEBIUS_LOKI ?? join(homedir(), '.local/state/scopes-nebius.loki'),
+    kattoTiedosto: env.NEBIUS_KATTO_TIEDOSTO ?? join(homedir(), '.config/scopes/nebius-katto.json'),
   });
   createServer(kasittele).listen(portti, '127.0.0.1', () => console.log(`nebius-valitys: http://127.0.0.1:${portti}`));
 }

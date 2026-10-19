@@ -1,7 +1,13 @@
 // node --test scopes/palvelu/nebius-valitys.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { anthropicVastaus, luoVirranKaantaja, openaiRunko } from './nebius-valitys.mjs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  anthropicVastaus, hinnasto, istuntoTunnus, katonYlitys, kulutus, luoValitys, luoVirranKaantaja, openaiRunko, paivays,
+} from './nebius-valitys.mjs';
 
 test('openaiRunko: järjestelmä, työkalut, työkalukutsu ja tulos oikeaan järjestykseen', () => {
   const r = openaiRunko({
@@ -49,4 +55,73 @@ test('luoVirranKaantaja: tekstilohko, työkalulohko paloina, lopetus ja käyttö
   assert.equal(t[6][1].delta.partial_json + t[7][1].delta.partial_json, '{"command":"ls"}');
   assert.equal(t[9][1].delta.stop_reason, 'tool_use');
   assert.equal(t[9][1].usage.output_tokens, 4);
+});
+
+test('hinnasto ja kulutus: hinnat $/token, päivä ja istunto, vanhat rivit mallin hinnalla', () => {
+  const h = hinnasto({ data: [{ id: 'm', pricing: { prompt: '0.000001', completion: '0.000002' } }, { id: 'x', pricing: {} }] });
+  assert.deepEqual([...h.keys()], ['m']);
+  const nyt = '2026-10-19T08:00:00.000Z';
+  const loki = [
+    { aika: nyt, malli: 'm', input_tokens: 1000, output_tokens: 500 }, // vanha rivi: 0.001 + 0.001
+    { aika: nyt, malli: 'm', istunto: 's1', kustannus: 0.5 },
+    { aika: '2026-10-10T08:00:00.000Z', malli: 'm', istunto: 's1', kustannus: 9 },
+  ].map((r) => JSON.stringify(r)).join('\n') + '\nrikki\n';
+  const k = kulutus(loki, { paiva: paivays(nyt), istunto: 's1', hinnat: h });
+  assert.ok(Math.abs(k.paiva - 0.502) < 1e-9);
+  assert.equal(k.istunto, 9.5);
+});
+
+test('istuntoTunnus ja katonYlitys', () => {
+  assert.equal(istuntoTunnus({ 'x-claude-code-session-id': 'abc' }, {}), 'abc');
+  assert.equal(istuntoTunnus({}, { metadata: { user_id: 'user_1_account_2_session_9f-aa' } }), '9f-aa');
+  assert.equal(istuntoTunnus({}, {}), null);
+  const katto = { istunto: 1, paiva: 2 };
+  assert.equal(katonYlitys({ katto, kulunut: { paiva: 0.5, istunto: 0.5 }, arvio: 0.4, istunto: 's' }), null);
+  assert.match(katonYlitys({ katto, kulunut: { paiva: 0.5, istunto: 0.7 }, arvio: 0.4, istunto: 's' }), /istunnon katto/);
+  assert.match(katonYlitys({ katto, kulunut: { paiva: 1.7, istunto: 0 }, arvio: 0.4, istunto: null }), /päivän katto/);
+  assert.match(katonYlitys({ katto: null, kulunut: { paiva: 0, istunto: 0 }, arvio: 0, istunto: null }), /puuttuu/);
+});
+
+test('luoValitys: katto katkaisee ennen Nebiusta, alle katon kutsu menee ja kirjaa kustannuksen', async () => {
+  const kansio = mkdtempSync(join(tmpdir(), 'nebius-katto-'));
+  const avain = join(kansio, 'avain'), loki = join(kansio, 'loki'), kattoTiedosto = join(kansio, 'katto.json');
+  writeFileSync(avain, 'k\n');
+  const kutsut = [];
+  const yla = createServer((req, res) => {
+    kutsut.push(req.url);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    if (req.url.startsWith('/v1/models')) return res.end(JSON.stringify({ data: [{ id: 'm', pricing: { prompt: '0.000001', completion: '0.000002' } }] }));
+    req.resume();
+    req.on('end', () => res.end(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { content: 'ok' } }], usage: { prompt_tokens: 100, completion_tokens: 10 } })));
+  });
+  await new Promise((ok) => yla.listen(0, '127.0.0.1', ok));
+  const valitys = createServer(luoValitys({ ylavirta: `http://127.0.0.1:${yla.address().port}`, avainTiedosto: avain, loki, kattoTiedosto }));
+  await new Promise((ok) => valitys.listen(0, '127.0.0.1', ok));
+  const laheta = (runko) => fetch(`http://127.0.0.1:${valitys.address().port}/v1/messages`, {
+    method: 'POST', headers: { 'x-claude-code-session-id': 's1' }, body: JSON.stringify({ model: 'm', max_tokens: 100, messages: [{ role: 'user', content: 'hei' }], ...runko }),
+  });
+  try {
+    writeFileSync(kattoTiedosto, JSON.stringify({ istunto: 1, paiva: 1 }));
+    const ok = await laheta();
+    assert.equal(ok.status, 200);
+    const rivi = JSON.parse(readFileSync(loki, 'utf8').trim().split('\n').pop());
+    assert.equal(rivi.istunto, 's1');
+    assert.equal(rivi.kustannus, 0.00012);
+
+    writeFileSync(kattoTiedosto, JSON.stringify({ istunto: 0.0002, paiva: 1 })); // kulunut 0.00012 + arvio > 0.0002
+    const ennen = kutsut.length;
+    const ei = await laheta();
+    assert.equal(ei.status, 400);
+    assert.match((await ei.json()).error.message, /istunnon katto/);
+    assert.equal(kutsut.length, ennen, 'Nebiusta ei kutsuttu');
+
+    const tuntematon = await laheta({ model: 'tuntematon' });
+    assert.equal(tuntematon.status, 400);
+    assert.match((await tuntematon.json()).error.message, /ei ole hintaa/);
+
+    writeFileSync(kattoTiedosto, 'rikki');
+    assert.equal((await laheta()).status, 400);
+  } finally {
+    valitys.close(); yla.close(); rmSync(kansio, { recursive: true, force: true });
+  }
 });
