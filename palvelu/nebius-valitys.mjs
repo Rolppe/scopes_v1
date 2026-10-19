@@ -9,7 +9,8 @@
 // Kustannuskatto (V-557: mittaus ilman kattoa kulutti ~7,10 $): ennen jokaista kutsua lasketaan päivän (paikallinen pvm) ja
 // istunnon kulutus tokenilokista Nebiuksen omilla hinnoilla (/v1/models?verbose=true, pricing $/token). Jos kulutus + kutsun
 // pahin arvio (syöte merkkeinä/3 + max_tokens tuotoksena) ylittää katon, kutsu katkaistaan virheeseen eikä Nebiusta kutsuta.
-// Tuntematon hinta tai lukukelvoton katto = ei kutsua. Katto: NEBIUS_KATTO_TIEDOSTO (JSON { istunto, paiva } dollareina).
+// Puuttuva katto (oletus 0 $), tuntematon hinta tai lukukelvoton katto = ei kutsua:
+// käyttäjä 19.10.2026 "Kaikkeen käyttöön kysytään lupa", joten katon kirjoittaa vain käyttäjän hyväksymä summa. Katto: NEBIUS_KATTO_TIEDOSTO (JSON { istunto, paiva } dollareina).
 //   node nebius-valitys.mjs     NEBIUS_PORTTI (oletus 11240), NEBIUS_REITIT (oletus palvelin,mac), NEBIUS_YLAVIRTA,
 //                               NEBIUS_AVAIN_TIEDOSTO, NEBIUS_LOKI (pyyntöjen tokenit, ei sisältöä), NEBIUS_KATTO_TIEDOSTO
 
@@ -23,7 +24,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const NEBIUS_NIMI = 'api.tokenfactory.nebius.com';
-export const KATTO_OLETUS = { istunto: 0.5, paiva: 2 };
+export const KATTO_OLETUS = { istunto: 0, paiva: 0 }; // ilman käyttäjän hyväksymää kattoa ei yhtään kutsua (käyttäjä 19.10.2026)
 const HINNAT_MS = 3_600_000;
 
 // /v1/models?verbose=true → Map(malli → { syote, tuotos }) $/token; mallit ilman hintaa pois.
@@ -196,7 +197,7 @@ function sshKutsu(reitit, polku, metodi, avain, data) {
 export function luoValitys({ ylavirta = null, reitit = ['palvelin', 'mac'], avainTiedosto, loki = null, kattoTiedosto = null, nyt = Date.now } = {}) {
   const yla = new URL(ylavirta ?? `https://${NEBIUS_NIMI}`);
   const avain = () => readFileSync(avainTiedosto, 'utf8').trim();
-  // Katto luetaan joka kutsulla, joten muutos tulee voimaan heti; puuttuva tiedosto = oletus, rikkinäinen = ei kutsuja.
+  // Katto luetaan joka kutsulla, joten muutos tulee voimaan heti; puuttuva tiedosto = 0 $, rikkinäinen = ei kutsuja.
   const katto = () => {
     if (!kattoTiedosto || !existsSync(kattoTiedosto)) return KATTO_OLETUS;
     try { return { ...KATTO_OLETUS, ...JSON.parse(readFileSync(kattoTiedosto, 'utf8')) }; } catch { return null; }

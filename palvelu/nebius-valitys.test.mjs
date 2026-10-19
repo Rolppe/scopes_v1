@@ -101,6 +101,10 @@ test('luoValitys: katto katkaisee ennen Nebiusta, alle katon kutsu menee ja kirj
     method: 'POST', headers: { 'x-claude-code-session-id': 's1' }, body: JSON.stringify({ model: 'm', max_tokens: 100, messages: [{ role: 'user', content: 'hei' }], ...runko }),
   });
   try {
+    const ilman = await laheta(); // ei kattotiedostoa = 0 $ = ei kutsua
+    assert.equal(ilman.status, 400);
+    assert.ok(!kutsut.some((u) => u.startsWith('/v1/chat')), 'Nebiusta ei kutsuttu ilman kattoa');
+
     writeFileSync(kattoTiedosto, JSON.stringify({ istunto: 1, paiva: 1 }));
     const ok = await laheta();
     assert.equal(ok.status, 200);
