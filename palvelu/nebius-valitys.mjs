@@ -169,7 +169,7 @@ export function luoVirranKaantaja(malli, kirjoita) {
 // Yksi kutsu `ssh <kone> curl`:lla. Tila luetaan curlin -D-otsakkeista stderristä; runko (myös SSE-virta) on stdout.
 // ssh:n koodi 255 ennen tilaa = kone ei vastannut, jolloin kokeillaan seuraavaa reittiä.
 function sshKutsu(reitit, polku, metodi, avain, data) {
-  const komento = `read -r K; curl -sN -m 600 -D /dev/stderr -X ${metodi} -H "Authorization: Bearer $K" -H 'Content-Type: application/json'${data ? ' --data-binary @-' : ''} https://${NEBIUS_NIMI}${polku}`;
+  const komento = `read -r K; curl -sN -m 600 -D /dev/stderr -X ${metodi} -H "Authorization: Bearer $K" -H 'Content-Type: application/json'${data ? ' --data-binary @-' : ''} 'https://${NEBIUS_NIMI}${polku}'`;
   const yritys = (i) => new Promise((ok, ei) => {
     if (i >= reitit.length) return ei(new Error(`Nebius ei tavoitettavissa reiteillä ${reitit.join(', ')}`));
     const lapsi = spawn('ssh', ['-o', 'ConnectTimeout=3', '-o', 'BatchMode=yes', reitit[i], komento], { stdio: ['pipe', 'pipe', 'pipe'] });
