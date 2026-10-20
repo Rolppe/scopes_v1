@@ -398,6 +398,10 @@ struct AsetuksetView: View {
                     Label("Nebius", systemImage: "key")
                 }
                 .accessibilityIdentifier("asetukset-nebius")
+                NavigationLink { LuvatAsetukset() } label: {
+                    Label("Luvat", systemImage: "checkmark.shield")
+                }
+                .accessibilityIdentifier("asetukset-luvat")
                 NavigationLink { TietojaAsetukset() } label: {
                     Label("Tietoja", systemImage: "info.circle")
                 }
@@ -428,6 +432,44 @@ struct AsetuksetView: View {
                 sulje()
             }
         }
+    }
+}
+
+// Luvat (käyttäjä 16.10.2026: "toggle joka pitää sitä always allow moodissa kaikille skoopeille"): kytkin kirjoitetaan palvelimelle heti,
+// ei Tallenna-painikkeella, koska se on palvelun asetus eikä äpin. Palvelu vastaa agy-istuntojen lupakyselyihin (agy-luvat.mjs).
+struct LuvatAsetukset: View {
+    @EnvironmentObject private var asetukset: Asetukset
+    @State private var paalla: Bool?
+    @State private var virhe: String?
+
+    var body: some View {
+        Form {
+            Section {
+                if let p = paalla {
+                    Toggle("Always allow", isOn: Binding(get: { p }, set: { v in Task { await aseta(v) } }))
+                        .accessibilityIdentifier("luvat-agy")
+                } else if let virhe {
+                    Text(virhe).foregroundStyle(Teema.virhe).accessibilityIdentifier("luvat-virhe")
+                } else {
+                    ProgressView()
+                }
+            } header: { Text("Agy-istunnot") } footer: {
+                Text("Päällä palvelin vastaa kaikkien skoopien agy-istuntojen lupakyselyihin (komento tai tiedosto) valiten \"always allow in this conversation\". Pysyviä lupia ei anneta. Claude-istuntoihin ja chattiin ei vaikuta: chat ei käytä työkaluja.")
+                    .accessibilityIdentifier("luvat-selite")
+            }
+        }
+        .navigationTitle("Luvat")
+        .task {
+            do { paalla = try await asiakas.agyLuvat().agyluvat } catch { virhe = "Asetusta ei saatu palvelulta: \(error.localizedDescription)" }
+        }
+    }
+
+    private var asiakas: Asiakas { Asiakas(osoite: asetukset.osoite, avain: asetukset.avain) }
+
+    private func aseta(_ v: Bool) async {
+        let vanha = paalla
+        paalla = v
+        do { paalla = try await asiakas.asetaAgyLuvat(v).agyluvat } catch { paalla = vanha; virhe = "Asetus ei tallentunut: \(error.localizedDescription)" }
     }
 }
 

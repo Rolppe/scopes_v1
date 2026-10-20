@@ -280,6 +280,7 @@ struct Viestilista: View {
     var odottaa = false
     var vastaa: ((String) -> Void)? = nil
     var sulje: (() -> Void)? = nil
+    @State private var alhaalla = true
     var body: some View {
         ScrollViewReader { vierita in
             ScrollView {
@@ -303,20 +304,54 @@ struct Viestilista: View {
             }
             // Lista pysyy alareunassaan, kun sen korkeus muuttuu (CHAT-NOUSU-TODENNUS 13.10.2026): näppäimistön avautuessa
             // keskustelu nousee kutistuksen mukana eikä jää lyhyeksi, jos kutistus ehtii vasta keyboardDidShow'n jälkeen.
-            .defaultScrollAnchor(.bottom, for: .sizeChanges)
+            .defaultScrollAnchor(alhaalla ? .bottom : nil, for: .sizeChanges)
+            // Seurataan onko käyttäjä alareunassa: uudet viestit ja suoratoisto eivät siirrä näkymää, jos käyttäjä selaa vanhoja viestejä.
+            .onScrollGeometryChange(for: Bool.self) { geo in
+                if geo.contentSize.height <= geo.containerSize.height { return true }
+                let nakyvaAlareuna = geo.contentOffset.y + geo.containerSize.height
+                let etaisyysPohjaan = geo.contentSize.height - nakyvaAlareuna
+                return etaisyysPohjaan <= 40
+            } action: { _, uusi in
+                alhaalla = uusi
+            }
             // Näppäimistö pois napautuksella tai vedolla viestilistassa (käyttäjä 13.10.2026); kortin painikkeet toimivat yhä.
             .scrollDismissesKeyboard(.interactively)
             .gesture(NappaimistoPois())
-            .onChange(of: viestit.count) { alkuun(vierita) }
-            .onChange(of: himmeat.count) { nosta(vierita) }
-            // Suoratoistossa viimeinen kupla kasvaa ilman uutta viestiä.
-            .onChange(of: viestit.last?.teksti) { nosta(vierita) }
+            .onChange(of: viestit.count) { vanha, uusi in
+                if vanha == 0 || viestit.last?.omaViesti == true {
+                    alhaalla = true
+                    alkuun(vierita)
+                } else if alhaalla {
+                    alkuun(vierita)
+                }
+            }
+            .onChange(of: himmeat.count) { vanha, uusi in
+                if uusi > vanha {
+                    alhaalla = true
+                    nosta(vierita)
+                } else if alhaalla {
+                    nosta(vierita)
+                }
+            }
+            // Suoratoistossa viimeinen kupla kasvaa ilman uutta viestiä (vain jos käyttäjä seuraa alhaalla).
+            .onChange(of: viestit.last?.teksti) {
+                if alhaalla { nosta(vierita) }
+            }
             // Kortin lähetys tai sulku (käyttäjä 13.10.2026): kortti katoaa ja vastaus nousee näkyviin listan loppuun.
-            .onChange(of: viestit.last?.vastattu) { nosta(vierita) }
-            .onAppear { if !viestit.isEmpty { alkuun(vierita, animoi: false) } }
+            .onChange(of: viestit.last?.vastattu) {
+                if alhaalla { nosta(vierita) }
+            }
+            .onAppear {
+                if !viestit.isEmpty {
+                    alhaalla = true
+                    alkuun(vierita, animoi: false)
+                }
+            }
             // Näppäimistön avautuminen nostaa keskustelun niin ylös kuin käsin vetäen, sekä kortin kentästä että
             // syöttökentästä (käyttäjä 13.10.2026); vieritys vasta näppäimistön jälkeen, kun lista on jo kutistunut.
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in nosta(vierita) }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                if alhaalla { nosta(vierita) }
+            }
         }
     }
 
@@ -479,6 +514,7 @@ struct ChatView: View {
     @State private var vastausKesken = false
     @State private var pysaytetty = false
     @State private var yhdistetaan = false
+    @State private var kayttoraja: Kayttoraja? = KayttorajaMuisti.lue(avain: "scopes.kayttoraja.chat") ?? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.oletus")
 
     private var valittuAgentti: Agentti? { agentit.first { $0.nimi == valittu } }
     private var asiakas: Asiakas { Asiakas(osoite: asetukset.osoite, avain: asetukset.avain) }
@@ -521,12 +557,18 @@ struct ChatView: View {
             .lapinakyvaYlapalkki()
             .toolbar {
                 Sivupalkkipainike()
+                ToolbarItem(placement: .topBarTrailing) { KayttorajaRenkaat(raja: kayttoraja) }
+                    .kapseliPois()
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { uusi() } label: { Image(systemName: "square.and.pencil") }
                         .disabled(odottaa)
                         .accessibilityIdentifier("chat-uusi")
                 }
                 .lasiKapseli()
+            }
+            .task(id: "\(valittu ?? "")-\(valittuAgentti?.tyyppi ?? "")") {
+                // Käyttöraja haetaan, kun agentti vaihtuu tai näkymä avautuu; arvo säilyy laitteella tyhjäkäynnillä.
+                await paivitaKayttoraja()
             }
             .task(id: asetukset.osoite + asetukset.avain) {
                 // Mallilista päivittyy 30 s välein: palvelimen mallit katoavat valitsimesta, kun kone ei vastaa.
@@ -546,7 +588,21 @@ struct ChatView: View {
                 guard let uusi else { return }
                 let tallessa = Luonnos.lue("chat.\(uusi)")
                 if vanha != nil || teksti.isEmpty || !tallessa.isEmpty { teksti = tallessa } else { Luonnos.tallenna(teksti, "chat.\(uusi)") }
+                Task { await paivitaKayttoraja() }
             }
+        }
+    }
+
+    private func paivitaKayttoraja() async {
+        let avain = KayttorajaMuisti.avain(agentti: valittu, tyyppi: valittuAgentti?.tyyppi)
+        if let tallessa = KayttorajaMuisti.lue(avain: avain) {
+            kayttoraja = tallessa
+        }
+        if let k = try? await asiakas.kayttoraja(tyyppi: valittuAgentti?.tyyppi, agentti: valittu) {
+            kayttoraja = k
+            KayttorajaMuisti.tallenna(k, avain: avain)
+            KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.chat")
+            KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.oletus")
         }
     }
 
@@ -641,9 +697,11 @@ struct ChatView: View {
         if jatko == nil { teksti = "" }
         pysaytetty = false
         viestit.append(Viesti(rooli: "kayttaja", teksti: viesti, aika: nil))
+        Task { await paivitaKayttoraja() }
         await vastaanota(kupla: nil) {
             try await asiakas.chatVirta(agentti: agentti, viesti: viesti, keskustelu: keskustelu)
         }
+        Task { await paivitaKayttoraja() }
     }
 
     // Stop: palvelu katkaisee ajon, ja virta päättyy valmis-riviin, jossa on tähän asti kirjoitettu vastaus; kenttä
@@ -730,8 +788,8 @@ struct ChatView: View {
 }
 
 // Käyttörajarenkaat kolmen pisteen vieressä (CHAT-KAYTTORAJA, käyttäjä 13.10.2026): ulompi keltainen = 5 h raja,
-// sisempi punainen = Clauden viikkoraja; rengas täyttyy ylhäältä myötäpäivään. Napautus näyttää prosentit ja
-// nollautumishetket. Ilman lukemaa renkaat ovat tyhjiä.
+// sisempi punainen = Clauden viikkoraja tai Googlen päivittäiset pyynnöt (käyttäjä 17.10.2026); rengas täyttyy ylhäältä
+// myötäpäivään. Napautus näyttää prosentit ja nollautumishetket. Ilman lukemaa renkaat ovat tyhjiä.
 struct KayttorajaRenkaat: View {
     let raja: Kayttoraja?
 
@@ -739,19 +797,32 @@ struct KayttorajaRenkaat: View {
         Menu {
             // Valikko nimeää renkaat (DESIGN-SKOOPPINAKYMA U8): väri yksin ei kerro, kumpi raja on kumpi.
             Section("Käyttöraja") {
-                Text(rivi("Ulompi keltainen, 5 h", raja?.viisiTuntia, muoto: .dateTime.hour().minute()))
-                Text(rivi("Sisempi punainen, viikko", raja?.viikko, muoto: .dateTime.weekday(.abbreviated).hour().minute()))
+                Text(rivi(raja?.viikko != nil ? "Ulompi keltainen, 5 h" : "Keltainen, 5 h", raja?.viisiTuntia, muoto: .dateTime.hour().minute()))
+                if let v = raja?.viikko {
+                    Text(rivi(v.otsikko ?? "Sisempi punainen, viikko", v, muoto: v.teksti != nil ? .dateTime.hour().minute() : .dateTime.weekday(.abbreviated).hour().minute()))
+                }
             }
         } label: {
             ZStack {
                 rengas(raja?.viisiTuntia, vari: .yellow, koko: 32)
-                rengas(raja?.viikko, vari: .red, koko: 19)
+                if raja?.viikko != nil {
+                    rengas(raja?.viikko, vari: .red, koko: 19)
+                }
             }
             .frame(width: 36, height: 36)
         }
         .accessibilityLabel("Käyttöraja")
-        .accessibilityValue("5 h \(prosentti(raja?.viisiTuntia)), viikko \(prosentti(raja?.viikko))")
+        .accessibilityValue(arvoTeksti)
         .accessibilityIdentifier("kayttoraja")
+    }
+
+    private var arvoTeksti: String {
+        if let v = raja?.viikko {
+            let nimi = v.otsikko?.contains("pyynnöt") == true ? "pyynnöt" : "viikko"
+            let lukema = v.teksti.map { "\($0) (\(prosentti(v)))" } ?? prosentti(v)
+            return "5 h \(prosentti(raja?.viisiTuntia)), \(nimi) \(lukema)"
+        }
+        return "5 h \(prosentti(raja?.viisiTuntia))"
     }
 
     private func rengas(_ r: Kayttoraja.Raja?, vari: Color, koko: CGFloat) -> some View {
@@ -764,13 +835,19 @@ struct KayttorajaRenkaat: View {
         .frame(width: koko, height: koko)
     }
 
-    private func prosentti(_ r: Kayttoraja.Raja?) -> String { r.map { "\(Int($0.kaytto.rounded())) %" } ?? "ei tiedossa" }
+    private func prosentti(_ r: Kayttoraja.Raja?) -> String {
+        guard let r else { return "ei tiedossa" }
+        if r.kaytto > 0 && r.kaytto < 1 { return String(format: "%.2f %%", r.kaytto) }
+        if r.kaytto >= 1 && r.kaytto < 10 { return String(format: "%.1f %%", r.kaytto) }
+        return "\(Int(r.kaytto.rounded())) %"
+    }
 
     private func rivi(_ nimi: String, _ r: Kayttoraja.Raja?, muoto: Date.FormatStyle) -> String {
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let aika = r?.nollautuu.flatMap { iso.date(from: $0) }.map { " · nollautuu \($0.formatted(muoto))" } ?? ""
-        return "\(nimi): \(prosentti(r))\(aika)"
+        let aika = r?.nollautuu.flatMap { iso.date(from: $0) ?? ISO8601DateFormatter().date(from: $0) }.map { " · nollautuu \($0.formatted(muoto))" } ?? ""
+        let luku = r?.teksti.map { "\($0) (\(prosentti(r)))" } ?? prosentti(r)
+        return "\(nimi): \(luku)\(aika)"
     }
 }
 
@@ -793,6 +870,7 @@ struct SkooppiViestitView: View {
     @State private var lahettaa = false
     @State private var puretaan = false
     @State private var puraValinta = false
+    @State private var jumissaPuraValinta = false
     @State private var virhe: String?
     @State private var kayttoraja: Kayttoraja?
     @State private var liitteet: [Liite] = []
@@ -805,12 +883,31 @@ struct SkooppiViestitView: View {
     // Juuri valittu malli ja effort näkyvät, kunnes transkriptista luettu arvo muuttuu (se päivittyy vasta vastauksen jälkeen).
     @State private var malliValittu: String?
     @State private var effortValittu: String?
+    // Jumissa-havaitseminen (ISTUNNOT-MALLIT-JUMIIN): viimeisimmän lähetyksen hetki; kun busy-tila kestää yli JUMISSA_RAJA
+    // eikä odottavia viestejä ole sovitettu, äppi tarjoaa mallivalintaa ja uutta purua.
+    @State private var viimeisinLahetys = Date.distantPast
+    @State private var nyt = Date()
+    private static let jumissaRaja: TimeInterval = 45
+
+    // Jumissa: käyttäjä on lähettänyt viestin, istunto on busy, mutta odottava viesti ei ole edennyt JUMISSA_RAJA sekunnissa.
+    private var jumissa: Bool {
+        guard !odottavat.isEmpty,
+              ["busy", "shell"].contains(tila?.istunto?.tila ?? ""),
+              !pysaytetty else { return false }
+        return nyt.timeIntervalSince(viimeisinLahetys) > Self.jumissaRaja
+    }
+
 
     private var asiakas: Asiakas { Asiakas(osoite: asetukset.osoite, avain: asetukset.avain) }
 
     init(nimi: String) {
         self.nimi = nimi
         _teksti = State(initialValue: Luonnos.lue("skooppi.\(nimi)"))
+        let tallennettuTyyppi = UserDefaults.standard.string(forKey: "scopes.istuntoTyyppi.\(nimi)") ?? (nimi.contains("agy") ? "agy" : nil)
+        let alkuraja = KayttorajaMuisti.lue(avain: KayttorajaMuisti.avain(skooppi: nimi))
+            ?? (tallennettuTyyppi == "agy" ? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.agy") : nil)
+            ?? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.oletus")
+        _kayttoraja = State(initialValue: alkuraja)
     }
 
     var body: some View {
@@ -830,6 +927,13 @@ struct SkooppiViestitView: View {
                     let kysymysAuki = t.viestit.contains { !($0.kysymykset ?? []).isEmpty && $0.vastattu != true }
                     if t.voiLahettaa {
                         if !kysymysAuki {
+                            // Jumissa-palkki (ISTUNNOT-MALLIT-JUMIIN): istunto busy eikä vastaa käyttäjän viestiin.
+                            if jumissa {
+                                JumissaMalliPalkki(skooppi: nimi, puretaan: puretaan) {
+                                    jumissaPuraValinta = true
+                                }
+                                .accessibilityIdentifier("viestit-jumissa-palkki")
+                            }
                             if !liitteet.isEmpty { LiiteRivi(liitteet: $liitteet) }
                             // Stop heti lähetyksestä ja play heti pysäytyksestä, ennen kuin palvelun tila ehtii perässä.
                             let tyossa = (["busy", "shell"].contains(t.istunto?.tila ?? "") || oletettuTyo) && !pysaytetty
@@ -894,20 +998,47 @@ struct SkooppiViestitView: View {
             PuraValintaView(skooppi: nimi, perhe: nimi.split(separator: " ").first == "scopes") { v in Task { await pura(v) } }
                 .environmentObject(asetukset)
         }
+        // Jumissa: mallivalinta ja puraus uudella mallilla (ISTUNNOT-MALLIT-JUMIIN).
+        .sheet(isPresented: $jumissaPuraValinta) {
+            PuraValintaView(skooppi: nimi, perhe: nimi.split(separator: " ").first == "scopes") { v in Task { await pura(v) } }
+                .environmentObject(asetukset)
+        }
         .onChange(of: teksti) { _, uusi in Luonnos.tallenna(uusi, "skooppi.\(nimi)") }
-        .task {
-            // Käyttöraja minuutin välein: palvelu välimuistittaa, eikä rengas tarvitse tarkempaa.
-            while !Task.isCancelled {
-                if let k = try? await asiakas.kayttoraja() { kayttoraja = k }
-                try? await Task.sleep(for: .seconds(60))
+        .task(id: "\(tila?.istunto?.tyyppi ?? "")-\(nimi)") {
+            // Käyttöraja haetaan, kun näkymä avautuu tai istuntotyyppi selviää; arvo säilyy laitteella tyhjäkäynnillä.
+            await paivitaKayttoraja()
+        }
+        .onChange(of: tila?.istunto?.tila) { vanha, uusi in
+            // Haetaan uusiksi, kun ajo alkaa tai valmistuu (käyttäjä 17.10.2026: haetaan vasta kun ajo aloitetaan uudestaan)
+            if (vanha != "busy" && (uusi == "busy" || uusi == "shell")) || (vanha == "busy" && uusi == "idle") {
+                Task { await paivitaKayttoraja() }
             }
         }
         .task {
             // Päivitys 5 s välein, kun näkymä on auki (istunnon vastaukset tulevat transkriptiin).
+            // nyt päivittyy samassa tahdissa jumissa-havaitsemista varten (ISTUNNOT-MALLIT-JUMIIN).
             while !Task.isCancelled {
+                nyt = Date()
                 if !puretaan { await lataa() }
                 try? await Task.sleep(for: .seconds(5))
             }
+        }
+    }
+
+    private func paivitaKayttoraja() async {
+        let tyyppi = tila?.istunto?.tyyppi ?? UserDefaults.standard.string(forKey: "scopes.istuntoTyyppi.\(nimi)") ?? (nimi.contains("agy") ? "agy" : nil)
+        if let tallessa = KayttorajaMuisti.lue(avain: KayttorajaMuisti.avain(skooppi: nimi))
+            ?? (tyyppi == "agy" ? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.agy") : nil)
+            ?? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.oletus") {
+            kayttoraja = tallessa
+        }
+        if let k = try? await asiakas.kayttoraja(tyyppi: tyyppi, skooppi: nimi) {
+            kayttoraja = k
+            KayttorajaMuisti.tallenna(k, avain: KayttorajaMuisti.avain(skooppi: nimi))
+            if tyyppi == "agy" || nimi.contains("agy") {
+                KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.agy")
+            }
+            KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.oletus")
         }
     }
 
@@ -917,6 +1048,12 @@ struct SkooppiViestitView: View {
             tila = uusi
             virhe = nil
             sovitaOdottavat(uusi.viestit)
+            if let tyyppi = uusi.istunto?.tyyppi {
+                UserDefaults.standard.set(tyyppi, forKey: "scopes.istuntoTyyppi.\(nimi)")
+            }
+            if kayttoraja == nil {
+                await paivitaKayttoraja()
+            }
             if ["busy", "shell"].contains(uusi.istunto?.tila ?? "") {
                 oletettuTyo = false
                 // Pysäytyksen jälkeen uudelleen työhön ryhtynyt istunto (esim. päätteeltä) palauttaa stopin.
@@ -949,8 +1086,11 @@ struct SkooppiViestitView: View {
         let o = OdottavaViesti(viesti: Viesti(rooli: "kayttaja", teksti: kirjoitettu.isEmpty ? "(liite)" : kirjoitettu, aika: nil),
                                avain: kirjoitettu, pohja: pohja, lahetetty: Date())
         odottavat.append(o)
+        // Tallennetaan lähetyshetki jumissa-havaitsemista varten (ISTUNNOT-MALLIT-JUMIIN).
+        viimeisinLahetys = Date()
         if kortista == nil { teksti = ""; liitteet = [] }
         oletettuTyo = true
+        Task { await paivitaKayttoraja() }
         Task {
             try? await Task.sleep(for: .seconds(10))
             oletettuTyo = false
@@ -963,6 +1103,7 @@ struct SkooppiViestitView: View {
             _ = try await asiakas.laheta(nimi, viesti)
             virhe = nil
             lahettaa = false
+            Task { await paivitaKayttoraja() }
             for tauko in [0.5, 1.0, 1.5] {
                 try? await Task.sleep(for: .seconds(tauko))
                 await lataa()
@@ -1027,6 +1168,7 @@ struct SkooppiViestitView: View {
         do {
             _ = try await asiakas.toiminto(.pura, nimi, valinta: valinta)
             Lr.jaettu.laukaise(.toiminto)
+            Task { await paivitaKayttoraja() }
             for _ in 0..<24 {
                 await lataa()
                 if tila?.auki == true { break }
@@ -1064,5 +1206,51 @@ struct KysymysKoe: View {
             }
             .padding()
         }
+    }
+}
+
+// Jumissa-palkki (ISTUNNOT-MALLIT-JUMIIN 18.10.2026): näytetään chatissa syöttökentän yläpuolella, kun istunto on
+// busy-tilassa eikä ole vastannut käyttäjän viestiin 45 sekunnin sisällä. Äppi on havainnut, että chat ei reagoi,
+// ja tarjoaa mallivalintaa uutta purua varten. Palkki käyttää samaa PuraValintaView:ta kuin normaali purku.
+struct JumissaMalliPalkki: View {
+    let skooppi: String
+    let puretaan: Bool
+    let avaa: () -> Void
+
+    var body: some View {
+        HStack(spacing: Teema.Vali.m) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .font(.body)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Istunto ei vastaa")
+                    .font(.subheadline.weight(.medium))
+                Text("Valitse malli ja pura uuteen istuntoon.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            Button {
+                avaa()
+            } label: {
+                Text(puretaan ? "Avataan…" : "Vaihda malli")
+                    .font(.subheadline.weight(.medium))
+                    .padding(.horizontal, Teema.Vali.m)
+                    .padding(.vertical, Teema.Vali.s)
+                    .background(Color(.systemOrange).opacity(0.15), in: Capsule())
+                    .foregroundStyle(.orange)
+            }
+            .buttonStyle(.plain)
+            .disabled(puretaan)
+            .accessibilityIdentifier("jumissa-vaihda-malli")
+        }
+        .padding(.horizontal, Teema.Vali.l)
+        .padding(.vertical, Teema.Vali.m)
+        .background(Color(.systemOrange).opacity(0.08))
+        .overlay(alignment: .bottom) {
+            Divider()
+        }
+        .animation(.easeInOut(duration: 0.3), value: puretaan)
     }
 }

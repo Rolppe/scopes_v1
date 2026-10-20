@@ -39,6 +39,7 @@ struct Istunto: Decodable, Identifiable, Hashable {
     // Claude-istunnon malli ja effort viimeisestä vastauksesta (MALLINAPPI); vanha palvelu ja istunto ilman vastausta → nil.
     let malli: String?
     let effort: String?
+    let tyyppi: String?
 }
 
 // Rekisterin taulukkorivi: otsikkosolu → arvo. Otsikot vaihtelevat skoopeittain ("Asia", "Vika", "Tila", …).
@@ -192,6 +193,18 @@ struct PakkausKytkimet: Decodable, Hashable {
     var istuntoja: Int?
 }
 
+// Nebius-avaimen tila (GET/POST /api/nebius-avain): itse avainta palvelu ei palauta.
+struct NebiusAvainTila: Decodable {
+    let asetettu: Bool
+    let merkkeja: Int
+}
+
+// Agy-istuntojen "always allow" (palvelu/agy-luvat.mjs, käyttäjä 16.10.2026): globaali kytkin; GET /api/asetukset palauttaa sen
+// pakkauskytkinten mukana, joten tässä luetaan vain tämä kenttä.
+struct LupaKytkin: Decodable {
+    var agyluvat: Bool
+}
+
 enum PakkausKytkin: String {
     case automaattijatko, autopack
 }
@@ -282,14 +295,37 @@ struct SkooppiViestit: Decodable {
     let viestit: [Viesti]
 }
 
-// Clauden käyttörajat prosentteina (CHAT-KAYTTORAJA): null, kun palvelu ei ole saanut lukemaa.
-struct Kayttoraja: Decodable {
-    struct Raja: Decodable {
+// Käyttörajat prosentteina (CHAT-KAYTTORAJA): null, kun palvelu ei ole saanut lukemaa.
+struct Kayttoraja: Codable, Equatable {
+    struct Raja: Codable, Equatable {
         let kaytto: Double
         let nollautuu: String?
+        let teksti: String?
+        let otsikko: String?
     }
     let viisiTuntia: Raja?
     let viikko: Raja?
+}
+
+// Käyttörajan pysyväistallennus päätteelle (UserDefaults): lukemat eivät katoa tyhjäkäynnillä tai äpin uudelleenkäynnistyksessä.
+enum KayttorajaMuisti {
+    static func avain(skooppi: String? = nil, agentti: String? = nil, tyyppi: String? = nil) -> String {
+        if let agentti, !agentti.isEmpty { return "scopes.kayttoraja.agentti.\(agentti)" }
+        if let skooppi, !skooppi.isEmpty { return "scopes.kayttoraja.skooppi.\(skooppi)" }
+        if let tyyppi, !tyyppi.isEmpty { return "scopes.kayttoraja.tyyppi.\(tyyppi)" }
+        return "scopes.kayttoraja.oletus"
+    }
+
+    static func lue(avain: String, _ d: UserDefaults = .standard) -> Kayttoraja? {
+        guard let data = d.data(forKey: avain) else { return nil }
+        return try? JSONDecoder().decode(Kayttoraja.self, from: data)
+    }
+
+    static func tallenna(_ raja: Kayttoraja, avain: String, _ d: UserDefaults = .standard) {
+        if let data = try? JSONEncoder().encode(raja) {
+            d.set(data, forKey: avain)
+        }
+    }
 }
 
 struct LahetysVastaus: Decodable {
@@ -396,9 +432,3 @@ func isoPaiva(_ iso: String?) -> Date? {
 
 // 228100 → "228 k"
 func tokenit(_ n: Int) -> String { n >= 1000 ? "\(n / 1000) k" : "\(n)" }
-
-// Nebius-avaimen tila (GET/POST /api/nebius-avain): itse avainta palvelu ei palauta.
-struct NebiusAvainTila: Decodable {
-    let asetettu: Bool
-    let merkkeja: Int
-}

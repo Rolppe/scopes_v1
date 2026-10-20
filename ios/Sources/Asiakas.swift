@@ -84,6 +84,13 @@ struct Asiakas {
         try await hae("/api/asetukset/\(kytkin.rawValue)/\(paalle ? "paalle" : "pois")", metodi: "POST")
     }
 
+    // "Always allow" agy-istunnoille: vanha palvelu ilman kenttää vastaa ilman agyluvat-arvoa, jolloin luku epäonnistuu ja kytkin piilotetaan.
+    func agyLuvat() async throws -> LupaKytkin { try await hae("/api/asetukset") }
+
+    func asetaAgyLuvat(_ paalle: Bool) async throws -> LupaKytkin {
+        try await hae("/api/asetukset/agyluvat/\(paalle ? "paalle" : "pois")", metodi: "POST")
+    }
+
     // Nebius Token Factory -avain (palvelu/nebius-avain.mjs, käyttäjä 18.10.2026): palvelu kertoo vain, onko avain annettu;
     // vanha palvelu ilman reittiä vastaa 404, jolloin näkymä kertoo palvelun olevan vanha.
     func nebiusAvain() async throws -> NebiusAvainTila { try await hae("/api/nebius-avain") }
@@ -152,7 +159,14 @@ struct Asiakas {
     // Chat (DEMO-SCOPES-VALILEHDET): agentin vastaus voi kestää minuutteja.
     func agentit() async throws -> [Agentti] { try await hae("/api/agentit") }
 
-    func kayttoraja() async throws -> Kayttoraja { try await hae("/api/kayttoraja") }
+    func kayttoraja(tyyppi: String? = nil, agentti: String? = nil, skooppi: String? = nil) async throws -> Kayttoraja {
+        var params: [String] = []
+        if let tyyppi { params.append("tyyppi=\(koodattu(tyyppi))") }
+        if let agentti { params.append("agentti=\(koodattu(agentti))") }
+        if let skooppi { params.append("skooppi=\(koodattu(skooppi))") }
+        let q = params.isEmpty ? "" : "?\(params.joined(separator: "&"))"
+        return try await hae("/api/kayttoraja\(q)")
+    }
 
     // Vastaus kirjain kerrallaan (DEMO-SCOPES-SUORATOISTO): palvelu kirjoittaa NDJSON-rivejä sitä mukaa kuin agentti
     // kirjoittaa. Hylkäys ennen agentin käynnistystä tulee tavallisena virhekoodina.

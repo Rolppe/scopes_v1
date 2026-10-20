@@ -404,7 +404,7 @@ struct SivuttaisVeto: UIGestureRecognizerRepresentable {
 
     final class Valvoja: NSObject, UIGestureRecognizerDelegate {
         func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
-            guard let p = g as? UIPanGestureRecognizer, !PitoVeto.kaynnissa else { return false }
+            guard let p = g as? UIPanGestureRecognizer, !RiviVeto.kaynnissa else { return false }
             let v = p.velocity(in: nil)
             return abs(v.x) > 2 * abs(v.y)
         }
@@ -419,6 +419,10 @@ struct SivuttaisVeto: UIGestureRecognizerRepresentable {
         // tämän eleen ratkaisua, joka ratkeaa vasta liikkeestä, eikä kortti koskaan irronnut (SCOPES-INFRA-JARJESTYS).
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy toinen: UIGestureRecognizer) -> Bool {
             toinen.view is UIScrollView && toinen is UIPanGestureRecognizer
+        }
+        // Sivupalkin rivin veto oikealle (Sivupalkki.swift RiviVeto) ratkeaa ensin: rivin napit eivät saa sulkea palkkia.
+        func gestureRecognizer(_ g: UIGestureRecognizer, shouldRequireFailureOf toinen: UIGestureRecognizer) -> Bool {
+            toinen is RiviVeto.Tunnistin
         }
     }
 }

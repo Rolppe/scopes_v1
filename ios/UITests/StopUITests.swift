@@ -62,6 +62,58 @@ final class StopUITests: XCTestCase {
         print("CHAT-STOP: kenttä vapautui \(String(format: "%.1f", kesto)) s, osittainen vastaus \(teksti.count) merkkiä")
     }
 
+    // Vapaa selaus (CHAT-SELAUS 17.10.2026): kun käyttäjä selaa vanhoja viestejä ylöspäin,
+    // suoratoisto tai uudet viestit eivät siirrä näkymää. Alas vieritettäessä automaattinen siirto palautuu.
+    func testChatVapaaSelaus() throws {
+        let ymp = ProcessInfo.processInfo.environment
+        let avain = try XCTUnwrap(ymp["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        let app = XCUIApplication()
+        app.launchEnvironment["SCOPES_OSOITE"] = ymp["SCOPES_OSOITE"] ?? "http://192.0.2.11:8787"
+        app.launchEnvironment["SCOPES_AVAIN"] = avain
+        app.launch()
+
+        // Käynnistys avaa sivupalkin; oikean reunan napautus sulkee sen chattiin.
+        XCTAssertTrue(app.buttons["suodatin-all"].waitForExistence(timeout: 15), "lista ei auennut käynnistyksessä")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        let agentti = app.buttons["chat-agentti"]
+        XCTAssertTrue(agentti.waitForExistence(timeout: 15))
+        agentti.tap()
+        XCTAssertTrue(app.buttons["Haiku 5.5"].waitForExistence(timeout: 5), "mallivalikko puuttuu")
+        app.buttons["Haiku 5.5"].tap()
+
+        // Lähetetään ensimmäinen viesti, jotta keskustelussa on historiaa.
+        let kentta = app.textFields["chat-kentta"].exists ? app.textFields["chat-kentta"] : app.textViews["chat-kentta"]
+        kentta.tap()
+        kentta.typeText("Hei! Kerro lyhyt vitsi.")
+        app.buttons["chat-laheta"].tap()
+        let stop = app.buttons["chat-stop"]
+        _ = stop.waitForExistence(timeout: 5)
+        XCTAssertTrue(app.buttons["chat-laheta"].waitForExistence(timeout: 30), "ensimmäinen vastaus ei valmistunut")
+
+        // Lähetetään pitkä suoratoistoviesti.
+        kentta.tap()
+        kentta.typeText("Kirjoita numerot yhdestä sataan suomeksi sanoina, pilkuilla erotettuina, ei muuta.")
+        app.buttons["chat-laheta"].tap()
+        XCTAssertTrue(stop.waitForExistence(timeout: 5), "suoratoisto ei alkanut")
+
+        // Vieritetään ylös vanhoihin viesteihin vetämällä ruudulta alaspäin.
+        let lista = app.descendants(matching: .any)["chat-viestit"]
+        let ylaKoord = lista.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25))
+        let alaKoord = lista.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85))
+        ylaKoord.press(forDuration: 0.05, thenDragTo: alaKoord)
+
+        kuva("chat-selaus-ylhaalla")
+        // Odotetaan hetki suoratoiston jatkumista.
+        Thread.sleep(forTimeInterval: 2)
+        kuva("chat-selaus-kesken")
+
+        // Vieritetään takaisin alas vetämällä alhaalta ylöspäin.
+        alaKoord.press(forDuration: 0.05, thenDragTo: ylaKoord)
+        kuva("chat-selaus-alhaalla")
+
+        if stop.exists { stop.tap() }
+    }
+
     private func kuva(_ nimi: String) {
         let liite = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         liite.name = nimi

@@ -612,6 +612,33 @@ final class SkoopitUITests: XCTestCase {
         kuva("chat-palautettu")
     }
 
+    // Käyttörajarenkaat chatissa (scopes agy usage 17.10.2026): renkaat näkyvät yläpalkissa,
+    // ja arvo heijastaa valitun agentin kiintiötä.
+    func testChatKayttoraja() throws {
+        let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        let app = kaynnista(avain: avain)
+        chattiin(app)
+        let renkaat = app.descendants(matching: .any)["kayttoraja"].firstMatch
+        XCTAssertTrue(renkaat.waitForExistence(timeout: 15), "kayttoraja-rengas puuttuu toolbarista")
+        kuva("chat-kayttoraja")
+        renkaat.tap()
+        kuva("chat-kayttoraja-valikko")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)).tap()
+        let agentti = app.buttons["chat-agentti"]
+        if agentti.waitForExistence(timeout: 5) {
+            agentti.tap()
+            let gemini = app.buttons["Gemini"]
+            if gemini.waitForExistence(timeout: 3) {
+                gemini.tap()
+                sleep(2)
+                kuva("chat-kayttoraja-gemini")
+                renkaat.tap()
+                kuva("chat-kayttoraja-gemini-valikko")
+                app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)).tap()
+            }
+        }
+    }
+
     // Suoratoisto (DEMO-SCOPES-SUORATOISTO): agentin kupla näkyy jo kirjoituksen aikana ja kasvaa valmiiksi.
     func testChatSuoratoisto() throws {
         let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
@@ -726,6 +753,11 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertTrue(app.secureTextFields["Bearer-avain"].exists, "avainkenttä puuttuu")
         kuva("asetukset-yhteys")
         takaisin(app, "Yhteys")
+        app.buttons["asetukset-luvat"].tap()
+        XCTAssertTrue(app.switches["luvat-agy"].waitForExistence(timeout: 10), "Always allow -kytkin puuttuu Luvat-alavalikosta")
+        XCTAssertTrue(app.staticTexts["luvat-selite"].exists, "selite puuttuu")
+        kuva("asetukset-luvat")
+        takaisin(app, "Luvat")
         app.buttons["asetukset-tietoja"].tap()
         XCTAssertTrue(app.staticTexts["Allekirjoitus voimassa"].waitForExistence(timeout: 5), "Tietoja-alavalikko ei auennut")
         kuva("asetukset-tietoja")
@@ -865,6 +897,8 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertTrue(malli.waitForExistence(timeout: 5), "mallin valinta puuttuu paluun jälkeen")
         malli.tap()
         XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS 'Opus 5.5'")).firstMatch.waitForExistence(timeout: 5), "Claude-malli puuttuu uuden skoopin istunnon malleista")
+        // AGY-PRE-ISTUNTO 16.10.2026: palvelimen agy-mallit istunnon malleiksi (vain valinta, ei luontia).
+        XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS 'Gemini 3.8 Flash' AND label CONTAINS 'oneplus linux'")).firstMatch.waitForExistence(timeout: 5), "oneplus linux -agy-malli puuttuu uuden skoopin istunnon malleista")
         kuva("uusi-mallit")
     }
 
@@ -894,8 +928,9 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertFalse(selite.label.hasPrefix("Valintoja ei saatu"), "peruttu haku jäi virheeksi")
     }
 
-    // Skoopin arkistointi listasta (SCOPES-LISTA-POISTO): pito + veto vasemmalle paljastaa X:n, pelkkä veto ei; kosketus
-    // muualle palauttaa rivin. Ei vahvista: testi ajaa oikeaa palvelua vastaan, eikä skooppia arkistoida.
+    // Skoopin rivitoiminnot listasta (SCOPES-LISTA-VIRTANAPPI): pelkkä veto oikealle paljastaa virtanapin (pura tai pakkaa)
+    // ja arkistointinapin ilman pitoa; vasen veto kuuluu sivupalkille; kosketus muualle palauttaa rivin. Ei vahvista:
+    // testi ajaa oikeaa palvelua vastaan, eikä skooppia arkistoida.
     func testListaArkistointiVeto() throws {
         let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
         let app = kaynnista(avain: avain)
@@ -905,23 +940,19 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertTrue(rivi.waitForExistence(timeout: 15), "skoopit puuttuvat palkista")
         let nimi = String(rivi.identifier.dropFirst("skooppi-".count))
         let x = app.buttons["arkistoi-\(nimi)"]
-        // Pelkkä nopea veto: ei X:ää, ja palkki pysyy auki tai sulkeutuu sivupalkin eleenä.
-        rivi.swipeLeft()
-        XCTAssertFalse(x.waitForExistence(timeout: 1), "veto ilman pitoa paljasti X:n")
-        palkki(app)
-        app.buttons["suodatin-scope"].tap()
-        XCTAssertTrue(rivi.waitForExistence(timeout: 10))
-        let alku = rivi.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.5))
-        alku.press(forDuration: 0.8, thenDragTo: alku.withOffset(CGVector(dx: -160, dy: 0)))
-        XCTAssertTrue(osuttava(x, true), "pito ja veto eivät paljastaneet X:ää")
+        let virta = app.buttons.matching(NSPredicate(format: "identifier IN {'pura-\(nimi)', 'pakkaa-\(nimi)'}")).firstMatch
+        let alku = rivi.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5))
+        alku.press(forDuration: 0.05, thenDragTo: alku.withOffset(CGVector(dx: 160, dy: 0)))
+        XCTAssertTrue(osuttava(x, true), "veto oikealle ei paljastanut arkistointia")
+        XCTAssertTrue(virta.exists, "veto oikealle ei paljastanut virtanappia")
         XCTAssertTrue(osuttava(app.buttons["suodatin-all"], true, timeout: 1), "veto sulki sivupalkin")
-        kuva("arkistointi-x")
+        kuva("rivitoiminnot")
         // Kosketus toiseen riviin palauttaa rivin eikä avaa kosketettua.
         app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'skooppi-'")).element(boundBy: 2).tap()
         XCTAssertTrue(osuttava(x, false), "kosketus muualle ei palauttanut riviä")
         XCTAssertTrue(osuttava(app.buttons["suodatin-all"], true, timeout: 1), "palauttava kosketus avasi skoopin")
-        // X kysyy varmistuksen; peruminen jättää skoopin listaan.
-        alku.press(forDuration: 0.8, thenDragTo: alku.withOffset(CGVector(dx: -160, dy: 0)))
+        // Arkistointi kysyy varmistuksen; peruminen jättää skoopin listaan.
+        alku.press(forDuration: 0.05, thenDragTo: alku.withOffset(CGVector(dx: 160, dy: 0)))
         XCTAssertTrue(osuttava(x, true))
         x.tap()
         XCTAssertTrue(app.buttons["vahvista-arkistointi"].waitForExistence(timeout: 5), "arkistointi ei kysynyt varmistusta")
@@ -931,6 +962,13 @@ final class SkoopitUITests: XCTestCase {
         if peru.exists { peru.tap() } else { app.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap() }
         XCTAssertTrue(app.buttons["vahvista-arkistointi"].waitForNonExistence(timeout: 5))
         XCTAssertTrue(rivi.exists, "peruminen poisti skoopin listasta")
+        // Vasen veto avatulla rivillä sulkee rivin, ei palkkia.
+        alku.press(forDuration: 0.05, thenDragTo: alku.withOffset(CGVector(dx: 160, dy: 0)))
+        XCTAssertTrue(osuttava(x, true))
+        // Avatun rivin kehys on siirtynyt oikealle: 0,8 osuisi sivupalkin ulkopuolelle, joten veto alkaa rivin alkupäästä.
+        alku.press(forDuration: 0.05, thenDragTo: alku.withOffset(CGVector(dx: -160, dy: 0)))
+        XCTAssertTrue(osuttava(x, false), "vasen veto ei sulkenut riviä")
+        XCTAssertTrue(osuttava(app.buttons["suodatin-all"], true, timeout: 1), "rivin sulkeminen sulki sivupalkin")
     }
 
     func testPakkaaIlmanIstuntoaLukittu() throws {
