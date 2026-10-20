@@ -4,6 +4,8 @@
 # Kuuntelee kaikissa osoitteissa: puhelin tulee kotiverkosta tai WireGuardin läpi, ja jokainen
 # skooppipyyntö vaatii avaimen (palvelin.mjs). Avain luodaan, jos sitä ei ole.
 set -u
+[ -x "$HOME/.local/opt/node-v22.23.3-linux-arm64/bin/node" ] && NODE=${NODE:-$HOME/.local/opt/node-v22.23.3-linux-arm64/bin/node}
+export PATH="$HOME/.local/bin:${NODE:+$(dirname "$NODE"):}$PATH"
 tama=$(cd "$(dirname "$0")" && pwd)
 portti=${SCOPES_PORTTI:-8787}
 avain=${SCOPES_AVAIN_TIEDOSTO:-$HOME/.config/scopes/avain}

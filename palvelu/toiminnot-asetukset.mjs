@@ -16,6 +16,8 @@ export const OLETUS_HAKEMISTO = join(homedir(), '.claude/skills/keskustelun-siir
 export const ASETUKSET = Object.freeze({
   automaattijatko: 'automaattivalinta.txt',
   autopack: 'autopack.txt',
+  // Agy-istuntojen lupakyselyihin vastaaminen (agy-luvat.mjs); globaali, ei keskustelukohtainen.
+  agyluvat: 'agy-luvat.txt',
 });
 
 export function luoAsetukset({ hakemisto = OLETUS_HAKEMISTO, loki = null } = {}) {
@@ -56,7 +58,7 @@ export function luoAsetukset({ hakemisto = OLETUS_HAKEMISTO, loki = null } = {})
 
   function asetaIstunto(nimi, tunnus, arvo) {
     try {
-      if (typeof nimi !== 'string' || !Object.hasOwn(ASETUKSET, nimi)) throw new Hylatty(404, 'tuntematon asetus');
+      if (typeof nimi !== 'string' || !Object.hasOwn(ASETUKSET, nimi) || nimi === 'agyluvat') throw new Hylatty(404, 'tuntematon asetus');
       if (typeof arvo !== 'boolean') throw new Hylatty(400, 'arvo: vain päällä tai pois');
       if (!kelvollinenTunnus(tunnus)) throw new Hylatty(409, 'istunnon tunnus puuttuu');
       try { asetaIstuntoon(nimi, tunnus, arvo, hakemisto); } catch { throw new Hylatty(500, 'asetuksen tallennus epäonnistui'); }

@@ -12,14 +12,14 @@ const tmp = () => mkdtempSync(join(tmpdir(), 'scopes-as-'));
 
 test('asetukset: puuttuva hakemisto ja tiedosto = false', () => {
   const a = luoAsetukset({ hakemisto: join(tmp(), 'ei-ole') });
-  assert.deepEqual(a.lue(), { automaattijatko: false, autopack: false });
+  assert.deepEqual(a.lue(), { automaattijatko: false, autopack: false, agyluvat: false });
 });
 
 test('asetukset: roskasisältö ja jokin muu kuin true = false', () => {
   const d = tmp();
   writeFileSync(join(d, ASETUKSET.automaattijatko), '\u0000ÿ roska');
   writeFileSync(join(d, ASETUKSET.autopack), 'TRUE\n1\n');
-  assert.deepEqual(luoAsetukset({ hakemisto: d }).lue(), { automaattijatko: false, autopack: false });
+  assert.deepEqual(luoAsetukset({ hakemisto: d }).lue(), { automaattijatko: false, autopack: false, agyluvat: false });
   writeFileSync(join(d, ASETUKSET.autopack), 'true');
   assert.equal(luoAsetukset({ hakemisto: d }).lue().autopack, true);
 });
@@ -27,11 +27,11 @@ test('asetukset: roskasisältö ja jokin muu kuin true = false', () => {
 test('asetukset: asetus kirjoittaa muodossa true/false + rivinvaihto ja lukee takaisin', () => {
   const d = tmp();
   const a = luoAsetukset({ hakemisto: d });
-  assert.deepEqual(a.aseta('autopack', true), { automaattijatko: false, autopack: true });
+  assert.deepEqual(a.aseta('autopack', true), { automaattijatko: false, autopack: true, agyluvat: false });
   assert.equal(readFileSync(join(d, 'autopack.txt'), 'utf8'), 'true\n');
-  assert.deepEqual(a.aseta('automaattijatko', true), { automaattijatko: true, autopack: true });
+  assert.deepEqual(a.aseta('automaattijatko', true), { automaattijatko: true, autopack: true, agyluvat: false });
   assert.equal(readFileSync(join(d, 'automaattivalinta.txt'), 'utf8'), 'true\n');
-  assert.deepEqual(a.aseta('autopack', false), { automaattijatko: true, autopack: false });
+  assert.deepEqual(a.aseta('autopack', false), { automaattijatko: true, autopack: false, agyluvat: false });
   assert.equal(readFileSync(join(d, 'autopack.txt'), 'utf8'), 'false\n');
   assert.deepEqual(readdirSync(d).sort(), ['autopack.txt', 'automaattivalinta.txt'].sort(), 'tmp-tiedosto jäi jäljelle');
 });
@@ -75,11 +75,11 @@ test('palvelin: GET/POST /api/asetukset vaatii avaimen ja kirjoittaa vain kiinte
     req.on('error', ei); req.end();
   });
   try {
-    assert.deepEqual(await laheta('/api/asetukset'), [200, { automaattijatko: false, autopack: false }]);
-    assert.deepEqual(await laheta('/api/asetukset/autopack/paalle', 'POST'), [200, { automaattijatko: false, autopack: true }]);
-    assert.deepEqual(await laheta('/api/asetukset/automaattijatko/paalle', 'POST'), [200, { automaattijatko: true, autopack: true }]);
-    assert.deepEqual(await laheta('/api/asetukset/autopack/pois', 'POST'), [200, { automaattijatko: true, autopack: false }]);
-    assert.deepEqual(await laheta('/api/asetukset'), [200, { automaattijatko: true, autopack: false }]);
+    assert.deepEqual(await laheta('/api/asetukset'), [200, { automaattijatko: false, autopack: false, agyluvat: false }]);
+    assert.deepEqual(await laheta('/api/asetukset/autopack/paalle', 'POST'), [200, { automaattijatko: false, autopack: true, agyluvat: false }]);
+    assert.deepEqual(await laheta('/api/asetukset/automaattijatko/paalle', 'POST'), [200, { automaattijatko: true, autopack: true, agyluvat: false }]);
+    assert.deepEqual(await laheta('/api/asetukset/autopack/pois', 'POST'), [200, { automaattijatko: true, autopack: false, agyluvat: false }]);
+    assert.deepEqual(await laheta('/api/asetukset'), [200, { automaattijatko: true, autopack: false, agyluvat: false }]);
     assert.equal((await laheta('/api/asetukset/muu/paalle', 'POST'))[0], 404);
     assert.equal((await laheta('/api/asetukset/..%2Fautopack/paalle', 'POST'))[0], 404);
     assert.equal((await laheta('/api/asetukset/autopack/ehka', 'POST'))[0], 404);
@@ -121,7 +121,7 @@ test('palvelin: keskustelukohtaiset kytkimet valitsevat istunnon itse tai ?istun
     assert.deepEqual(await laheta('/api/skoopit/scopes%20chat/asetukset'), [200, { istunto: A, istuntoja: 1, automaattijatko: false, autopack: true }]);
     assert.deepEqual(await laheta('/api/skoopit/scopes%20chat/asetukset/autopack/pois', 'POST'), [200, { istunto: A, istuntoja: 1, automaattijatko: false, autopack: false }]);
     // yhteinen oletus ja toisen skoopin istunto eivät muutu
-    assert.deepEqual(await laheta('/api/asetukset'), [200, { automaattijatko: false, autopack: true }]);
+    assert.deepEqual(await laheta('/api/asetukset'), [200, { automaattijatko: false, autopack: true, agyluvat: false }]);
     assert.equal((await laheta(`/api/skoopit/scopes%20lista/asetukset?istunto=${B}`))[1].autopack, true);
     // useita istuntoja: kirjoitus vaatii valinnan, luku näyttää yhteisen oletuksen
     assert.deepEqual(await laheta('/api/skoopit/scopes%20lista/asetukset'), [200, { istunto: null, istuntoja: 2, automaattijatko: false, autopack: true }]);
@@ -134,4 +134,13 @@ test('palvelin: keskustelukohtaiset kytkimet valitsevat istunnon itse tai ?istun
     assert.equal((await laheta('/api/skoopit/ei%20ole/asetukset'))[0], 404);
     assert.equal((await laheta('/api/skoopit/scopes%20chat/asetukset/muu/pois', 'POST'))[0], 404);
   } finally { srv.close(); }
+});
+
+test('agyluvat: globaali kytkin, ei keskustelukohtainen (AGY-PRE-ISTUNTO)', () => {
+  const d = mkdtempSync(join(tmpdir(), 'asetukset-'));
+  const a = luoAsetukset({ hakemisto: d });
+  assert.equal(a.lue().agyluvat, false);
+  assert.equal(a.aseta('agyluvat', true).agyluvat, true);
+  assert.equal(luoAsetukset({ hakemisto: d }).lue().agyluvat, true);
+  assert.throws(() => a.asetaIstunto('agyluvat', '38c487b9-3c36-4723-b2af-5f07b106c172', true), (e) => e.koodi === 404);
 });

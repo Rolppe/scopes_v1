@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { projektiNimi } from './lahteet.mjs';
 import { kasittelija } from './palvelin.mjs';
 import { Hylatty } from './toiminnot.mjs';
-import { GEMINI_AGENTTI, geminiKehote, istunnonAsetukset, keskustelu, luoViestit, mallinNayttonimi, MALLIT, paikallisetMallit, transkriptissa, tyokaluRivi } from './viestit.mjs';
+import { AGY_MALLIT, GEMINI_AGENTTI, geminiKehote, istunnonAsetukset, keskustelu, luoViestit, mallinNayttonimi, MALLIT, paikallisetMallit, transkriptissa, tyokaluRivi } from './viestit.mjs';
 
 const ID = '38c487b9-3c36-4723-b2af-5f07b106c172';
 const rivi = (o) => JSON.stringify(o);
@@ -188,8 +188,8 @@ test('chat: malli, agentti ja jatko; viesti stdinissä, ei työkaluja', async ()
   assert.equal(kutsut[0].cwd, a.chatDir);
   await v.chat({ agentti: 'claude-opus-5-5', viesti: 'x', keskustelu: ID });
   assert.deepEqual(kutsut[1].argumentit.slice(7), ['--model', 'claude-opus-5-5', '--resume', ID]);
-  assert.equal((await v.agentit()).length, MALLIT.length + 1);
-  assert.equal((await v.agentit()).length, MALLIT.length + 1);
+  assert.equal((await v.agentit()).length, MALLIT.length + AGY_MALLIT.length + 1);
+  assert.equal((await v.agentit()).length, MALLIT.length + AGY_MALLIT.length + 1);
   assert.equal(kutsut.filter((k) => k.komento === 'ssh').length, 1, 'mallilista välimuistista');
 });
 
@@ -213,7 +213,7 @@ test('chat: paikallinen malli ssh:n yli — viestit JSON-rungossa, ajattelu pois
   await hylkaa(v.chat({ agentti: 'palvelin/ei-ole', viesti: 'x' }), 400);
   // palvelin pois päältä: vain Claude-mallit.
   const pois = luoViestit(a, { aja: vaarennos(undefined, { koodi: 255, stdout: '', stderr: 'timeout' }).aja });
-  assert.equal((await pois.agentit()).length, MALLIT.length);
+  assert.equal((await pois.agentit()).length, MALLIT.length + AGY_MALLIT.length);
 });
 
 test('chat: suoratoisto — palat sitä mukaa, ajattelu pois, tekstilohkot erotettu', async () => {
@@ -423,7 +423,7 @@ test('palvelin: chat- ja viestipolut avaimella, iso runko sallittu', async () =>
     req.end(runko ? JSON.stringify(runko) : undefined);
   });
   try {
-    assert.equal((await hae('/api/agentit')).data.length, MALLIT.length + 1);
+    assert.equal((await hae('/api/agentit')).data.length, MALLIT.length + AGY_MALLIT.length + 1);
     assert.equal((await hae('/api/agentit', 'GET', null, 'vaara')).koodi, 401);
     const c = await hae('/api/chat', 'POST', { agentti: 'claude-haiku-5-5', viesti: 'x'.repeat(5000) });
     assert.equal(c.koodi, 200);

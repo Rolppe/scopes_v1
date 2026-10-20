@@ -83,3 +83,53 @@ test('vanha vahdin lukema (yli 10 min) ei kelpaa', async () => {
   });
   assert.equal((await kayttoraja()).viisiTuntia, null);
 });
+
+test('palvelin: /api/kayttoraja reitittää agy-kiintiöön kun tyyppi=agy tai agentti=android/gemini', async () => {
+  const { createServer } = await import('node:http');
+  const { kasittelija } = await import('./palvelin.mjs');
+  const claudeRaja = async () => ({ viisiTuntia: { kaytto: 10, nollautuu: null }, viikko: { kaytto: 20, nollautuu: null } });
+  const agyRaja = async () => ({ viisiTuntia: { kaytto: 30, nollautuu: null }, viikko: { kaytto: 40, nollautuu: null } });
+
+  const srv = createServer(
+    kasittelija(
+      { avain: 'salaisuus', juuri: '/nonexistent', toimintoloki: null },
+      async () => ({}),
+      { skoopinViestit: () => ({ istunto: null }) },
+      claudeRaja,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      agyRaja
+    )
+  ).listen(0, '127.0.0.1');
+  await new Promise((r) => srv.once('listening', r));
+
+  try {
+    const portti = srv.address().port;
+    const hae = async (path) => {
+      const res = await fetch(`http://127.0.0.1:${portti}${path}`, {
+        headers: { authorization: 'Bearer salaisuus' },
+      });
+      return await res.json();
+    };
+
+    // Oletus: claude
+    const oletus = await hae('/api/kayttoraja');
+    assert.equal(oletus.viisiTuntia.kaytto, 10);
+
+    // tyyppi=agy: agy
+    const agy = await hae('/api/kayttoraja?tyyppi=agy');
+    assert.equal(agy.viisiTuntia.kaytto, 30);
+
+    // agentti=android/gemini: agy
+    const gemini = await hae('/api/kayttoraja?agentti=android/gemini');
+    assert.equal(gemini.viisiTuntia.kaytto, 30);
+  } finally {
+    srv.close();
+  }
+});
+

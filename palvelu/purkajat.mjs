@@ -11,7 +11,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { ajaKomento, Hylatty } from './toiminnot.mjs';
+import { AGY_MALLI, MAC_AGY_MALLI, ajaKomento, Hylatty } from './toiminnot.mjs';
 import { MALLIT, PAIKALLINEN } from './viestit.mjs';
 
 export const AGENTTI = 'siirtaja-sonnet';
@@ -69,10 +69,13 @@ export function luoPurkajat({ juuri, paikalliset = async () => [], aja = ajaKome
       { tunnus: '', kuvaus: `Oletus (${oletus()})`, ryhma: 'oletus' },
       ...MALLIT.map((m) => ({ tunnus: `claude-cli:${m.nimi}`, kuvaus: m.kuvaus, ryhma: 'Claude' })),
       { tunnus: `claude-agent:${AGENTTI}`, kuvaus: `${AGENTTI}-agentti`, ryhma: 'Claude' },
-      ...agyt.map((m) => ({ tunnus: `agy:${m.id}`, kuvaus: m.nimi, ryhma: 'agy' })),
+      ...agyt.map((m) => ({ tunnus: `mac-agy:${m.id}`, kuvaus: `${m.nimi} · macos`, ryhma: 'Mac AGY' })),
+      ...agyt.map((m) => ({ tunnus: `agy:${m.id}`, kuvaus: `${m.nimi} · oneplus linux`, ryhma: 'OnePlus Linux AGY' })),
       ...lms.map((m) => ({ tunnus: `paikallinen:${m.nimi.slice(PAIKALLINEN.length)}`, kuvaus: m.kuvaus, ryhma: 'Paikalliset' })),
     ];
     const mallit = [...MALLIT.map(({ nimi, kuvaus }) => ({ nimi, kuvaus, ryhma: 'Claude' })),
+      ...agyt.map((m) => ({ nimi: `${MAC_AGY_MALLI}${m.id}`, kuvaus: `${m.nimi} · macos`, ryhma: 'Mac AGY' })),
+      ...agyt.map((m) => ({ nimi: `${AGY_MALLI}${m.id}`, kuvaus: `${m.nimi} · oneplus linux`, ryhma: 'OnePlus Linux AGY' })),
       ...lms.map(({ nimi, kuvaus }) => ({ nimi, kuvaus, ryhma: 'Paikalliset' })),
       ...(existsSync(nebiusTiedosto) ? NEBIUS_MALLIT.map((m) => ({ nimi: `${NEBIUS_MALLI}${m.id}`, kuvaus: m.kuvaus, ryhma: 'Nebius' })) : [])];
     return { purkajat, mallit, oletusMalli: 'claude-opus-5-5' };
@@ -80,10 +83,28 @@ export function luoPurkajat({ juuri, paikalliset = async () => [], aja = ajaKome
 
   // Runko {purkaja?, malli?} → { ajaja, malli }; tyhjä tai puuttuva = oletus (null).
   async function tarkista(runko = {}) {
-    const purkaja = runko.purkaja ?? '';
-    const malli = runko.malli ?? '';
+    let purkaja = runko.purkaja ?? '';
+    let malli = runko.malli ?? '';
     if (typeof purkaja !== 'string' || typeof malli !== 'string') throw new Hylatty(400, 'purkaja ja malli ovat merkkijonoja');
     const l = (purkaja || malli) ? await lista() : null;
+
+    if (malli && l) {
+      if (malli.startsWith('macos-agy/')) {
+        malli = `${MAC_AGY_MALLI}${malli.slice(10)}`;
+      } else if (!malli.includes('/')) {
+        const loytyi = l.mallit.find((m) => m.nimi === `${MAC_AGY_MALLI}${malli}` || m.nimi === `${AGY_MALLI}${malli}`);
+        if (loytyi) malli = loytyi.nimi;
+      }
+    }
+    if (purkaja && l) {
+      if (purkaja.startsWith('macos-agy:')) {
+        purkaja = `mac-agy:${purkaja.slice(10)}`;
+      } else if (!purkaja.includes(':')) {
+        const loytyi = l.purkajat.find((p) => p.tunnus === `mac-agy:${purkaja}` || p.tunnus === `agy:${purkaja}`);
+        if (loytyi) purkaja = loytyi.tunnus;
+      }
+    }
+
     if (malli && !l.mallit.some((m) => m.nimi === malli)) throw new Hylatty(400, `tuntematon istunnon malli ${malli.slice(0, 80)}`);
     if (purkaja && !l.purkajat.some((p) => p.tunnus === purkaja)) {
       throw new Hylatty(400, `purkaja ei ole saatavilla: ${purkaja.slice(0, 120)}`);
