@@ -15,6 +15,14 @@ import { agyRuudut, agyViestit, haeMacAgyKeskustelu, jasennaAgyRuutu, loydaKesku
 import { istunnotAsync, lueSkoopit, projektiNimi, pysahdys } from './lahteet.mjs';
 import { ajaKomento, Hylatty, mallitonSlug } from './toiminnot.mjs';
 
+export const AGY_MALLIT = [
+  { nimi: 'mac-agy/gemini-3.8-flash-low', kuvaus: 'Gemini 3.8 Flash (Low)', tyyppi: 'agy', malliId: 'gemini-3.8-flash-low' },
+  { nimi: 'mac-agy/gemini-3.8-flash-medium', kuvaus: 'Gemini 3.8 Flash (Medium)', tyyppi: 'agy', malliId: 'gemini-3.8-flash-medium' },
+  { nimi: 'mac-agy/gemini-3.8-flash-high', kuvaus: 'Gemini 3.8 Flash (High)', tyyppi: 'agy', malliId: 'gemini-3.8-flash-high' },
+  { nimi: 'mac-agy/claude-sonnet-4-6', kuvaus: 'Claude Sonnet 4.6', tyyppi: 'agy', malliId: 'claude-sonnet-4-6' },
+  { nimi: 'mac-agy/claude-opus-4-6-thinking', kuvaus: 'Claude Opus 4.6 (Thinking)', tyyppi: 'agy', malliId: 'claude-opus-4-6-thinking' },
+  { nimi: 'mac-agy/gpt-oss-120b-medium', kuvaus: 'GPT-OSS 120B (Medium)', tyyppi: 'agy', malliId: 'gpt-oss-120b-medium' },
+];
 export const MALLIT = [
   { nimi: 'claude-fable-5-1', kuvaus: 'Fable 5.1', tyyppi: 'malli' },
   { nimi: 'claude-opus-5-5', kuvaus: 'Opus 5.5', tyyppi: 'malli' },
@@ -56,6 +64,24 @@ const GEMINI_MAKSIMI = 8000; // android.mjs TEKSTIN_MAKSIMI: jakointentin teksti
 
 // Jatkoviesti Geminille: jokainen kysymys on oma Gemini-chattinsa (android.mjs kysyGeminilta), joten aiempi keskustelu
 // kulkee tekstin alussa kuten paikallisten mallien messages-listassa. Vanhimmat viestit jäävät pois, kun raja tulee vastaan.
+
+export function agyKehote(aiemmat, uusiViesti, jarjestelmaKehote = null, maksimi = 16000) {
+  let prompt = '';
+  if (jarjestelmaKehote) {
+    prompt += '[Järjestelmäohjeet]\n' + jarjestelmaKehote + '\n\n';
+  }
+  if (aiemmat && aiemmat.length > 0) {
+    prompt += '[Aiempi keskustelu]\n';
+    for (const v of aiemmat) {
+      const rooli = v.rooli === 'kayttaja' ? 'Käyttäjä' : 'Koordinaattori';
+      prompt += rooli + ': ' + v.teksti + '\n';
+    }
+    prompt += '\n';
+  }
+  prompt += '[Uusi viesti]\nKäyttäjä: ' + uusiViesti + '\nKoordinaattori:';
+  return prompt;
+}
+
 export function geminiKehote(aiemmat, viesti, maksimi = GEMINI_MAKSIMI) {
   if (!aiemmat.length) return viesti;
   const alku = 'Jatka alla olevaa keskustelua ja vastaa vain viimeiseen viestiin.\n\n[Aiempi keskustelu]\n';
@@ -406,7 +432,7 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
   }
   const nebiusAvain = () => asetukset.nebiusTiedosto ?? join(homedir(), '.config/scopes/nebius-avain');
   const nebiusMallit = () => (existsSync(nebiusAvain()) ? NEBIUS_CHAT_MALLIT : []);
-  const kaikkiMallit = async () => [...MALLIT, ...(android ? [GEMINI_AGENTTI] : []), ...await haePaikalliset(), ...nebiusMallit()];
+  const kaikkiMallit = async () => [...MALLIT, ...AGY_MALLIT, ...(android ? [GEMINI_AGENTTI] : []), ...await haePaikalliset(), ...nebiusMallit()];
 
   // Paikallisen mallin keskustelu talletetaan itse (LM Studio ei pidä historiaa): chatDir/paikalliset/<uuid>.json.
   // Samaan kansioon menevät Gemini-keskustelut, koska Geminin oma historia on joka kysymykselle eri chat.
@@ -491,6 +517,35 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
     return { vastaus, keskustelu: id, agentti: valittu.nimi, kustannus, ...(pysaytetty() ? { keskeytetty: true } : {}) };
   }
 
+  async function agyChat(valittu, viesti, jatko, { pala, alku, signal, pysaytetty, jarjestelmaKehote } = {}) {
+    const k = jatko ? luePaikallinen(jatko) : { agentti: valittu.nimi, viestit: [] };
+    if (!k) throw new Hylatty(404, 'tuntematon keskustelu');
+    if (k.agentti !== valittu.nimi) throw new Hylatty(409, 'keskustelu kuuluu toiselle mallille');
+    const aiemmat = [...k.viestit];
+    k.viestit.push({ rooli: 'kayttaja', teksti: viesti, aika: new Date().toISOString() });
+    alku?.();
+    let vastaus = '';
+    const agyKomento = process.env.AGY_BIN ?? (process.platform === 'darwin' ? '~/.local/bin/agy' : '~/.local/bin/agy');
+    const syoteKehote = agyKehote(aiemmat, viesti, jarjestelmaKehote);
+    const argumentit = ['--dangerously-skip-permissions', '--model', valittu.malliId, '--add-dir', asetukset.juuri, '-p', syoteKehote];
+    const riville = (r) => {
+      if (r) {
+        vastaus += r + '\n';
+        pala?.(r + '\n');
+      }
+    };
+    const t = pysaytetty() ? null : await aja(agyKomento, argumentit, { cwd: asetukset.juuri, riville, signal, aikaraja: 180_000 });
+    if (!pysaytetty() && (t?.koodi !== 0 || !vastaus.trim())) {
+      const virheTeksti = t?.stderr || t?.stdout || 'AGY ei vastannut';
+      throw new Hylatty(502, `AGY-malli ei vastannut: ${virheTeksti.slice(0, 300)}`);
+    }
+    vastaus = vastaus.trim();
+    if (vastaus) k.viestit.push({ rooli: 'agentti', teksti: vastaus, aika: new Date().toISOString() });
+    const id = jatko ?? randomUUID();
+    mkdirSync(paikallisetDir(), { recursive: true });
+    writeFileSync(join(paikallisetDir(), `${id}.json`), JSON.stringify(k));
+    return { vastaus, keskustelu: id, agentti: valittu.nimi, kustannus: 0, ...(pysaytetty() ? { keskeytetty: true } : {}) };
+  }
   async function geminiChat(valittu, viesti, jatko, { pala, alku, pysaytetty }) {
     const k = jatko ? luePaikallinen(jatko) : { agentti: valittu.nimi, viestit: [] };
     if (!k) throw new Hylatty(404, 'tuntematon keskustelu');
@@ -558,8 +613,9 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
     // tekstin palat menevät `pala`-kutsulle sitä mukaa kuin agentti kirjoittaa; lopullinen vastaus tulee result-rivistä.
     // `alku` kutsutaan, kun pyyntö on hyväksytty ja agentti käynnistyy (palvelin avaa vasta silloin virran);
     // `signal` katkaisee ajon, kun puhelin sulkee yhteyden.
-    async chat({ agentti, viesti, keskustelu: jatko } = {}, { pala, alku, signal } = {}) {
+    async chat({ agentti, viesti, keskustelu: jatko, jarjestelmaKehote } = {}, { pala, alku, signal } = {}) {
       const valittu = MALLIT.find((a) => a.nimi === agentti)
+        ?? AGY_MALLIT.find((a) => a.nimi === agentti)
         ?? nebiusMallit().find((a) => a.nimi === agentti)
         ?? (android && agentti === GEMINI_AGENTTI.nimi ? GEMINI_AGENTTI : undefined)
         ?? (typeof agentti === 'string' && agentti.startsWith(PAIKALLINEN) ? (await haePaikalliset()).find((a) => a.nimi === agentti) : undefined);
@@ -573,6 +629,7 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
       const pysaytetty = () => pysaytin.signal.aborted;
       signal = signal ? AbortSignal.any([signal, pysaytin.signal]) : pysaytin.signal;
       try {
+        if (valittu.tyyppi === 'agy') return await agyChat(valittu, viesti, jatko, { pala, alku, signal, pysaytetty, jarjestelmaKehote });
         if (valittu.tyyppi === 'nebius') return await nebiusChat(valittu, viesti, jatko, { pala, alku, signal, pysaytetty });
         if (valittu.tyyppi === 'paikallinen') return await paikallinenChat(valittu, viesti, jatko, { pala, alku, signal, pysaytetty });
         if (valittu.tyyppi === 'gemini') return await geminiChat(valittu, viesti, jatko, { pala, alku, pysaytetty });

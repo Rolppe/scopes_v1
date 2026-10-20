@@ -30,12 +30,12 @@ test('lista: oletus, Claude, agentti, agy ja paikalliset; agy välimuistissa', a
   const { p, kutsut } = purkajat();
   const l = await p.lista();
   assert.deepEqual(l.purkajat.map((x) => x.tunnus), ['', 'claude-cli:claude-fable-5-1', 'claude-cli:claude-opus-5-5', 'claude-cli:claude-sonnet-5-5',
-    'claude-cli:claude-haiku-5-5', 'claude-agent:siirtaja-sonnet', 'agy:gemini-3.8-flash-medium', 'agy:gpt-oss-120b-medium', 'paikallinen:qwen/qwen3.6-35b-a3b']);
+    'claude-cli:claude-haiku-5-5', 'claude-agent:siirtaja-sonnet', 'mac-agy:gemini-3.8-flash-medium', 'mac-agy:gpt-oss-120b-medium', 'agy:gemini-3.8-flash-medium', 'agy:gpt-oss-120b-medium', 'paikallinen:qwen/qwen3.6-35b-a3b']);
   assert.equal(l.purkajat[0].kuvaus, 'Oletus (claude-cli claude-haiku-5-5)');
   assert.equal(l.oletusMalli, 'claude-opus-5-5');
   // Paikalliset mallit myös istunnon malleiksi (15.10.2026: "Paikalliset mallit pitää saada myös keskustelun ajoon").
   assert.deepEqual(l.mallit.map((m) => `${m.ryhma}:${m.nimi}`), ['Claude:claude-fable-5-1', 'Claude:claude-opus-5-5', 'Claude:claude-sonnet-5-5',
-    'Claude:claude-haiku-5-5', 'Paikalliset:palvelin/qwen/qwen3.6-35b-a3b']);
+    'Claude:claude-haiku-5-5', 'Mac AGY:mac-agy/gemini-3.8-flash-medium', 'Mac AGY:mac-agy/gpt-oss-120b-medium', 'OnePlus Linux AGY:agy/gemini-3.8-flash-medium', 'OnePlus Linux AGY:agy/gpt-oss-120b-medium', 'Paikalliset:palvelin/qwen/qwen3.6-35b-a3b']);
   await p.lista();
   assert.equal(kutsut.length, 1);
 });
@@ -47,16 +47,16 @@ test('lista: vanhentunut agy-lista heti, päivitys taustalla yhtenä hakuna', as
   let hidas = false;
   const { p, kutsut } = purkajat({ nyt: () => aika,
     aja: () => (hidas ? new Promise((r) => { vapauta = () => r({ koodi: 0, stdout: 'uusi-malli\tUusi\n', stderr: '' }); }) : { koodi: 0, stdout: AGY, stderr: '' }) });
-  assert.equal((await p.lista()).purkajat.filter((x) => x.ryhma === 'agy').length, 2);
+  assert.equal((await p.lista()).purkajat.filter((x) => x.ryhma.includes('AGY')).length, 4);
   aika = 11 * 60_000;
   hidas = true;
   const ennen = await p.lista();
   await p.lista();
   assert.equal(kutsut.length, 2);
-  assert.deepEqual(ennen.purkajat.filter((x) => x.ryhma === 'agy').map((x) => x.tunnus), ['agy:gemini-3.8-flash-medium', 'agy:gpt-oss-120b-medium']);
+  assert.deepEqual(ennen.purkajat.filter((x) => x.ryhma.includes('AGY')).map((x) => x.tunnus), ['mac-agy:gemini-3.8-flash-medium', 'mac-agy:gpt-oss-120b-medium', 'agy:gemini-3.8-flash-medium', 'agy:gpt-oss-120b-medium']);
   vapauta();
   await new Promise((r) => setImmediate(r));
-  assert.deepEqual((await p.lista()).purkajat.filter((x) => x.ryhma === 'agy').map((x) => x.tunnus), ['agy:uusi-malli']);
+  assert.deepEqual((await p.lista()).purkajat.filter((x) => x.ryhma.includes('AGY')).map((x) => x.tunnus), ['mac-agy:uusi-malli', 'agy:uusi-malli']);
   assert.equal(kutsut.length, 2);
 });
 
@@ -69,6 +69,9 @@ test('tarkista: vain listan jäsenet, tyhjä = oletus', async () => {
   const { p } = purkajat();
   assert.deepEqual(await p.tarkista({}), { ajaja: null, malli: null });
   assert.deepEqual(await p.tarkista({ purkaja: 'agy:gemini-3.8-flash-medium', malli: 'claude-sonnet-5-5' }), { ajaja: 'agy:gemini-3.8-flash-medium', malli: 'claude-sonnet-5-5' });
+  assert.deepEqual(await p.tarkista({ malli: 'gemini-3.8-flash-medium' }), { ajaja: null, malli: 'mac-agy/gemini-3.8-flash-medium' });
+  assert.deepEqual(await p.tarkista({ malli: 'mac-agy/gemini-3.8-flash-medium' }), { ajaja: null, malli: 'mac-agy/gemini-3.8-flash-medium' });
+  assert.deepEqual(await p.tarkista({ malli: 'agy/gemini-3.8-flash-medium' }), { ajaja: null, malli: 'agy/gemini-3.8-flash-medium' });
   const hylkaa = (r) => assert.rejects(p.tarkista(r), (e) => e instanceof Hylatty && e.koodi === 400);
   await hylkaa({ purkaja: 'agy:gemini --rm' });
   await hylkaa({ purkaja: 'paikallinen:muu' });

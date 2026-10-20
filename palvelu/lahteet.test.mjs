@@ -1,7 +1,7 @@
 // node --test scopes/palvelu/lahteet.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request } from 'node:http';
@@ -128,6 +128,62 @@ test('lista ja yksi: tiivistelmä ja skoopin näkymä', () => {
   assert.equal(s.seuraava.id, 'A-PAKETTI');
   assert.equal(s.istunnot[0].id, 's1');
   assert.equal(yksi('puuttuu', a), null);
+});
+
+test('lista ja yksi: AGY-istunnot rikastavat skoopin tilan, istuntomäärän ja kontekstin', () => {
+  const a = ymparisto();
+  utimesSync(join(a.juuri, 'a/R.md'), 1000, 1000);
+  const agy = [{
+    id: 'siirto-b-120000',
+    nimi: 'siirto-b-120000',
+    tila: 'busy',
+    kysely: false,
+    skooppi: 'b',
+    konteksti: { tokenit: 12345, aika: '2026-10-16T15:00:00.000Z' },
+    pysahdys: '2026-10-16T15:00:00.000Z',
+    pakattu: false,
+    hereilla: false,
+    alkoi: 1792150000000,
+    pid: 9999,
+    vanhempi: null,
+    ruutu: 'siirto-b-120000',
+    tyyppi: 'agy',
+  }];
+  const l = lista(a, agy);
+  const b = l.find((x) => x.nimi === 'b');
+  assert.equal(b.istuntoja, 1);
+  assert.equal(b.tila, 'kasittely');
+  assert.equal(b.suurinKonteksti, 12345);
+  assert.equal(b.aika, '2026-10-16T15:00:00.000Z');
+
+  const s = yksi('b', a, agy);
+  assert.equal(s.istunnot.length, 1);
+  assert.equal(s.istunnot[0].id, 'siirto-b-120000');
+  assert.equal(s.istunnot[0].tyyppi, 'agy');
+});
+
+test('istunnot ja lista: AGY-istunto synkronisesti listaukseen, kyselytila ja deduplikointi', () => {
+  const a = ymparisto();
+  const listPanes = () => 'siirto-b-140000 agy 1792160000 7777\n';
+  const capturePane = () => 'Question 1/1: Valitse toiminto?\n  ↑/↓ Navigate · enter Select · esc Skip\n';
+
+  const res = istunnot({ ...a, skooppiNimet: ['a', 'b'], listPanes, capturePane });
+  assert.equal(res.length, 2); // s1 (Claude) ja siirto-b-140000 (AGY)
+  const agy = res.find((i) => i.id === 'siirto-b-140000');
+  assert.equal(agy.skooppi, 'b');
+  assert.equal(agy.tila, 'waiting');
+  assert.equal(agy.kysely, true);
+  assert.equal(agy.tyyppi, 'agy');
+
+  const l = lista({ ...a, listPanes, capturePane });
+  const b = l.find((x) => x.nimi === 'b');
+  assert.equal(b.tila, 'kysely');
+  assert.equal(b.istuntoja, 1);
+
+  // lisaIstunnot samalla id:llä ei monista istuntoa
+  const l2 = lista({ ...a, listPanes, capturePane }, [agy]);
+  const b2 = l2.find((x) => x.nimi === 'b');
+  assert.equal(b2.istuntoja, 1);
 });
 
 test('skooppiTila: busy käsittelyssä, muu pakkaamaton odottaa, pakattu tai ei istuntoja harmaa', () => {

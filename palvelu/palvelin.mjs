@@ -81,7 +81,7 @@ import { fileURLToPath } from 'node:url';
 import { luoDiagnostiikka } from './diagnostiikka.mjs';
 import { luoKayttoraja } from './kayttoraja.mjs';
 import { luoAgyKayttoraja } from './agy-kayttoraja.mjs';
-import { lista, lueSkoopit, rekisterinOsat, rekisterit, yksi } from './lahteet.mjs';
+import { lista, lueSkoopit, lueViat, rekisterinOsat, rekisterit, yksi } from './lahteet.mjs';
 import { luoLiitteet } from './liitteet.mjs';
 import { luoNebiusAvain } from './nebius-avain.mjs';
 import { luoAndroid } from './android.mjs';
@@ -94,6 +94,7 @@ import { ajaKomento, Hylatty, luoToiminnot } from './toiminnot.mjs';
 import { agyIstunnot } from './agy-istunto.mjs';
 import { luoViestit } from './viestit.mjs';
 import { LrVirhe, luoLr } from '../localregister/palvelu.mjs';
+import { luoKordinaattori } from './kordinaattori.mjs';
 
 const tama = dirname(fileURLToPath(import.meta.url));
 
@@ -142,7 +143,7 @@ function runko(req, raja = 1024) {
   });
 }
 
-export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset, { android: () => android }), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), purkajat = luoPurkajat({ juuri: asetukset.juuri, paikalliset: () => viestit.agentit() }), linux = luoLinuxServer({ loki: asetukset.toimintoloki, kuiva: asetukset.linuxKuiva === true }), android = luoAndroid({ loki: asetukset.toimintoloki, kuiva: asetukset.androidKuiva === true, ...(asetukset.androidLaite && { laite: asetukset.androidLaite }), ...(asetukset.androidDir && { tuotoksetDir: asetukset.androidDir }) }), agyKayttoraja = luoAgyKayttoraja()) {
+export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset, { android: () => android }), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), purkajat = luoPurkajat({ juuri: asetukset.juuri, paikalliset: () => viestit.agentit() }), linux = luoLinuxServer({ loki: asetukset.toimintoloki, kuiva: asetukset.linuxKuiva === true }), android = luoAndroid({ loki: asetukset.toimintoloki, kuiva: asetukset.androidKuiva === true, ...(asetukset.androidLaite && { laite: asetukset.androidLaite }), ...(asetukset.androidDir && { tuotoksetDir: asetukset.androidDir }) }), agyKayttoraja = luoAgyKayttoraja(), kordinaattori = luoKordinaattori(asetukset.juuri)) {
   const istuntoValinta = luoIstuntoValinta(asetukset);
   const nebius = luoNebiusAvain({ tiedosto: asetukset.nebiusTiedosto ?? join(homedir(), '.config/scopes/nebius-avain') });
   // Chat suoratoistona (DEMO-SCOPES-SUORATOISTO): NDJSON-rivit {tyyppi: 'pala', teksti} …, lopuksi
@@ -224,6 +225,22 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         if (an) return vastaa(200, await android.suorita(an[1], await runko(req, 32_768)));
         if (polku === '/api/nebius-avain') return vastaa(200, nebius.tallenna((await runko(req)).avain));
         if (polku === '/api/uusi') { const r = await runko(req); return vastaa(200, await suorita('uusi', r.nimi, await purkajat.tarkista(r))); }
+        if (polku === '/api/kordinaattori/chat') {
+          const runkoData = await runko(req, 32_768);
+          return vastaa(200, await viestit.chat({
+            ...runkoData,
+            agentti: kordinaattori.ratkaiseMalli(runkoData.agentti),
+            jarjestelmaKehote: kordinaattori.kehote()
+          }));
+        }
+        if (polku === '/api/kordinaattori/virta') {
+          const runkoData = await runko(req, 32_768);
+          return await virtaa(res, {
+            ...runkoData,
+            agentti: kordinaattori.ratkaiseMalli(runkoData.agentti),
+            jarjestelmaKehote: kordinaattori.kehote()
+          });
+        }
         if (polku === '/api/chat') return vastaa(200, await viestit.chat(await runko(req, 32_768)));
         if (polku === '/api/chat/virta') return await virtaa(res, await runko(req, 32_768));
         // Stop-nappi (CHAT-STOP): chat-vastaus katkeaa ja valmis-rivi tuo osittaisen vastauksen; skoopin istunto saa Escapen.
@@ -232,6 +249,16 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         if (st) return vastaa(200, await viestit.pysaytaSkooppi(decodeURIComponent(st[1])));
         const v = polku.match(/^\/api\/skoopit\/([^/]+)\/viesti$/);
         if (v) return vastaa(200, await viestit.lahetaSkooppiin(decodeURIComponent(v[1]), (await runko(req, 32_768)).teksti));
+        const stm = polku.match(/^\/api\/skoopit\/([^/]+)\/stream$/);
+        if (stm) {
+          const nimi = decodeURIComponent(stm[1]);
+          const { teksti } = await runko(req, 32_768);
+          const tulos = await viestit.lahetaSkooppiin(nimi, teksti);
+          res.writeHead(200, NDJSON);
+          kirjoitaRes(res, { tyyppi: "valmis", vastaus: "", istunto: tulos?.istunto ?? null });
+          res.end();
+          return;
+        }
         const ml = polku.match(/^\/api\/skoopit\/([^/]+)\/malli$/);
         if (ml) return vastaa(200, await viestit.vaihdaMalli(decodeURIComponent(ml[1]), await runko(req, 1024)));
         const l = polku.match(/^\/api\/skoopit\/([^/]+)\/liite$/);
@@ -261,6 +288,11 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         const { agyluvat: _globaali, ...yhteiset } = kytkimet.lue(); // agyluvat on globaali, ei keskustelukohtainen
         return vastaa(200, { ...v, ...(v.istunto ? kytkimet.lueIstunto(v.istunto) : yhteiset) });
       }
+      if (polku === '/api/kordinaattori') return vastaa(200, kordinaattori.tila());
+      if (polku === '/api/kordinaattori/skoopit') return vastaa(200, kordinaattori.skoopit());
+      if (polku === '/api/viat') return vastaa(200, lueViat(asetukset.juuri));
+      if (polku === '/api/diagnostiikka') return vastaa(200, diagnostiikka.lueTilanne());
+      if (polku === '/api/kordinaattori/kehote') return vastaa(200, { kehote: kordinaattori.kehote() });
       if (polku === '/api/agentit') return vastaa(200, await viestit.agentit());
       if (polku === '/api/purkajat') return vastaa(200, await purkajat.lista());
       if (polku === '/api/palvelin') return vastaa(200, await linux.tila());

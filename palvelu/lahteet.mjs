@@ -597,3 +597,22 @@ export function yksi(nimi, asetukset, lisaIstunnot = []) {
   const s = skooppi(nimi, { juuri: asetukset.juuri, skoopit, kaikkiIstunnot });
   return s && { ...s, konteksti: skoopinKonteksti(nimi, { juuri: asetukset.juuri, rekisterit: s.rekisterit, istunnot: s.istunnot }) };
 }
+
+export function lueViat(juuri) {
+  const polku = join(juuri, "scopes/viat/REKISTERI.md");
+  if (!existsSync(polku)) return { viat: [] };
+  const lines = readFileSync(polku, "utf8").split("\n");
+  const viat = [];
+  let inViat = false;
+  for (const line of lines) {
+    if (line.trim().startsWith("## Viat")) { inViat = true; continue; }
+    if (inViat && line.trim().startsWith("## ")) break;
+    if (inViat && line.startsWith("|")) {
+      const parts = line.split("|").map((s) => s.trim()).filter(Boolean);
+      if (parts.length >= 2 && parts[0] !== "Vika" && !parts[0].startsWith("---")) {
+        viat.push({ vika: parts[0], tila: parts[1] });
+      }
+    }
+  }
+  return { viat };
+}
