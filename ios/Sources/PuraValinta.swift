@@ -112,12 +112,13 @@ struct PurkuValitsimet: View {
     }
     private var malliRyhmat: [(String, [IstunnonMalli])] {
         let m = (valinnat?.mallit ?? []) + Self.macAgyMallit
-        return ["Claude", "Mac AGY", "Paikalliset", "Nebius"].compactMap { r in
+        return ["Claude", "Mac AGY", "OnePlus Linux AGY", "agy", "Paikalliset", "Nebius"].compactMap { r in
             let osat = m.filter { ($0.ryhma ?? "Claude") == r }
             return osat.isEmpty ? nil : (r, osat)
         }
     }
     private var paikallinenValittu: Bool { valinnat?.mallit.first { $0.nimi == malli }?.ryhma == "Paikalliset" }
+    private var agyValittu: Bool { valinnat?.mallit.first { $0.nimi == malli }?.ryhma == "agy" }
     private var nebiusValittu: Bool { valinnat?.mallit.first { $0.nimi == malli }?.ryhma == "Nebius" }
     private var oletusPurkaja: String { valinnat?.purkajat.first { $0.ryhma == "oletus" }?.kuvaus ?? "Oletus" }
     private var oletusMalli: String {
@@ -161,7 +162,9 @@ struct PurkuValitsimet: View {
             .pickerStyle(.navigationLink)
             .accessibilityIdentifier("pura-malli")
         } header: { Text("Istunto") } footer: {
-            Text(nebiusValittu
+            Text(agyValittu
+                 ? "palvelimen Linux-agy ajaa istuntoa. Toimii vain scopes-skoopeille, avautuu palvelimen tmuxiin eikä näy tämän äpin istunnoissa."
+                 : nebiusValittu
                  ? "Nebius Token Factory ajaa Claude Code -istuntoa (maksullinen API, avain Asetukset → Nebius). Istunto näkyy vain tämän äpin chatissa, ei Claudessa."
                  : paikallinenValittu
                  ? "Paikallinen malli ajaa Claude Code -istuntoa palvelimella. Istunto näkyy vain tämän äpin chatissa, ei Claudessa, ja vastaukset ovat hitaita."
