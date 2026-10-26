@@ -302,6 +302,34 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
     automaattisiirto: (nimi) => istuntoon(nimi, '/automaattisiirto', 'automaattisiirto'),
     herata: (nimi) => istuntoon(nimi, '/sa', 'herata'),
     'herata-pois': (nimi) => istuntoon(nimi, '/sa pois', 'herata-pois'),
+    // Sulje istunto ilman pakkausta (käyttäjä 26.10.2026): Escape avoimen kyselyn varalta, sitten /exit ruutuun.
+    async sulje(nimi) {
+      const skoopit = lueSkoopit(asetukset.juuri);
+      if (!Object.hasOwn(skoopit, nimi)) throw new Hylatty(404, 'tuntematon skooppi');
+      const omat = skoopinIstunnot(nimi, skoopit);
+      const agyTmux = await agyRuudut(aja, nimi);
+      const suljettavat = omat.filter((i) => i.ruutu);
+      for (const r of agyTmux) {
+        if (!suljettavat.some((i) => i.ruutu === r.ruutu)) {
+          suljettavat.push({ ruutu: r.ruutu, id: r.ruutu, pid: r.pid, vanhempi: null });
+        }
+      }
+      if (!suljettavat.length) throw new Hylatty(409, 'skoopilla ei ole avointa istuntoa, jota sulkea');
+      const suljettiin = [];
+      for (const i of suljettavat) {
+        if (i.pid || i.vanhempi) {
+          try { await tarkistaRuutu(i); } catch { /* ruutu voi olla agy tai prosessi jo päättynyt */ }
+        }
+        await aja('tmux', ['send-keys', '-t', i.ruutu, 'Escape']).catch(() => {});
+        await kirjoita(i, '/exit');
+        suljettiin.push(i.id);
+      }
+      for (const avain of [...jono.keys()]) {
+        if (avain.startsWith(`${nimi}\n`)) jono.delete(avain);
+      }
+      tallennaJono();
+      return { suljettiin, istunto: suljettavat[0]?.id };
+    },
     // Uusi skooppi saa samat valinnat kuin pura (SCOPES-LISTA-UUSI-VALINNAT 15.10.2026): /pura-taito siirtää --ajaja-lipun
     // luonnin ohi purkuvaiheeseen.
     async uusi(nimi, { ajaja = null, malli = null } = {}) {

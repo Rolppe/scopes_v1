@@ -611,13 +611,21 @@ struct ChatView: View {
     // Gemini (CHAT-GEMINI 15.10.2026) on puhelinpalvelimen Android-äppi, jota palvelu ajaa ruudun kautta.
     private var mallinValinta: some View {
         Menu {
-            Section("Claude") { ForEach(agentit.filter { $0.tyyppi == "malli" }) { valinta($0) } }
-            let android = agentit.filter { $0.tyyppi == "gemini" }
+            let suodatetut = agentit.filter { a in
+                if asetukset.kaikkiMallit.contains(where: { $0.nimi == a.nimi }) {
+                    return asetukset.sallitutMallit.contains(a.nimi)
+                }
+                return true
+            }
+            Section("Claude") { ForEach(suodatetut.filter { $0.tyyppi == "malli" }) { valinta($0) } }
+            let android = suodatetut.filter { $0.tyyppi == "gemini" }
             if !android.isEmpty { Section("Android") { ForEach(android) { valinta($0) } } }
-            let paikalliset = agentit.filter { $0.tyyppi == "paikallinen" }
+            let paikalliset = suodatetut.filter { $0.tyyppi == "paikallinen" }
             if !paikalliset.isEmpty { Section("Paikalliset") { ForEach(paikalliset) { valinta($0) } } }
-            let nebius = agentit.filter { $0.tyyppi == "nebius" }
+            let nebius = suodatetut.filter { $0.tyyppi == "nebius" }
             if !nebius.isEmpty { Section("Nebius") { ForEach(nebius) { valinta($0) } } }
+            let agy = suodatetut.filter { $0.tyyppi == "agy" }
+            if !agy.isEmpty { Section("AGY") { ForEach(agy) { valinta($0) } } }
         } label: {
             HStack(spacing: Teema.Vali.xs) {
                 Text(valittuAgentti?.otsikko ?? "Valitse malli").font(.subheadline.weight(.medium)).lineLimit(1)
@@ -990,6 +998,18 @@ struct SkooppiViestitView: View {
                     .accessibilityLabel("Skoopin tiedot")
                     .accessibilityValue(tila?.istunto?.konteksti.map { "konteksti \(tokenit($0.tokenit))" } ?? "")
                     .accessibilityIdentifier("tiedot")
+                    .contextMenu {
+                        if tila?.istunto != nil {
+                            Button(role: .destructive) {
+                                Task {
+                                    _ = try? await asiakas.toiminto(.sulje, nimi)
+                                    await lataa()
+                                }
+                            } label: {
+                                Label("Sulje istunto ilman pakkausta", systemImage: "xmark.circle")
+                            }
+                        }
+                    }
             }
             .kapseliPois()
         }

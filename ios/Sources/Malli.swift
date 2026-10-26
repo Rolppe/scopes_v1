@@ -181,6 +181,7 @@ func prosentti(_ osa: Int, _ kaikki: Int) -> String {
 enum Toiminto: String {
     case pura, pakkaa, automaattisiirto, herata
     case herataPois = "herata-pois"
+    case sulje
 }
 
 // Pakkauskytkimet (palvelu/toiminnot-asetukset.mjs, käyttäjä 14.10.2026). Skoopin reitiltä (scopes infra setting
@@ -219,12 +220,64 @@ struct ToimintoVastaus: Decodable, Hashable {
     let komento: String?
     // true: istunto oli varattu, komento lähtee palvelun jonosta, kun istunto vapautuu (V-294).
     let jonossa: Bool?
+    let suljettiin: [String]?
 }
 
 // POST /api/skoopit/<nimi>/arkistoi (SCOPES-LISTA-POISTO); varoitus = install.sh epäonnistui commitin jälkeen.
 struct ArkistointiVastaus: Decodable {
     let commit: String?
     let varoitus: Bool?
+}
+
+// Mallien ja purkajan valinnat (SCOPES-MALLIVALINNAT).
+struct IstunnonMalli: Codable, Hashable, Identifiable {
+    let nimi: String
+    let kuvaus: String
+    let ryhma: String?
+
+    var id: String { nimi }
+
+    init(nimi: String, kuvaus: String, ryhma: String? = nil) {
+        self.nimi = nimi
+        self.kuvaus = kuvaus
+        self.ryhma = ryhma
+    }
+}
+
+struct PurkajaVaihtoehto: Codable, Hashable, Identifiable {
+    let tunnus: String
+    let kuvaus: String
+    let ryhma: String
+
+    var id: String { tunnus }
+
+    init(tunnus: String, kuvaus: String, ryhma: String) {
+        self.tunnus = tunnus
+        self.kuvaus = kuvaus
+        self.ryhma = ryhma
+    }
+}
+
+struct PurkuValinnat: Codable {
+    let purkajat: [PurkajaVaihtoehto]
+    let mallit: [IstunnonMalli]
+    let oletusMalli: String
+
+    init(purkajat: [PurkajaVaihtoehto] = [], mallit: [IstunnonMalli] = [], oletusMalli: String = "") {
+        self.purkajat = purkajat
+        self.mallit = mallit
+        self.oletusMalli = oletusMalli
+    }
+}
+
+struct MallitVastaus: Codable {
+    let mallit: [IstunnonMalli]
+    let oletusMalli: String?
+
+    init(mallit: [IstunnonMalli] = [], oletusMalli: String? = nil) {
+        self.mallit = mallit
+        self.oletusMalli = oletusMalli
+    }
 }
 
 // Chat ja skoopin viestit (viestit.mjs, DEMO-SCOPES-VALILEHDET).

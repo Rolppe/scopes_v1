@@ -73,7 +73,7 @@
 // oletus ~/.local/state/scopes-android). Ilman avainta palvelu ei käynnisty.
 
 import { timingSafeEqual } from 'node:crypto';
-import { appendFileSync, readFileSync, realpathSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, realpathSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -203,7 +203,8 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
     const polku = url.pathname;
     try {
       if (polku === '/api/terveys') return vastaa(200, { ok: true });
-      if (!avainKelpaa(req.headers.authorization, asetukset.avain)) return vastaa(401, { virhe: 'avain puuttuu tai väärä' });
+      const authOtsake = req.headers.authorization ?? (url.searchParams.get('avain') ? `Bearer ${url.searchParams.get('avain')}` : '');
+      if (!avainKelpaa(authOtsake, asetukset.avain)) return vastaa(401, { virhe: 'avain puuttuu tai väärä' });
       if (polku.startsWith('/api/lr/')) return vastaa(200, await lr.kasittele(req.method, polku, () => runko(req, 16 << 20)));
       if (req.method === 'POST') {
         if (polku === '/api/diagnostiikka') return vastaa(200, await diagnostiikka.vastaanota(req));
@@ -272,7 +273,7 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         // Purun valinnat (SCOPES-PURA-MALLI): runko {purkaja?, malli?} tarkistetaan purkajat.mjs:n listaa vasten; tyhjä = oletus.
         const pu = polku.match(/^\/api\/skoopit\/([^/]+)\/pura$/);
         if (pu) return vastaa(200, await suorita('pura', decodeURIComponent(pu[1]), await purkajat.tarkista(await runko(req))));
-        const t = polku.match(/^\/api\/skoopit\/([^/]+)\/(pakkaa|automaattisiirto|herata|herata-pois|arkistoi)$/);
+        const t = polku.match(/^\/api\/skoopit\/([^/]+)\/(pakkaa|automaattisiirto|herata|herata-pois|arkistoi|sulje)$/);
         if (t) return vastaa(200, await suorita(t[2], decodeURIComponent(t[1])));
         return vastaa(404, { virhe: 'tuntematon toiminto' });
       }
@@ -295,6 +296,7 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
       if (polku === '/api/kordinaattori/kehote') return vastaa(200, { kehote: kordinaattori.kehote() });
       if (polku === '/api/agentit') return vastaa(200, await viestit.agentit());
       if (polku === '/api/purkajat') return vastaa(200, await purkajat.lista());
+      if (polku === '/api/mallit') return vastaa(200, await purkajat.lista());
       if (polku === '/api/palvelin') return vastaa(200, await linux.tila());
       if (polku === '/api/android') return vastaa(200, await android.tila());
       if (polku === '/api/android/ruutu') return vastaaTavut(await android.ruutu(url.searchParams.get('leveys') ?? 720));
@@ -317,6 +319,12 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
       if (polku === '/api/nebius-avain') return vastaa(200, nebius.tila());
       if (polku === '/api/wg-asetus') {
         try { return vastaa(200, { asetus: readFileSync(asetukset.wgTiedosto, 'utf8') }); } catch { return vastaa(404, { virhe: 'tunnelin asetusta ei ole' }); }
+      }
+      if (polku === '/api/ios/ipa' || polku === '/api/skoopit.ipa') {
+        const ipaPolku = join(asetukset.juuri, 'scopes/ios/Skoopit.ipa');
+        if (!existsSync(ipaPolku)) return vastaa(404, { virhe: 'Skoopit.ipa ei löydy, aja scopes/ios/asenna.sh --ipa' });
+        const data = readFileSync(ipaPolku);
+        return vastaaTavut({ tyyppi: 'application/octet-stream', data, nimi: 'Skoopit.ipa' });
       }
       if (polku === '/api/chat/kaynnissa') return liity(res);
       if (polku === '/api/chat/keskustelut') return vastaa(200, viestit.keskustelut());
