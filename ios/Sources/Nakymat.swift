@@ -286,7 +286,18 @@ struct ToimintoTulos: View {
                 }
                 Link("Avaa istunto Claudessa", destination: url).buttonStyle(.borderless)
             } else if tulos.tmux != nil {
-                Text("Istunto avattu paikallisella mallilla. Se näkyy vain tämän äpin chatissa.").accessibilityIdentifier("toiminto-tulos")
+                let kuvaus: String = {
+                    if tulos.malli?.hasPrefix("mac-agy") == true {
+                        return "Mac AGY -istunto avattu Macilla. Se näkyy tämän äpin chatissa."
+                    } else if tulos.malli?.hasPrefix("agy/") == true {
+                        return "OnePlus Linux AGY -istunto avattu puhelimella. Se näkyy tämän äpin chatissa."
+                    } else if tulos.malli?.hasPrefix("nebius/") == true {
+                        return "Nebius-istunto avattu. Se näkyy vain tämän äpin chatissa."
+                    } else {
+                        return "Istunto avattu paikallisella mallilla. Se näkyy vain tämän äpin chatissa."
+                    }
+                }()
+                Text(kuvaus).accessibilityIdentifier("toiminto-tulos")
                 if let skooppi {
                     Button("Avaa chat") { avattu(); navigaatio.avaaSkooppi(skooppi) }
                         .buttonStyle(.borderless).accessibilityIdentifier("toiminto-avaa-chat")

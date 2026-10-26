@@ -994,15 +994,17 @@ final class SkoopitUITests: XCTestCase {
         for _ in 0..<4 where !(pakkaa.exists && pakkaa.isHittable) { app.swipeUp() }
         XCTAssertTrue(pakkaa.waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["toiminto-pura"].exists)
-        // Automaattisiirto pakkausnapin alla ja herätyskytkin sen alla; ilman istuntoa kytkin on pois ja lukittu.
-        let siirto = app.buttons["toiminto-automaattisiirto"], herata = app.switches["toiminto-hereilla"]
-        XCTAssertTrue(siirto.exists && herata.exists, "automaattisiirto tai herätyskytkin puuttuu")
+        // Automaattisiirto pakkausnapin alla, sulje sen alla ja herätyskytkin sen alla; ilman istuntoa kytkin on pois ja lukittu.
+        let siirto = app.buttons["toiminto-automaattisiirto"], sulje = app.buttons["toiminto-sulje"], herata = app.switches["toiminto-hereilla"]
+        XCTAssertTrue(siirto.exists && sulje.exists && herata.exists, "automaattisiirto, sulje tai herätyskytkin puuttuu")
         XCTAssertLessThan(app.buttons["toiminto-pakkaa"].frame.minY, siirto.frame.minY)
-        XCTAssertLessThan(siirto.frame.minY, herata.frame.minY)
+        XCTAssertLessThan(siirto.frame.minY, sulje.frame.minY)
+        XCTAssertLessThan(sulje.frame.minY, herata.frame.minY)
         XCTAssertFalse(herata.isEnabled)
         XCTAssertEqual(herata.value as? String, "0")
         XCTAssertFalse(app.buttons["toiminto-pakkaa"].isEnabled, "pakkaus ilman istuntoa ei saa olla painettavissa")
         XCTAssertFalse(siirto.isEnabled, "siirto ilman istuntoa ei saa olla painettavissa")
+        XCTAssertFalse(sulje.isEnabled, "sulje ilman istuntoa ei saa olla painettavissa")
         // Automaattijatko ja Autopack ovat globaaleja: herätyskytkimen alla, eivätkä lukitu ilman istuntoa (käyttäjä 14.10.2026).
         // Vaatii palvelun, jolla on /api/asetukset; vanhalla palvelulla kytkimet ovat piilossa. Autopack voi olla ruudun alapuolella.
         let jatko = app.switches["toiminto-automaattijatko"], autopack = app.switches["toiminto-autopack"]

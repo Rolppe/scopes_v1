@@ -1,7 +1,7 @@
 // node --test scopes/palvelu/viestit.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -574,25 +574,84 @@ test('vaihdaMalli: /model ja /effort ruutuun vain vapaassa istunnossa, arvot lis
   ruutu = '';
   const tyhja = luoViestit({ ...a, malliTauko: 0 }, { aja: async (k, ar, v) => (k === 'tmux' && ar[0] === 'capture-pane' ? { koodi: 0, stdout: 'ei valitsinta', stderr: '' } : aja(k, ar, v)) });
   await hylkaa(tyhja.vaihdaMalli('a', { malli: 'claude-opus-5-5' }), 502);
-  // V-525: "Change effort level?" -vahvistusta ei hyväksytä; Escape sulkee sen, 409 eikä Enteriä.
+  // Kesken keskustelun: "Change effort level?" -vahvistus hyväksytään (valinta 1), jotta effort vaihtuu.
   const IKKUNA = '   Change effort level?\n   ❯ 1. Yes, switch to medium\n     2. No, go back';
-  for (const sulkeutuu of [true, false]) {
-    let nakyy = false;
-    const lahetetyt = [];
-    const ikkunallinen = luoViestit({ ...a, malliTauko: 0 }, { aja: async (k, ar, v) => {
-      if (k === 'tmux' && ar[0] === 'capture-pane') return { koodi: 0, stdout: nakyy ? IKKUNA : 'Effort', stderr: '' };
-      if (k === 'tmux' && ar[0] === 'send-keys') {
-        lahetetyt.push(ar.slice(3));
-        if (ar[3] === '-l' && ar[4] === 's') nakyy = true;
-        if (ar[3] === 'Escape' && sulkeutuu) nakyy = false;
-        if (ar[3] === '-l' && ar[4] === '2' && sulkeutuu) nakyy = false;
+  let nakyy = false;
+  const lahetetyt = [];
+  const ikkunallinen = luoViestit({ ...a, malliTauko: 0 }, { aja: async (k, ar, v) => {
+    if (k === 'tmux' && ar[0] === 'capture-pane') return { koodi: 0, stdout: nakyy ? IKKUNA : 'Set effort level to medium', stderr: '' };
+    if (k === 'tmux' && ar[0] === 'send-keys') {
+      lahetetyt.push(ar.slice(3));
+      if (ar[3] === '-l' && ar[4] === 's') nakyy = true;
+      if (ar[3] === '-l' && ar[4] === '1') nakyy = false;
+    }
+    return aja(k, ar, v);
+  } });
+  assert.deepEqual(await ikkunallinen.vaihdaMalli('a', { effort: 'medium' }), { ok: true, istunto: 's1' });
+  assert.ok(lahetetyt.some((k) => k[0] === '-l' && k[1] === '1'), 'vahvistus hyväksytään 1-näppäimellä');
+
+  // Jos vahvistusikkuna jää jumiin eikä sulkeudu: Escape ja 502
+  const jumittava = luoViestit({ ...a, malliTauko: 0 }, { aja: async (k, ar, v) => {
+    if (k === 'tmux' && ar[0] === 'capture-pane') return { koodi: 0, stdout: IKKUNA, stderr: '' };
+    return aja(k, ar, v);
+  } });
+  await hylkaa(jumittava.vaihdaMalli('a', { effort: 'medium' }), 502);
+});
+
+test('vaihdaMalli: AGY-istunnossa /effort valitsimesta liukusäätimellä', async () => {
+  const a = ymparisto();
+  const { aja, kutsut } = vaarennos();
+  const ruutuTeksti = '? for shortcuts                                      accept-edits · Gemini 3.8 Flash · high';
+  let paneeli = '';
+  let siirretty = false;
+  const ohjattu = async (komento, argumentit, valinnat) => {
+    if (komento === 'tmux' && argumentit[0] === 'capture-pane') {
+      return { koodi: 0, stdout: paneeli || ruutuTeksti, stderr: '' };
+    }
+    if (komento === 'tmux' && argumentit[0] === 'send-keys') {
+      if (argumentit[3] === '-l' && argumentit[4] === '/effort') {
+        paneeli = 'Set Effort\n  ◂        ●━━━━━━━━━━━━━━●━━━━━━━━━━━━━━◉        ▸\n          low          medium          high\n';
       }
-      return aja(k, ar, v);
-    } });
-    await hylkaa(ikkunallinen.vaihdaMalli('a', { effort: 'medium' }), 409);
-    assert.ok(lahetetyt.some((k) => k[0] === 'Escape'), 'ikkuna suljetaan Escapella');
-    assert.ok(!lahetetyt.some((k) => k[0] === 'Enter' && lahetetyt.indexOf(k) > lahetetyt.findIndex((x) => x[1] === 's')), 'vahvistusta ei hyväksytä Enterillä');
-  }
+      if (argumentit[3] === 'Right') {
+        siirretty = true;
+      }
+      if (argumentit[3] === 'Enter' && siirretty) {
+        paneeli = '';
+      }
+    }
+    return aja(komento, argumentit, valinnat);
+  };
+  // AGY-ruutu tmuxissa
+  const v = luoViestit({ ...a, malliTauko: 0 }, { aja: ohjattu });
+  // Luodaan skoopille "a" agy-istunto
+  // Poistetaan edellisen testin claude-istunto, jotta skoopilla "a" on vain agy-ruutu
+  rmSync(join(a.istunnotDir, `${process.pid}.json`), { force: true });
+  writeFileSync(join(a.istunnotDir, 'dummy.json'), JSON.stringify({ pid: 99999, status: 'idle', name: 'other' }));
+  const vAgy = luoViestit({ ...a, malliTauko: 0 }, {
+    aja: async (k, ar, val) => {
+      if (k === 'tmux' && ar[0] === 'list-panes') {
+        return { koodi: 0, stdout: 'siirto-a-120000 agy 1700000000 12345\n', stderr: '' };
+      }
+      return ohjattu(k, ar, val);
+    }
+  });
+  const tulos = await vAgy.vaihdaMalli('a', { effort: 'medium' });
+  assert.equal(tulos.ok, true);
+  const sendKeys = kutsut.filter((k) => k.komento === 'tmux' && k.argumentit[0] === 'send-keys').map((k) => k.argumentit.slice(3));
+  assert.ok(sendKeys.some((k) => k[1] === '/effort'), '/effort avattiin');
+  assert.ok(sendKeys.some((k) => k.includes('Left')), 'liukusäädintä siirrettiin Leftillä reunaan');
+  assert.ok(sendKeys.some((k) => k.includes('Right')), 'liukusäädintä siirrettiin Rightillä kohteeseen');
+  assert.ok(sendKeys.some((k) => k.includes('Enter')), 'valinta vahvistettiin Enterillä');
+
+  // Compound AGY-malli (esim. mac-agy/gemini-3.8-flash-medium):
+  // Kun ruudussa on jo Gemini 3.8 Flash mutta effort on high, /model ohitetaan ja /effort vaihdetaan mediumiksi.
+  kutsut.length = 0;
+  siirretty = false;
+  const tulosMalli = await vAgy.vaihdaMalli('a', { malli: 'mac-agy/gemini-3.8-flash-medium' });
+  assert.equal(tulosMalli.ok, true);
+  const sendKeysMalli = kutsut.filter((k) => k.komento === 'tmux' && k.argumentit[0] === 'send-keys').map((k) => k.argumentit.slice(3));
+  assert.ok(!sendKeysMalli.some((k) => k[1] === '/model'), '/model ohitettiin koska perusmalli oli jo aktiivinen');
+  assert.ok(sendKeysMalli.some((k) => k[1] === '/effort'), '/effort avattiin mallinimen sisältämän medium-tason takia');
 });
 
 // AGY-PRE-ISTUNTO (16.10.2026): skoopilla ei ole Claude-istuntoa mutta tmuxissa on agy-ruutu → viestit agy:n keskustelutiedostosta,
