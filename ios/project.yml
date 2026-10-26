@@ -18,6 +18,7 @@ targets:
       - framework: tunneli/Tunneli.xcframework
         embed: false
       - target: SkoopitWidget
+      - target: SkoopitKeyboard
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.skoopit
@@ -67,6 +68,27 @@ targets:
       path: Widget/SkoopitWidget.entitlements
       properties:
         com.apple.security.application-groups: [group.com.example.skoopit]
+  # Suomalainen näppäimistölaajennus (IOSKEYBOARD-RUNKO 26.10.2026): vaakatilassa keskellä kaksi lisänappipystyriviä.
+  SkoopitKeyboard:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources: [Keyboard]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.skoopit.keyboard
+    info:
+      path: Keyboard/Info.plist
+      properties:
+        CFBundleDisplayName: Scopes
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.keyboard-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController
+          NSExtensionAttributes:
+            IsASCIICapable: true
+            PrefersRightToLeft: false
+            PrimaryLanguage: fi
+            RequestsOpenAccess: true
   SkoopitUITests:
     type: bundle.ui-testing
     platform: iOS
