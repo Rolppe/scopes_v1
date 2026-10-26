@@ -385,6 +385,13 @@ test('pura: mac-agy mallin istunto palauttaa tmux-nimen osoitteen tilalla', asyn
   assert.deepEqual(r, { ok: true, toiminto: 'pura', nimi: 'scopes test', tmux: 'siirto-scopes-test-120000', suljettiin: [], tiedosto: '~/.local/state/pura/scopes-test.md', malli: 'mac-agy/gemini-3.8-flash-high' });
 });
 
+test('pura: mac-agy mallin istunto toimii myös infra expresso -skoopille', async () => {
+  const a = ymparisto({ skoopit: { 'infra expresso': ['Infra/iot/expresso/REKISTERI.md'] } });
+  const v = vaarennos({ perhe: true, autovaihto: { koodi: 0, stdout: 'UUSI: …\nOK: mac-agy tmux siirto-infra-expresso-120000\n', stderr: '' } });
+  const r = await luoToiminnot(a, { aja: v.aja })('pura', 'infra expresso', { malli: 'mac-agy/gemini-3.8-flash-high' });
+  assert.deepEqual(r, { ok: true, toiminto: 'pura', nimi: 'infra expresso', tmux: 'siirto-infra-expresso-120000', suljettiin: [], tiedosto: '~/.local/state/pura/infra-expresso.md', malli: 'mac-agy/gemini-3.8-flash-high' });
+});
+
 test('palvelin: POST-reitit vaativat avaimen ja ohjautuvat toimintoihin', async () => {
   const avain = 'k'.repeat(32);
   const kutsut = [];

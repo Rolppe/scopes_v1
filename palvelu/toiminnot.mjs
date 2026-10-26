@@ -254,9 +254,9 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
   }
 
   // Uusi skooppi agy-istunnolla (AGY-PRE-ISTUNTO): /pura uusi on Clauden taito, joten vaiheet 0 (luonti, asennus, commit) tehdään
-  // tässä samoin kuin taito ne tekisi, ja autovaihto.sh avaa agy-istunnon neutraalilla purkutiedostolla. Vain scopes-perhe.
+  // tässä samoin kuin taito ne tekisi, ja autovaihto.sh avaa agy-istunnon neutraalilla purkutiedostolla. Scopes- ja infra-perheet.
   async function uusiAgy(nimi, malli) {
-    if (!nimi.startsWith('scopes ')) throw new Hylatty(400, 'agy-istunto kuuluu vain scopes-perheen skoopeille: nimi alkaa sanalla scopes');
+    if (!nimi.startsWith('scopes ') && !nimi.startsWith('infra ')) throw new Hylatty(400, 'agy-istunto kuuluu vain scopes- ja infra-perheen skoopeille: nimi alkaa sanalla scopes tai infra');
     const luonti = await aja('node', [join(asetukset.juuri, 'claude/siirto/tools/luo-skooppi.mjs'), nimi], { cwd: asetukset.juuri });
     if (luonti.koodi !== 0 && luonti.koodi !== 4) {
       throw new Hylatty(500, (luonti.stderr.trim().split('\n').filter(Boolean).pop() ?? `luo-skooppi exit ${luonti.koodi}`).slice(0, 300));
@@ -292,7 +292,7 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
       // Perhetunnistus on yksi kaikille reiteille (T6): 0 = scopes-perhe, 1 = ei; muu exit ei saa pudottaa perhettä mallireittiin.
       const p = await aja('node', [malliton, '--perhe', nimi]);
       if (p.koodi === 0) return puraMallitta(nimi, suljettavat, malli);
-      if ((malli?.startsWith(AGY_MALLI) || malli?.startsWith(MAC_AGY_MALLI)) && p.koodi === 1) throw new Hylatty(400, 'agy-istunto kuuluu vain scopes-perheen skoopeille');
+      if ((malli?.startsWith(AGY_MALLI) || malli?.startsWith(MAC_AGY_MALLI)) && p.koodi === 1) throw new Hylatty(400, 'agy-istunto kuuluu vain scopes- ja infra-perheen skoopeille');
       if (p.koodi !== 1) throw new Hylatty(500, (p.stderr.trim().split('\n').filter(Boolean).pop() ?? `pura-malliton --perhe exit ${p.koodi}`).slice(0, 300));
       for (const i of suljettavat) { await tarkistaRuutu(i); await kirjoita(i, '/exit'); }
       const tulos = await avaaIstunto(nimi, `/pura ${nimi}${ajaja ? ` --ajaja=${ajaja}` : ''}`, malli);
