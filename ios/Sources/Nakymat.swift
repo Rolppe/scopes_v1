@@ -93,6 +93,10 @@ struct SkooppiNakymaView: View {
                 Button("Automaattisiirto") { vahvista = .automaattisiirto }
                     .disabled(avoinIstunto == nil)
                     .accessibilityIdentifier("toiminto-automaattisiirto")
+                // Sulje istunto ilman pakkausta (käyttäjä 26.10.2026).
+                Button("Sulje istunto ilman pakkausta", role: .destructive) { vahvista = .sulje }
+                    .disabled(nakyma?.istunnot.isEmpty ?? true)
+                    .accessibilityIdentifier("toiminto-sulje")
                 Toggle("Pidä muisti hereillä", isOn: Binding(get: { hereilla }, set: { p in Task { await kytke(p) } }))
                     .tint(Teema.kytkin)
                     .disabled(avoinIstunto == nil)
@@ -116,7 +120,7 @@ struct SkooppiNakymaView: View {
                     Text("\(j.komento) odottaa vuoroa: lähtee, kun istunto vapautuu.")
                         .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("toiminto-jonossa")
                 }
-                if let k = kaynnissa { ProgressView(k == .pura ? "Avataan istuntoa…" : "Lähetetään \(komento(k))…") }
+                if let k = kaynnissa { ProgressView(k == .pura ? "Avataan istuntoa…" : (k == .sulje ? "Suljetaan istuntoa…" : "Lähetetään \(komento(k))…")) }
                 if let toimintoVirhe { Text(toimintoVirhe).foregroundStyle(.red).accessibilityIdentifier("toiminto-virhe") }
                 if let tulos { ToimintoTulos(tulos: tulos, skooppi: nimi) }
             } header: { Text("Toiminnot") } footer: {
@@ -141,7 +145,7 @@ struct SkooppiNakymaView: View {
         .confirmationDialog(vahvista.map { vahvistus($0).kysymys } ?? "",
                             isPresented: Binding(get: { vahvista != nil }, set: { if !$0 { vahvista = nil } }),
                             titleVisibility: .visible, presenting: vahvista) { t in
-            Button(vahvistus(t).nappi) { Task { await aja(t) } }.accessibilityIdentifier("vahvista")
+            Button(vahvistus(t).nappi, role: t == .sulje ? .destructive : nil) { Task { await aja(t) } }.accessibilityIdentifier("vahvista")
         } message: { t in
             Text(vahvistus(t).seuraus).accessibilityIdentifier("vahvista-seuraus")
         }
@@ -160,6 +164,8 @@ struct SkooppiNakymaView: View {
                        "Istunto kirjaa tehdyn työn ja seuraavan paketin skoopin rekisteriin ja jää auki.", "Pakkaa")
         case .automaattisiirto: ("Siirretäänkö työ uuteen istuntoon?",
                                  "Istunto pakataan ja suljetaan, ja uusi istunto jatkaa samasta kohdasta.", "Siirrä")
+        case .sulje: ("Suljetaanko istunto ilman pakkausta?",
+                      "Istunto suljetaan tallentamatta työtä rekisteriin.", "Sulje istunto")
         case .herata, .herataPois: ("", "", "")
         }
     }
@@ -192,6 +198,7 @@ struct SkooppiNakymaView: View {
         case .pura: "/pura"
         case .pakkaa: "/pakkaa"
         case .automaattisiirto: "/automaattisiirto"
+        case .sulje: "/exit"
         case .herata: "/sa"
         case .herataPois: "/sa pois"
         }
@@ -284,6 +291,8 @@ struct ToimintoTulos: View {
                     Button("Avaa chat") { avattu(); navigaatio.avaaSkooppi(skooppi) }
                         .buttonStyle(.borderless).accessibilityIdentifier("toiminto-avaa-chat")
                 }
+            } else if tulos.toiminto == "sulje" {
+                Text("Istunto suljettu.").accessibilityIdentifier("toiminto-tulos")
             } else if let i = tulos.istunto, tulos.jonossa == true {
                 Text("Istunto \(i.prefix(8)) on varattu: \(tulos.komento ?? "komento") lähtee, kun se vapautuu.").accessibilityIdentifier("toiminto-tulos")
             } else if let i = tulos.istunto {
@@ -382,6 +391,10 @@ struct AsetuksetView: View {
                     Label("Yhteys", systemImage: "network")
                 }
                 .accessibilityIdentifier("asetukset-yhteys")
+                NavigationLink { MalliAsetuksetView() } label: {
+                    Label("Mallit", systemImage: "cpu")
+                }
+                .accessibilityIdentifier("asetukset-mallit")
                 NavigationLink { AGYAsetukset().toolbar { tallennaPainike } } label: {
                     Label("AGY-agentit", systemImage: "sparkles")
                 }
@@ -559,6 +572,108 @@ struct YhteysAsetukset: View {
         case .eiTunnelia: return Avainnippu.lue("wg") == nil ? "Ei yhteyttä — tunnelin asetus puuttuu (avaa äppi kerran kotiverkossa)" : "Ei yhteyttä — tunneli ei auennut"
         case .tuntematon: return "Ei vielä yhdistetty"
         }
+    }
+}
+
+// Mallien keskitetty hallinta (SCOPES-MALLIVALINNAT): sallitut mallit, automaattivalinta ja oletusmalli.
+struct MalliAsetuksetView: View {
+    @EnvironmentObject private var asetukset: Asetukset
+    @State private var latausVirhe: String?
+    @State private var lataa = false
+
+    private var asiakas: Asiakas { Asiakas(osoite: asetukset.osoite, avain: asetukset.avain) }
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Ota uudet mallit käyttöön automaattisesti", isOn: $asetukset.otaUudetMallitAutomaattisesti)
+                    .accessibilityIdentifier("ota-uudet-mallit")
+            } header: {
+                Text("Automaatio")
+            } footer: {
+                Text("Kun asetus on päällä, kaikki palvelimelta tai AGY:stä löytyvät uudet mallit ovat heti valittavissa kaikissa skoopeissa ja keskusteluissa.")
+            }
+
+            Section("Oletusmalli") {
+                Picker("Oletus", selection: $asetukset.oletusMalli) {
+                    ForEach(asetukset.kaikkiMallit.isEmpty ? Asetukset.oletusMallit : asetukset.kaikkiMallit, id: \.nimi) { m in
+                        Text(m.kuvaus).tag(m.nimi)
+                    }
+                }
+                .pickerStyle(.navigationLink)
+            }
+
+            let ryhmat = jarjestetytRyhmat
+            ForEach(ryhmat, id: \.0) { ryhma, mallit in
+                Section(ryhma) {
+                    ForEach(mallit, id: \.nimi) { m in
+                        Toggle(isOn: Binding(
+                            get: { asetukset.sallitutMallit.contains(m.nimi) },
+                            set: { paalla in
+                                if paalla {
+                                    asetukset.sallitutMallit.insert(m.nimi)
+                                } else {
+                                    asetukset.sallitutMallit.remove(m.nimi)
+                                }
+                            }
+                        )) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(m.kuvaus)
+                                Text(m.nimi).font(.caption2).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Section {
+                Button("Ota kaikki mallit käyttöön") {
+                    let lista = asetukset.kaikkiMallit.isEmpty ? Asetukset.oletusMallit : asetukset.kaikkiMallit
+                    asetukset.sallitutMallit = Set(lista.map(\.nimi))
+                }
+                Button("Palauta oletusvalinnat", role: .destructive) {
+                    asetukset.sallitutMallit = Set(Asetukset.oletusMallit.map(\.nimi))
+                    asetukset.otaUudetMallitAutomaattisesti = true
+                }
+            }
+        }
+        .navigationTitle("Mallit")
+        .task {
+            await paivitaMallit()
+        }
+        .refreshable {
+            await paivitaMallit()
+        }
+    }
+
+    private var jarjestetytRyhmat: [(String, [IstunnonMalli])] {
+        let lista = asetukset.kaikkiMallit.isEmpty ? Asetukset.oletusMallit : asetukset.kaikkiMallit
+        let jarjestys = ["Claude", "Mac AGY", "OnePlus Linux AGY", "Nebius", "Paikalliset"]
+        var map: [String: [IstunnonMalli]] = [:]
+        for m in lista {
+            let r = m.ryhma ?? "Muut"
+            map[r, default: []].append(m)
+        }
+        var tulos: [(String, [IstunnonMalli])] = []
+        for r in jarjestys {
+            if let l = map[r], !l.isEmpty { tulos.append((r, l)) }
+        }
+        for (r, l) in map where !jarjestys.contains(r) && !l.isEmpty {
+            tulos.append((r, l))
+        }
+        return tulos
+    }
+
+    private func paivitaMallit() async {
+        guard asetukset.valmis else { return }
+        lataa = true
+        do {
+            let valinnat = try await asiakas.purkuValinnat()
+            asetukset.paivitaMallit(valinnat.mallit)
+        } catch {
+            latausVirhe = error.localizedDescription
+        }
+        lataa = false
     }
 }
 

@@ -9,25 +9,6 @@ import SwiftUI
 // ei yhteyttä) tarjolla on vain oletus, ja Pura toimii kuten ennen.
 // PURA-MALLITON-T6E: scopes/-perheen skooppi puretaan skriptillä ilman mallia, joten sen arkissa ei ole purkajan valintaa (purkaja lähtee nil).
 
-struct PurkajaVaihtoehto: Decodable, Hashable {
-    let tunnus: String
-    let kuvaus: String
-    let ryhma: String
-}
-
-struct IstunnonMalli: Decodable, Hashable {
-    let nimi: String
-    let kuvaus: String
-    // "Claude" tai "Paikalliset"; puuttuu vanhalta palvelulta (= Claude).
-    let ryhma: String?
-}
-
-struct PurkuValinnat: Decodable {
-    let purkajat: [PurkajaVaihtoehto]
-    let mallit: [IstunnonMalli]
-    let oletusMalli: String
-}
-
 // POST /api/skoopit/<nimi>/pura -runko; tyhjä tai puuttuva kenttä = palvelun oletus.
 struct PuraValinta: Encodable, Hashable {
     var purkaja: String?
@@ -77,24 +58,6 @@ struct PuraValintaView: View {
 // Purkajan ja istunnon mallin valitsimet; sama osio purun vahvistuksessa ja uudessa skoopissa (SCOPES-LISTA-UUSI-VALINNAT
 // 15.10.2026, käyttäjä: "uuden skoopin aloitus pitää antaa samat valinnat"). Lataa valinnat palvelulta itse.
 struct PurkuValitsimet: View {
-    static let macAgyMallit: [IstunnonMalli] = [
-        IstunnonMalli(nimi: "gemini-3.8-flash-high", kuvaus: "Gemini 3.8 Flash (High)", ryhma: "Mac AGY"),
-        IstunnonMalli(nimi: "gemini-3.8-flash-medium", kuvaus: "Gemini 3.8 Flash (Medium)", ryhma: "Mac AGY"),
-        IstunnonMalli(nimi: "gemini-3.8-flash-low", kuvaus: "Gemini 3.8 Flash (Low)", ryhma: "Mac AGY"),
-        IstunnonMalli(nimi: "claude-sonnet-4-6", kuvaus: "Claude Sonnet 4.6 (Thinking)", ryhma: "Mac AGY"),
-        IstunnonMalli(nimi: "claude-opus-4-6-thinking", kuvaus: "Claude Opus 4.6 (Thinking)", ryhma: "Mac AGY"),
-        IstunnonMalli(nimi: "gpt-oss-120b-medium", kuvaus: "GPT-OSS 120B (Medium)", ryhma: "Mac AGY"),
-    ]
-
-    static let macAgyPurkajat: [PurkajaVaihtoehto] = [
-        PurkajaVaihtoehto(tunnus: "macos-agy:gemini-3.8-flash-high", kuvaus: "Gemini 3.8 Flash (High)", ryhma: "Mac AGY"),
-        PurkajaVaihtoehto(tunnus: "macos-agy:gemini-3.8-flash-medium", kuvaus: "Gemini 3.8 Flash (Medium)", ryhma: "Mac AGY"),
-        PurkajaVaihtoehto(tunnus: "macos-agy:gemini-3.8-flash-low", kuvaus: "Gemini 3.8 Flash (Low)", ryhma: "Mac AGY"),
-        PurkajaVaihtoehto(tunnus: "macos-agy:claude-sonnet-4-6", kuvaus: "Claude Sonnet 4.6 (Thinking)", ryhma: "Mac AGY"),
-        PurkajaVaihtoehto(tunnus: "macos-agy:claude-opus-4-6-thinking", kuvaus: "Claude Opus 4.6 (Thinking)", ryhma: "Mac AGY"),
-        PurkajaVaihtoehto(tunnus: "macos-agy:gpt-oss-120b-medium", kuvaus: "GPT-OSS 120B (Medium)", ryhma: "Mac AGY"),
-    ]
-
     @Binding var valinnat: PurkuValinnat?
     @Binding var latausVirhe: String?
     @Binding var purkaja: String
@@ -104,25 +67,36 @@ struct PurkuValitsimet: View {
     @EnvironmentObject private var asetukset: Asetukset
 
     private var ryhmat: [(String, [PurkajaVaihtoehto])] {
-        let p = ((valinnat?.purkajat ?? []).filter { $0.ryhma != "oletus" }) + Self.macAgyPurkajat
-        return ["Claude", "Mac AGY", "agy", "Paikalliset"].compactMap { r in
+        let p = (valinnat?.purkajat ?? []).filter { $0.ryhma != "oletus" }
+        let ryhmaNimet = ["Claude", "Mac AGY", "OnePlus Linux AGY", "agy", "Paikalliset"]
+        return ryhmaNimet.compactMap { r in
             let osat = p.filter { $0.ryhma == r }
             return osat.isEmpty ? nil : (r, osat)
         }
     }
     private var malliRyhmat: [(String, [IstunnonMalli])] {
-        let m = (valinnat?.mallit ?? []) + Self.macAgyMallit
-        return ["Claude", "Mac AGY", "OnePlus Linux AGY", "agy", "Paikalliset", "Nebius"].compactMap { r in
+        let saatavilla = (valinnat?.mallit ?? []).isEmpty ? asetukset.kaikkiMallit : valinnat!.mallit
+        let m = saatavilla.filter { asetukset.sallitutMallit.contains($0.nimi) }
+        let ryhmaNimet = ["Claude", "Mac AGY", "OnePlus Linux AGY", "agy", "Paikalliset", "Nebius"]
+        var tulos = ryhmaNimet.compactMap { r -> (String, [IstunnonMalli])? in
             let osat = m.filter { ($0.ryhma ?? "Claude") == r }
             return osat.isEmpty ? nil : (r, osat)
         }
+        let muut = m.filter { !ryhmaNimet.contains($0.ryhma ?? "Claude") }
+        if !muut.isEmpty {
+            tulos.append(("Muut", muut))
+        }
+        return tulos
     }
     private var paikallinenValittu: Bool { valinnat?.mallit.first { $0.nimi == malli }?.ryhma == "Paikalliset" }
-    private var agyValittu: Bool { valinnat?.mallit.first { $0.nimi == malli }?.ryhma == "agy" }
+    private var agyValittu: Bool {
+        let r = valinnat?.mallit.first { $0.nimi == malli }?.ryhma
+        return r == "agy" || r == "Mac AGY" || r == "OnePlus Linux AGY"
+    }
     private var nebiusValittu: Bool { valinnat?.mallit.first { $0.nimi == malli }?.ryhma == "Nebius" }
     private var oletusPurkaja: String { valinnat?.purkajat.first { $0.ryhma == "oletus" }?.kuvaus ?? "Oletus" }
     private var oletusMalli: String {
-        let m = valinnat.flatMap { v in v.mallit.first { $0.nimi == v.oletusMalli }?.kuvaus } ?? "palvelun oletus"
+        let m = valinnat.flatMap { v in v.mallit.first { $0.nimi == v.oletusMalli }?.kuvaus } ?? asetukset.oletusMalli
         return "Oletus (\(m))"
     }
 
@@ -185,18 +159,16 @@ struct PurkuValitsimet: View {
     private func lataa() async {
         do {
             let v = try await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).purkuValinnat()
-            let yhdistetytPurkajat = v.purkajat + Self.macAgyPurkajat
-            let yhdistetytMallit = v.mallit + Self.macAgyMallit
-            if !yhdistetytPurkajat.contains(where: { $0.tunnus == purkaja }) { purkaja = "" }
-            if !yhdistetytMallit.contains(where: { $0.nimi == malli }) { malli = "" }
+            asetukset.paivitaMallit(v.mallit)
             valinnat = v
+            if malli.isEmpty {
+                malli = asetukset.oletusMalli
+            }
         } catch is CancellationError {
             return
         } catch let e as URLError where e.code == .cancelled {
             return
         } catch {
-            purkaja = ""
-            malli = ""
             latausVirhe = error.localizedDescription
         }
     }

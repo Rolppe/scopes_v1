@@ -22,6 +22,12 @@ export const AGY_MALLIT = [
   { nimi: 'mac-agy/claude-sonnet-4-6', kuvaus: 'Claude Sonnet 4.6', tyyppi: 'agy', malliId: 'claude-sonnet-4-6' },
   { nimi: 'mac-agy/claude-opus-4-6-thinking', kuvaus: 'Claude Opus 4.6 (Thinking)', tyyppi: 'agy', malliId: 'claude-opus-4-6-thinking' },
   { nimi: 'mac-agy/gpt-oss-120b-medium', kuvaus: 'GPT-OSS 120B (Medium)', tyyppi: 'agy', malliId: 'gpt-oss-120b-medium' },
+  { nimi: 'agy/gemini-3.8-flash-low', kuvaus: 'Gemini 3.8 Flash (Low) · Linux', tyyppi: 'agy', malliId: 'gemini-3.8-flash-low' },
+  { nimi: 'agy/gemini-3.8-flash-medium', kuvaus: 'Gemini 3.8 Flash (Medium) · Linux', tyyppi: 'agy', malliId: 'gemini-3.8-flash-medium' },
+  { nimi: 'agy/gemini-3.8-flash-high', kuvaus: 'Gemini 3.8 Flash (High) · Linux', tyyppi: 'agy', malliId: 'gemini-3.8-flash-high' },
+  { nimi: 'agy/claude-sonnet-4-6', kuvaus: 'Claude Sonnet 4.6 · Linux', tyyppi: 'agy', malliId: 'claude-sonnet-4-6' },
+  { nimi: 'agy/claude-opus-4-6-thinking', kuvaus: 'Claude Opus 4.6 (Thinking) · Linux', tyyppi: 'agy', malliId: 'claude-opus-4-6-thinking' },
+  { nimi: 'agy/gpt-oss-120b-medium', kuvaus: 'GPT-OSS 120B (Medium) · Linux', tyyppi: 'agy', malliId: 'gpt-oss-120b-medium' },
 ];
 export const MALLIT = [
   { nimi: 'claude-fable-5-1', kuvaus: 'Fable 5.1', tyyppi: 'malli' },
