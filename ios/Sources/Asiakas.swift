@@ -159,13 +159,18 @@ struct Asiakas {
     // Chat (DEMO-SCOPES-VALILEHDET): agentin vastaus voi kestää minuutteja.
     func agentit() async throws -> [Agentti] { try await hae("/api/agentit") }
 
-    func kayttoraja(tyyppi: String? = nil, agentti: String? = nil, skooppi: String? = nil) async throws -> Kayttoraja {
+    func kayttoraja(tyyppi: String? = nil, agentti: String? = nil, skooppi: String? = nil, ymparisto: String? = nil) async throws -> Kayttoraja {
         var params: [String] = []
         if let tyyppi { params.append("tyyppi=\(koodattu(tyyppi))") }
         if let agentti { params.append("agentti=\(koodattu(agentti))") }
         if let skooppi { params.append("skooppi=\(koodattu(skooppi))") }
+        if let ymparisto { params.append("ymparisto=\(koodattu(ymparisto))") }
         let q = params.isEmpty ? "" : "?\(params.joined(separator: "&"))"
         return try await hae("/api/kayttoraja\(q)")
+    }
+
+    func kayttorajatKaikki() async throws -> KayttorajatKaikki {
+        try await hae("/api/kayttorajat-kaikki")
     }
 
     // Vastaus kirjain kerrallaan (DEMO-SCOPES-SUORATOISTO): palvelu kirjoittaa NDJSON-rivejä sitä mukaa kuin agentti

@@ -89,9 +89,13 @@ struct PurkuValitsimet: View {
         return tulos
     }
     private var paikallinenValittu: Bool { valinnat?.mallit.first { $0.nimi == malli }?.ryhma == "Paikalliset" }
-    private var agyValittu: Bool {
+    private var macAgyValittu: Bool {
         let r = valinnat?.mallit.first { $0.nimi == malli }?.ryhma
-        return r == "agy" || r == "Mac AGY" || r == "OnePlus Linux AGY"
+        return r == "Mac AGY" || malli.hasPrefix("mac-agy")
+    }
+    private var oneplusAgyValittu: Bool {
+        let r = valinnat?.mallit.first { $0.nimi == malli }?.ryhma
+        return r == "OnePlus Linux AGY" || r == "agy" || malli.hasPrefix("agy/")
     }
     private var nebiusValittu: Bool { valinnat?.mallit.first { $0.nimi == malli }?.ryhma == "Nebius" }
     private var oletusPurkaja: String { valinnat?.purkajat.first { $0.ryhma == "oletus" }?.kuvaus ?? "Oletus" }
@@ -136,8 +140,10 @@ struct PurkuValitsimet: View {
             .pickerStyle(.navigationLink)
             .accessibilityIdentifier("pura-malli")
         } header: { Text("Istunto") } footer: {
-            Text(agyValittu
-                 ? "palvelimen Linux-agy ajaa istuntoa. Toimii vain scopes-skoopeille, avautuu palvelimen tmuxiin eikä näy tämän äpin istunnoissa."
+            Text(macAgyValittu
+                 ? "Macin agy (macOS) ajaa istuntoa Macilla (itsenäinen kiintiö). Toimii vain scopes- ja infra-skoopeille, avautuu tmuxiin ja näkyy äpin chatissa."
+                 : oneplusAgyValittu
+                 ? "palvelimen Linux-agy ajaa istuntoa puhelimella (itsenäinen kiintiö). Toimii vain scopes- ja infra-skoopeille, avautuu palvelimen tmuxiin."
                  : nebiusValittu
                  ? "Nebius Token Factory ajaa Claude Code -istuntoa (maksullinen API, avain Asetukset → Nebius). Istunto näkyy vain tämän äpin chatissa, ei Claudessa."
                  : paikallinenValittu

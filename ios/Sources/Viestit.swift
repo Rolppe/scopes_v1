@@ -514,7 +514,7 @@ struct ChatView: View {
     @State private var vastausKesken = false
     @State private var pysaytetty = false
     @State private var yhdistetaan = false
-    @State private var kayttoraja: Kayttoraja? = KayttorajaMuisti.lue(avain: "scopes.kayttoraja.chat") ?? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.oletus")
+    @State private var kayttoraja: Kayttoraja? = KayttorajaMuisti.lue(avain: "scopes.kayttoraja.chat")
 
     private var valittuAgentti: Agentti? { agentit.first { $0.nimi == valittu } }
     private var asiakas: Asiakas { Asiakas(osoite: asetukset.osoite, avain: asetukset.avain) }
@@ -595,14 +595,23 @@ struct ChatView: View {
 
     private func paivitaKayttoraja() async {
         let avain = KayttorajaMuisti.avain(agentti: valittu, tyyppi: valittuAgentti?.tyyppi)
-        if let tallessa = KayttorajaMuisti.lue(avain: avain) {
+        if let tallessa = KayttorajaMuisti.lue(avain: avain)
+            ?? (valittu?.hasPrefix("mac-agy") == true ? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.mac-agy") : nil)
+            ?? (valittuAgentti?.tyyppi == "agy" ? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.agy") : nil)
+            ?? (valittuAgentti?.tyyppi == "malli" ? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.claude") : nil) {
             kayttoraja = tallessa
         }
         if let k = try? await asiakas.kayttoraja(tyyppi: valittuAgentti?.tyyppi, agentti: valittu) {
             kayttoraja = k
             KayttorajaMuisti.tallenna(k, avain: avain)
             KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.chat")
-            KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.oletus")
+            if valittu?.hasPrefix("mac-agy") == true {
+                KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.mac-agy")
+            } else if valittuAgentti?.tyyppi == "agy" {
+                KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.agy")
+            } else if valittuAgentti?.tyyppi == "malli" {
+                KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.claude")
+            }
         }
     }
 
@@ -804,7 +813,7 @@ struct KayttorajaRenkaat: View {
     var body: some View {
         Menu {
             // Valikko nimeää renkaat (DESIGN-SKOOPPINAKYMA U8): väri yksin ei kerro, kumpi raja on kumpi.
-            Section("Käyttöraja") {
+            Section(raja?.otsikko.map { "Käyttöraja (\($0))" } ?? "Käyttöraja") {
                 Text(rivi(raja?.viikko != nil ? "Ulompi keltainen, 5 h" : "Keltainen, 5 h", raja?.viisiTuntia, muoto: .dateTime.hour().minute()))
                 if let v = raja?.viikko {
                     Text(rivi(v.otsikko ?? "Sisempi punainen, viikko", v, muoto: v.teksti != nil ? .dateTime.hour().minute() : .dateTime.weekday(.abbreviated).hour().minute()))
@@ -912,9 +921,11 @@ struct SkooppiViestitView: View {
         self.nimi = nimi
         _teksti = State(initialValue: Luonnos.lue("skooppi.\(nimi)"))
         let tallennettuTyyppi = UserDefaults.standard.string(forKey: "scopes.istuntoTyyppi.\(nimi)") ?? (nimi.contains("agy") ? "agy" : nil)
-        let alkuraja = KayttorajaMuisti.lue(avain: KayttorajaMuisti.avain(skooppi: nimi))
+        let tallennettuMalli = UserDefaults.standard.string(forKey: "scopes.istuntoMalli.\(nimi)")
+        let alkuraja = KayttorajaMuisti.lue(avain: KayttorajaMuisti.avain(skooppi: nimi, agentti: tallennettuMalli, tyyppi: tallennettuTyyppi))
+            ?? (tallennettuMalli?.hasPrefix("mac-agy") == true ? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.mac-agy") : nil)
             ?? (tallennettuTyyppi == "agy" ? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.agy") : nil)
-            ?? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.oletus")
+            ?? (tallennettuTyyppi == "claude" ? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.claude") : nil)
         _kayttoraja = State(initialValue: alkuraja)
     }
 
@@ -982,7 +993,14 @@ struct SkooppiViestitView: View {
         .navigationTitle(nimi)
         .navigationBarTitleDisplayMode(.inline)
         .lapinakyvaYlapalkki()
-        .onChange(of: tila?.istunto?.malli) { _, _ in malliValittu = nil }
+        .onChange(of: tila?.istunto?.malli) { _, uusi in
+            malliValittu = nil
+            if let uusi { UserDefaults.standard.set(uusi, forKey: "scopes.istuntoMalli.\(nimi)") }
+            Task { await paivitaKayttoraja() }
+        }
+        .onChange(of: malliValittu) { _, _ in
+            Task { await paivitaKayttoraja() }
+        }
         .onChange(of: tila?.istunto?.effort) { _, _ in effortValittu = nil }
         .toolbar {
             // Renkaat ilman kapselia ja omana kohtanaan aivo-napin vierellä (CHAT-TOPBAR, käyttäjä 16.10.2026).
@@ -1047,18 +1065,24 @@ struct SkooppiViestitView: View {
 
     private func paivitaKayttoraja() async {
         let tyyppi = tila?.istunto?.tyyppi ?? UserDefaults.standard.string(forKey: "scopes.istuntoTyyppi.\(nimi)") ?? (nimi.contains("agy") ? "agy" : nil)
-        if let tallessa = KayttorajaMuisti.lue(avain: KayttorajaMuisti.avain(skooppi: nimi))
+        let malli = malliValittu ?? tila?.istunto?.malli ?? UserDefaults.standard.string(forKey: "scopes.istuntoMalli.\(nimi)")
+        let avain = KayttorajaMuisti.avain(skooppi: nimi, agentti: malli, tyyppi: tyyppi)
+        if let tallessa = KayttorajaMuisti.lue(avain: avain)
+            ?? (malli?.hasPrefix("mac-agy") == true || tila?.istunto?.onMac == true ? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.mac-agy") : nil)
             ?? (tyyppi == "agy" ? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.agy") : nil)
-            ?? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.oletus") {
+            ?? (tyyppi == "claude" ? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.claude") : nil) {
             kayttoraja = tallessa
         }
-        if let k = try? await asiakas.kayttoraja(tyyppi: tyyppi, skooppi: nimi) {
+        if let k = try? await asiakas.kayttoraja(tyyppi: tyyppi, agentti: malli, skooppi: nimi) {
             kayttoraja = k
-            KayttorajaMuisti.tallenna(k, avain: KayttorajaMuisti.avain(skooppi: nimi))
-            if tyyppi == "agy" || nimi.contains("agy") {
+            KayttorajaMuisti.tallenna(k, avain: avain)
+            if malli?.hasPrefix("mac-agy") == true || tila?.istunto?.onMac == true {
+                KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.mac-agy")
+            } else if tyyppi == "agy" || nimi.contains("agy") {
                 KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.agy")
+            } else if tyyppi == "claude" {
+                KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.claude")
             }
-            KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.oletus")
         }
     }
 
@@ -1071,9 +1095,10 @@ struct SkooppiViestitView: View {
             if let tyyppi = uusi.istunto?.tyyppi {
                 UserDefaults.standard.set(tyyppi, forKey: "scopes.istuntoTyyppi.\(nimi)")
             }
-            if kayttoraja == nil {
-                await paivitaKayttoraja()
+            if let malli = uusi.istunto?.malli {
+                UserDefaults.standard.set(malli, forKey: "scopes.istuntoMalli.\(nimi)")
             }
+            await paivitaKayttoraja()
             if ["busy", "shell"].contains(uusi.istunto?.tila ?? "") {
                 oletettuTyo = false
                 // Pysäytyksen jälkeen uudelleen työhön ryhtynyt istunto (esim. päätteeltä) palauttaa stopin.
@@ -1160,9 +1185,13 @@ struct SkooppiViestitView: View {
     private func vaihdaMalli(_ malli: String?, _ effort: String?) async {
         do {
             _ = try await asiakas.vaihdaMalli(nimi, malli: malli, effort: effort)
-            if let malli { malliValittu = malli }
+            if let malli {
+                malliValittu = malli
+                UserDefaults.standard.set(malli, forKey: "scopes.istuntoMalli.\(nimi)")
+            }
             if let effort { effortValittu = effort }
             virhe = nil
+            await paivitaKayttoraja()
             try? await Task.sleep(for: .seconds(1))
             await lataa()
         } catch {
