@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   luoAgyKayttoraja,
+  luoMacAgyKayttoraja,
   etsiRyhma,
   poimi5h,
   pacificResetAika,
@@ -144,5 +145,36 @@ test('ei tee verkkokutsuja jos tila luetaan levyltä', async () => {
 
   const r = await raja({ ryhma: 'gemini' });
   assert.equal(r.lahde, 'cli-statusline');
+  assert.equal(r.ymparisto, 'oneplus');
   assert.ok(r.viisiTuntia);
+});
+
+test('luoMacAgyKayttoraja: hakee Macilta ssh:lla ja palauttaa erilliset käyttörajat', async () => {
+  const kutsut = [];
+  const mockAja = async (komento, args) => {
+    kutsut.push([komento, args]);
+    return {
+      koodi: 0,
+      stdout: JSON.stringify({
+        tila: {
+          gemini: { viisiTuntia: { kaytto: 45, nollautuu: null } },
+          kolmasOsapuoli: { viisiTuntia: { kaytto: 10, nollautuu: null }, viikko: { kaytto: 20, nollautuu: null } },
+        },
+        pyynnot: { kaytto: 75.5, nollautuu: '2026-10-27T07:00:00.000Z', teksti: '1132 / 1500', otsikko: 'Sisempi punainen, pyynnöt', maara: 1132, maksimi: 1500 },
+      }),
+    };
+  };
+
+  const macRaja = luoMacAgyKayttoraja({ aja: mockAja });
+  const gemini = await macRaja({ ryhma: 'gemini' });
+  assert.equal(gemini.ymparisto, 'macos');
+  assert.equal(gemini.lahde, 'mac-ssh');
+  assert.equal(gemini.viisiTuntia.kaytto, 45);
+  assert.equal(gemini.viikko.kaytto, 75.5);
+  assert.equal(gemini.viikko.teksti, '1132 / 1500');
+
+  const kolmas = await macRaja({ ryhma: '3p' });
+  assert.equal(kolmas.viisiTuntia.kaytto, 10);
+  assert.equal(kolmas.viikko.kaytto, 20);
+  assert.equal(kutsut.length, 1, 'välimuisti estää toisen ssh-kutsun heti perään');
 });
