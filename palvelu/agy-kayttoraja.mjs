@@ -6,11 +6,14 @@
 // (nollautuu klo 07:00 UTC / 10:00 Suomen aikaa).
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { homedir, platform } from 'node:os';
 import { join } from 'node:path';
+import { ajaKomento } from './toiminnot.mjs';
 
 export const MAKSIMI_PYYNNOT = 1500;
 export const TILA_TIEDOSTO = join(homedir(), '.local/state/scopes-agy-kayttoraja.json');
+export const MAC_TILA_TIEDOSTO = '~/.local/state/scopes-agy-kayttoraja.json';
+export const MAC_BRAIN_DIR = '~/.gemini/antigravity-cli/brain';
 const PY_CACHE_MS = 30_000;
 
 // Nollautumishetki ISO-muotoon: päätepisteen mikrosekunnit tai Z-muoto siivotaan iOS-yhteensopivaksi.
@@ -171,6 +174,74 @@ export function luoAgyKayttoraja({
       haettu: oma ? new Date(oma.haettu ?? viimMtime ?? nyt()).toISOString() : null,
       paivitetty: oma?.paivitetty ?? null,
       lahde: oma?.lahde ?? 'levy',
+      ymparisto: 'oneplus',
+    };
+  };
+}
+
+export function luoMacAgyKayttoraja({
+  tilaTiedosto = MAC_TILA_TIEDOSTO,
+  brainDir = MAC_BRAIN_DIR,
+  laskePyynnot = laskePyyntomaara,
+  lueTila = lueAgyTila,
+  aja = null,
+  nyt = Date.now,
+  ttlMs = 30_000,
+} = {}) {
+  let valimuisti = null;
+  let kesken = null;
+
+  async function haeMacilta() {
+    if (platform() === 'darwin' && !process.env.SCOPES_TEST_REMOTE) {
+      const tila = lueTila(tilaTiedosto);
+      const pyynnot = laskePyynnot({ nytMs: nyt(), brainDir });
+      return { tila, pyynnot, haettu: nyt(), lahde: 'mac-paikallinen' };
+    }
+
+    const suorita = aja ?? ajaKomento;
+    const koodi = `export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"; node -e 'import { lueAgyTila, laskePyyntomaara } from "~/sessions-repo/scopes/palvelu/agy-kayttoraja.mjs"; const tila = lueAgyTila("${tilaTiedosto}"); const pyynnot = laskePyyntomaara({ brainDir: "${brainDir}" }); console.log(JSON.stringify({ tila, pyynnot }));'`;
+    try {
+      const res = await suorita('ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=3', 'mac', koodi], { aikaraja: 8000 });
+      if (res.koodi === 0) {
+        const parsed = JSON.parse(res.stdout.trim());
+        return { tila: parsed.tila, pyynnot: parsed.pyynnot, haettu: nyt(), lahde: 'mac-ssh' };
+      }
+    } catch {
+      // ssh virhe tai timeout
+    }
+    return valimuisti?.data ?? { tila: null, pyynnot: null, haettu: nyt(), lahde: 'virhe' };
+  }
+
+  const voimassa = (r) => (r && r.nollautuu && Date.parse(r.nollautuu) <= nyt() ? { ...r, kaytto: 0, nollautuu: null } : r ?? null);
+
+  return async function macAgyKayttoraja({ ryhma = 'gemini' } = {}) {
+    const nytAika = nyt();
+    if (!valimuisti || (nytAika - valimuisti.aika > ttlMs)) {
+      kesken ??= haeMacilta().then((d) => {
+        valimuisti = { aika: nyt(), data: d };
+        return d;
+      }).finally(() => { kesken = null; });
+      await kesken;
+    }
+
+    const d = valimuisti?.data;
+    const tila = d?.tila;
+    const kohde = ryhma === '3p' ? tila?.kolmasOsapuoli : tila?.gemini;
+
+    let viikko = kohde?.viikko ?? null;
+    if (ryhma !== '3p') {
+      if (d?.pyynnot) {
+        viikko = d.pyynnot;
+      }
+    }
+
+    return {
+      viikko: voimassa(viikko),
+      viisiTuntia: voimassa(kohde?.viisiTuntia),
+      haettu: d ? new Date(d.haettu ?? nytAika).toISOString() : null,
+      paivitetty: tila?.paivitetty ?? null,
+      lahde: d?.lahde ?? 'mac',
+      ymparisto: 'macos',
     };
   };
 }

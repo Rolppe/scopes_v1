@@ -181,6 +181,7 @@ func prosentti(_ osa: Int, _ kaikki: Int) -> String {
 enum Toiminto: String {
     case pura, pakkaa, automaattisiirto, herata
     case herataPois = "herata-pois"
+    case sulje
 }
 
 // Pakkauskytkimet (palvelu/toiminnot-asetukset.mjs, käyttäjä 14.10.2026). Skoopin reitiltä (scopes infra setting
@@ -219,6 +220,7 @@ struct ToimintoVastaus: Decodable, Hashable {
     let komento: String?
     // true: istunto oli varattu, komento lähtee palvelun jonosta, kun istunto vapautuu (V-294).
     let jonossa: Bool?
+    let suljettiin: [String]?
 }
 
 // POST /api/skoopit/<nimi>/arkistoi (SCOPES-LISTA-POISTO); varoitus = install.sh epäonnistui commitin jälkeen.
@@ -305,11 +307,23 @@ struct Kayttoraja: Codable, Equatable {
     }
     let viisiTuntia: Raja?
     let viikko: Raja?
+    var ymparisto: String? = nil
+}
+
+struct KayttorajatKaikki: Codable, Equatable {
+    struct AgyRyhmat: Codable, Equatable {
+        let gemini: Kayttoraja?
+        let kolmasOsapuoli: Kayttoraja?
+    }
+    let claude: Kayttoraja?
+    let oneplusAgy: AgyRyhmat?
+    let macAgy: AgyRyhmat?
 }
 
 // Käyttörajan pysyväistallennus päätteelle (UserDefaults): lukemat eivät katoa tyhjäkäynnillä tai äpin uudelleenkäynnistyksessä.
 enum KayttorajaMuisti {
-    static func avain(skooppi: String? = nil, agentti: String? = nil, tyyppi: String? = nil) -> String {
+    static func avain(skooppi: String? = nil, agentti: String? = nil, tyyppi: String? = nil, ymparisto: String? = nil) -> String {
+        if let ymparisto, !ymparisto.isEmpty { return "scopes.kayttoraja.ymparisto.\(ymparisto)" }
         if let agentti, !agentti.isEmpty { return "scopes.kayttoraja.agentti.\(agentti)" }
         if let skooppi, !skooppi.isEmpty { return "scopes.kayttoraja.skooppi.\(skooppi)" }
         if let tyyppi, !tyyppi.isEmpty { return "scopes.kayttoraja.tyyppi.\(tyyppi)" }

@@ -73,14 +73,14 @@
 // oletus ~/.local/state/scopes-android). Ilman avainta palvelu ei käynnisty.
 
 import { timingSafeEqual } from 'node:crypto';
-import { appendFileSync, readFileSync, realpathSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, realpathSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { luoDiagnostiikka } from './diagnostiikka.mjs';
 import { luoKayttoraja } from './kayttoraja.mjs';
-import { luoAgyKayttoraja } from './agy-kayttoraja.mjs';
+import { luoAgyKayttoraja, luoMacAgyKayttoraja } from './agy-kayttoraja.mjs';
 import { lista, lueSkoopit, lueViat, rekisterinOsat, rekisterit, yksi } from './lahteet.mjs';
 import { luoLiitteet } from './liitteet.mjs';
 import { luoNebiusAvain } from './nebius-avain.mjs';
@@ -143,7 +143,7 @@ function runko(req, raja = 1024) {
   });
 }
 
-export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset, { android: () => android }), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), purkajat = luoPurkajat({ juuri: asetukset.juuri, paikalliset: () => viestit.agentit() }), linux = luoLinuxServer({ loki: asetukset.toimintoloki, kuiva: asetukset.linuxKuiva === true }), android = luoAndroid({ loki: asetukset.toimintoloki, kuiva: asetukset.androidKuiva === true, ...(asetukset.androidLaite && { laite: asetukset.androidLaite }), ...(asetukset.androidDir && { tuotoksetDir: asetukset.androidDir }) }), agyKayttoraja = luoAgyKayttoraja(), kordinaattori = luoKordinaattori(asetukset.juuri)) {
+export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset, { android: () => android }), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), purkajat = luoPurkajat({ juuri: asetukset.juuri, paikalliset: () => viestit.agentit() }), linux = luoLinuxServer({ loki: asetukset.toimintoloki, kuiva: asetukset.linuxKuiva === true }), android = luoAndroid({ loki: asetukset.toimintoloki, kuiva: asetukset.androidKuiva === true, ...(asetukset.androidLaite && { laite: asetukset.androidLaite }), ...(asetukset.androidDir && { tuotoksetDir: asetukset.androidDir }) }), agyKayttoraja = luoAgyKayttoraja(), kordinaattori = luoKordinaattori(asetukset.juuri), macAgyKayttoraja = luoMacAgyKayttoraja()) {
   const istuntoValinta = luoIstuntoValinta(asetukset);
   const nebius = luoNebiusAvain({ tiedosto: asetukset.nebiusTiedosto ?? join(homedir(), '.config/scopes/nebius-avain') });
   // Chat suoratoistona (DEMO-SCOPES-SUORATOISTO): NDJSON-rivit {tyyppi: 'pala', teksti} …, lopuksi
@@ -203,7 +203,8 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
     const polku = url.pathname;
     try {
       if (polku === '/api/terveys') return vastaa(200, { ok: true });
-      if (!avainKelpaa(req.headers.authorization, asetukset.avain)) return vastaa(401, { virhe: 'avain puuttuu tai väärä' });
+      const authOtsake = req.headers.authorization ?? (url.searchParams.get('avain') ? `Bearer ${url.searchParams.get('avain')}` : '');
+      if (!avainKelpaa(authOtsake, asetukset.avain)) return vastaa(401, { virhe: 'avain puuttuu tai väärä' });
       if (polku.startsWith('/api/lr/')) return vastaa(200, await lr.kasittele(req.method, polku, () => runko(req, 16 << 20)));
       if (req.method === 'POST') {
         if (polku === '/api/diagnostiikka') return vastaa(200, await diagnostiikka.vastaanota(req));
@@ -272,7 +273,7 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         // Purun valinnat (SCOPES-PURA-MALLI): runko {purkaja?, malli?} tarkistetaan purkajat.mjs:n listaa vasten; tyhjä = oletus.
         const pu = polku.match(/^\/api\/skoopit\/([^/]+)\/pura$/);
         if (pu) return vastaa(200, await suorita('pura', decodeURIComponent(pu[1]), await purkajat.tarkista(await runko(req))));
-        const t = polku.match(/^\/api\/skoopit\/([^/]+)\/(pakkaa|automaattisiirto|herata|herata-pois|arkistoi)$/);
+        const t = polku.match(/^\/api\/skoopit\/([^/]+)\/(pakkaa|automaattisiirto|herata|herata-pois|arkistoi|sulje)$/);
         if (t) return vastaa(200, await suorita(t[2], decodeURIComponent(t[1])));
         return vastaa(404, { virhe: 'tuntematon toiminto' });
       }
@@ -295,21 +296,58 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
       if (polku === '/api/kordinaattori/kehote') return vastaa(200, { kehote: kordinaattori.kehote() });
       if (polku === '/api/agentit') return vastaa(200, await viestit.agentit());
       if (polku === '/api/purkajat') return vastaa(200, await purkajat.lista());
+      if (polku === '/api/mallit') return vastaa(200, await purkajat.lista());
       if (polku === '/api/palvelin') return vastaa(200, await linux.tila());
       if (polku === '/api/android') return vastaa(200, await android.tila());
       if (polku === '/api/android/ruutu') return vastaaTavut(await android.ruutu(url.searchParams.get('leveys') ?? 720));
       if (polku === '/api/android/ui') return vastaa(200, await android.ui());
       if (polku === '/api/android/tuotokset') return vastaa(200, await android.tuotokset());
       if (polku === '/api/android/tuotos') return vastaaTavut(await android.tuotos(url.searchParams.get('polku')));
+      if (polku === '/api/kayttorajat-kaikki' || (polku === '/api/kayttoraja' && url.searchParams.get('kaikki') === '1')) {
+        const [claude, opGemini, op3p, macGemini, mac3p] = await Promise.all([
+          Promise.resolve().then(() => kayttoraja()).catch(() => null),
+          Promise.resolve().then(() => agyKayttoraja({ ryhma: 'gemini' })).catch(() => null),
+          Promise.resolve().then(() => agyKayttoraja({ ryhma: '3p' })).catch(() => null),
+          Promise.resolve().then(() => macAgyKayttoraja({ ryhma: 'gemini' })).catch(() => null),
+          Promise.resolve().then(() => macAgyKayttoraja({ ryhma: '3p' })).catch(() => null),
+        ]);
+        return vastaa(200, {
+          claude,
+          oneplusAgy: {
+            gemini: opGemini,
+            kolmasOsapuoli: op3p,
+          },
+          macAgy: {
+            gemini: macGemini,
+            kolmasOsapuoli: mac3p,
+          },
+        });
+      }
       if (polku === '/api/kayttoraja') {
         const tyyppi = url.searchParams.get('tyyppi');
+        const ymparisto = url.searchParams.get('ymparisto');
         const agentti = url.searchParams.get('agentti');
         const skooppi = url.searchParams.get('skooppi');
         const ryhma = url.searchParams.get('ryhma');
-        let onAgy = tyyppi === 'agy' || tyyppi === 'gemini' || agentti === 'android/gemini' || agentti?.startsWith('agy') || agentti?.startsWith('antigravity') || agentti?.includes('gemini');
-        if (!onAgy && skooppi && tyyppi !== 'claude' && !agentti?.startsWith('claude')) {
-          onAgy = (await viestit.onkoAgy?.(skooppi)) || ((await viestit.skoopinViestit?.(skooppi))?.istunto?.tyyppi === 'agy');
+
+        let onMacAgy = ymparisto === 'macos' || tyyppi === 'mac-agy' || tyyppi === 'macos-agy' || tyyppi === 'macos' || agentti?.startsWith('mac-agy') || agentti?.startsWith('macos-agy');
+        let onAgy = onMacAgy || tyyppi === 'agy' || tyyppi === 'gemini' || agentti === 'android/gemini' || agentti?.startsWith('agy') || agentti?.startsWith('antigravity') || agentti?.includes('gemini');
+
+        if (skooppi && tyyppi !== 'claude' && !agentti?.startsWith('claude')) {
+          const sv = await viestit.skoopinViestit?.(skooppi);
+          if (sv?.istunto) {
+            if (sv.istunto.onMac || sv.istunto.malli?.includes('mac-agy') || sv.istunto.malli?.includes('macos')) {
+              onMacAgy = true;
+              onAgy = true;
+            } else if (sv.istunto.tyyppi === 'agy') {
+              onAgy = true;
+            }
+          } else if (await viestit.onkoAgy?.(skooppi)) {
+            onAgy = true;
+          }
         }
+
+        if (onMacAgy) return vastaa(200, await macAgyKayttoraja({ ryhma: ryhma || 'gemini' }));
         if (onAgy) return vastaa(200, await agyKayttoraja({ ryhma: ryhma || 'gemini' }));
         return vastaa(200, await kayttoraja());
       }
@@ -317,6 +355,12 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
       if (polku === '/api/nebius-avain') return vastaa(200, nebius.tila());
       if (polku === '/api/wg-asetus') {
         try { return vastaa(200, { asetus: readFileSync(asetukset.wgTiedosto, 'utf8') }); } catch { return vastaa(404, { virhe: 'tunnelin asetusta ei ole' }); }
+      }
+      if (polku === '/api/ios/ipa' || polku === '/api/skoopit.ipa') {
+        const ipaPolku = join(asetukset.juuri, 'scopes/ios/Skoopit.ipa');
+        if (!existsSync(ipaPolku)) return vastaa(404, { virhe: 'Skoopit.ipa ei löydy, aja scopes/ios/asenna.sh --ipa' });
+        const data = readFileSync(ipaPolku);
+        return vastaaTavut({ tyyppi: 'application/octet-stream', data, nimi: 'Skoopit.ipa' });
       }
       if (polku === '/api/chat/kaynnissa') return liity(res);
       if (polku === '/api/chat/keskustelut') return vastaa(200, viestit.keskustelut());
