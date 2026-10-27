@@ -96,6 +96,7 @@ import { luoViestit } from './viestit.mjs';
 import { LrVirhe, luoLr } from '../localregister/palvelu.mjs';
 import { luoKordinaattori } from './kordinaattori.mjs';
 import { luoTerminaali } from './terminal.mjs';
+import { luoEconomyPalvelu } from './economy.mjs';
 
 const tama = dirname(fileURLToPath(import.meta.url));
 
@@ -144,7 +145,7 @@ function runko(req, raja = 1024) {
   });
 }
 
-export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset, { android: () => android }), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), purkajat = luoPurkajat({ juuri: asetukset.juuri, paikalliset: () => viestit.agentit() }), linux = luoLinuxServer({ loki: asetukset.toimintoloki, kuiva: asetukset.linuxKuiva === true }), android = luoAndroid({ loki: asetukset.toimintoloki, kuiva: asetukset.androidKuiva === true, ...(asetukset.androidLaite && { laite: asetukset.androidLaite }), ...(asetukset.androidDir && { tuotoksetDir: asetukset.androidDir }) }), agyKayttoraja = luoAgyKayttoraja(), kordinaattori = luoKordinaattori(asetukset.juuri), macAgyKayttoraja = luoMacAgyKayttoraja({ aja: ajaKomento }), terminal = luoTerminaali(asetukset)) {
+export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset, { android: () => android }), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), purkajat = luoPurkajat({ juuri: asetukset.juuri, paikalliset: () => viestit.agentit() }), linux = luoLinuxServer({ loki: asetukset.toimintoloki, kuiva: asetukset.linuxKuiva === true }), android = luoAndroid({ loki: asetukset.toimintoloki, kuiva: asetukset.androidKuiva === true, ...(asetukset.androidLaite && { laite: asetukset.androidLaite }), ...(asetukset.androidDir && { tuotoksetDir: asetukset.androidDir }) }), agyKayttoraja = luoAgyKayttoraja(), kordinaattori = luoKordinaattori(asetukset.juuri), macAgyKayttoraja = luoMacAgyKayttoraja({ aja: ajaKomento }), terminal = luoTerminaali(asetukset), economy = luoEconomyPalvelu({ juuri: asetukset.juuri, brainDir: asetukset.brainHakemisto, aja: asetukset.aja ?? ajaKomento })) {
   suorita?.asetaKytkimet?.(kytkimet);
   const istuntoValinta = luoIstuntoValinta(asetukset);
   const nebius = luoNebiusAvain({ tiedosto: asetukset.nebiusTiedosto ?? join(homedir(), '.config/scopes/nebius-avain') });
@@ -330,6 +331,9 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
       if (polku === '/api/android/ui') return vastaa(200, await android.ui());
       if (polku === '/api/android/tuotokset') return vastaa(200, await android.tuotokset());
       if (polku === '/api/android/tuotos') return vastaaTavut(await android.tuotos(url.searchParams.get('polku')));
+      if (polku === '/api/economy/git-tila') return vastaa(200, await economy.gitTila(url.searchParams.get('skooppi'), url.searchParams.get('muoto')));
+      if (polku === '/api/economy/tiedostokartta') return vastaa(200, economy.tiedostokartta(url.searchParams.get('skooppi')));
+      if (polku === '/api/economy/tilasto') return vastaa(200, economy.tilasto());
       if (polku === '/api/kayttorajat-kaikki' || (polku === '/api/kayttoraja' && url.searchParams.get('kaikki') === '1')) {
         const [claude, opGemini, op3p, macGemini, mac3p] = await Promise.all([
           Promise.resolve().then(() => kayttoraja()).catch(() => null),
