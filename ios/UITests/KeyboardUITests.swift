@@ -173,6 +173,21 @@ final class KeyboardUITests: XCTestCase {
 
         let calloutDark = KeyPreviewCallout(label: "a", isDark: true)
         XCTAssertNotNil(calloutDark)
+
+        // IOSKEYBOARD-TYYLI: Testataan callout-kohdistukset ja kuplan muodon polku
+        for align in [CalloutAlignment.leading, CalloutAlignment.center, CalloutAlignment.trailing] {
+            let alignedCallout = KeyPreviewCallout(label: "q", isDark: false, keyWidth: 32, keyHeight: 42, alignment: align)
+            XCTAssertNotNil(alignedCallout)
+
+            let shape = KeyCalloutShape(keyWidth: 32, keyHeight: 42, alignment: align)
+            let path = shape.path(in: CGRect(x: 0, y: 0, width: shape.headWidth, height: shape.totalHeight))
+            XCTAssertFalse(path.isEmpty, "Callout-kuplan polun tulee muodostua")
+        }
+
+        // Testataan aktiivinen shift-painike ja natiivityyli
+        let activeShiftItem = KeyItem(label: "", action: .shift, systemImage: "shift.fill", isSpecial: true)
+        let activeShiftView = KeyButtonView(item: activeShiftItem, height: 42) { _ in }
+        XCTAssertNotNil(activeShiftView)
     }
 
     // MARK: - 3. Simulaattorin UI- ja kiertotesti
