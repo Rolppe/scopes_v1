@@ -42,6 +42,18 @@ import {
   muotoileKuluttajaOhje,
   TUNNETUT_SUURKULUTTAJAT,
 } from '../siirto/economy/kuluttajat.mjs';
+import {
+  VUOROKAUSIBUDJETTI_KUTSUJA,
+  TAVOITE_PAKETTI_KUTSUJA,
+  MAKSIMI_PAKETTI_KUTSUJA,
+  HALYTYSTASOT,
+  SAASTOTILAT,
+  OLETUS_SKOOPPI_ALLOKAATIO,
+  VAIHE_BUDJETIT,
+  laskeBudjettitilanne,
+  arvioiIstunnonBudjetti,
+  muotoileBudjettiRaportti,
+} from '../siirto/economy/budjetti.mjs';
 
 export {
   muotoileTaskOdotusOhje,
@@ -68,6 +80,16 @@ export {
   tarkistaMolemmatGitTilat,
   muotoileKuluttajaOhje,
   TUNNETUT_SUURKULUTTAJAT,
+  VUOROKAUSIBUDJETTI_KUTSUJA,
+  TAVOITE_PAKETTI_KUTSUJA,
+  MAKSIMI_PAKETTI_KUTSUJA,
+  HALYTYSTASOT,
+  SAASTOTILAT,
+  OLETUS_SKOOPPI_ALLOKAATIO,
+  VAIHE_BUDJETIT,
+  laskeBudjettitilanne,
+  arvioiIstunnonBudjetti,
+  muotoileBudjettiRaportti,
 };
 
 const OLETUS_TTL_MS = 5_000;
@@ -417,6 +439,21 @@ export function luoEconomyPalvelu({
         kuluttajat: lista,
         kohde: karsinta,
         ohje: muotoileKuluttajaOhje({ skooppi, kuluttajat: lista }),
+      };
+    },
+    budjetti(opt = {}) {
+      const valinnat = typeof opt === 'string' ? { muoto: opt } : opt;
+      const { muoto, skooppi, lyhyt, kiintio } = valinnat;
+      const tila = laskeBudjettitilanne({ brainDir, nytMs: Date.now(), ...(kiintio && { kiintio }) });
+      if (muoto === 'teksti' || muoto === 'markdown') {
+        return {
+          ...tila,
+          teksti: muotoileBudjettiRaportti(tila, { skooppi, lyhyt: Boolean(lyhyt) }),
+        };
+      }
+      return {
+        ...tila,
+        ohje: muotoileBudjettiRaportti(tila, { skooppi, lyhyt: Boolean(lyhyt) }),
       };
     },
   };
