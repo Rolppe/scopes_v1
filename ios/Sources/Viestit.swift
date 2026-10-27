@@ -515,6 +515,7 @@ struct ChatView: View {
     @State private var pysaytetty = false
     @State private var yhdistetaan = false
     @State private var kayttoraja: Kayttoraja? = KayttorajaMuisti.lue(avain: "scopes.kayttoraja.chat")
+    @State private var kayttorajatKaikki: KayttorajatKaikki?
 
     private var valittuAgentti: Agentti? { agentit.first { $0.nimi == valittu } }
     private var asiakas: Asiakas { Asiakas(osoite: asetukset.osoite, avain: asetukset.avain) }
@@ -545,6 +546,24 @@ struct ChatView: View {
                 }
                 if odottaa && viestit.last?.omaViesti == false {
                     Text("kirjoittaa…").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("chat-kirjoittaa")
+                }
+                if let r = kayttoraja, r.suurinKaytto >= 90 {
+                    HStack(spacing: Teema.Vali.s) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(r.onTayna ? .red : .orange)
+                        Text(r.onTayna
+                             ? "Käyttöraja 100 % täynnä (\(r.otsikko ?? "malli")). Vaihda toiseen malliin."
+                             : "Käyttöraja lähes täynnä (\(r.prosenttiTeksti)).")
+                            .font(.caption2.weight(.medium))
+                            .lineLimit(1)
+                        Spacer()
+                    }
+                    .padding(.horizontal, Teema.Vali.m)
+                    .padding(.vertical, 4)
+                    .background((r.onTayna ? Color.red : Color.orange).opacity(0.12))
+                    .cornerRadius(6)
+                    .padding(.horizontal, Teema.Vali.m)
+                    .accessibilityIdentifier("chat-kayttoraja-varoitus")
                 }
                 Syottorivi(teksti: $teksti, estetty: odottaa || valittu == nil || vastausKesken, tunnus: "chat", laheta: { Task { await laheta() } },
                            stop: (odottaa || vastausKesken) && !pysaytetty ? { Task { await pysayta() } } : nil,
@@ -613,6 +632,9 @@ struct ChatView: View {
                 KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.claude")
             }
         }
+        if let kaikki = try? await asiakas.kayttorajatKaikki() {
+            kayttorajatKaikki = kaikki
+        }
     }
 
     // Mallin valinta syöttökentän alla Claude-äpin tapaan: nimi ja alasnuoli; Claude-mallit ja palvelimen
@@ -626,7 +648,8 @@ struct ChatView: View {
                 }
                 return true
             }
-            Section("Claude") { ForEach(suodatetut.filter { $0.tyyppi == "malli" }) { valinta($0) } }
+            let claudeRaja = kayttorajatKaikki?.claude
+            Section(claudeRaja?.tiivisTeksti.map { "Claude (\($0))" } ?? "Claude") { ForEach(suodatetut.filter { $0.tyyppi == "malli" }) { valinta($0) } }
             let android = suodatetut.filter { $0.tyyppi == "gemini" }
             if !android.isEmpty { Section("Android") { ForEach(android) { valinta($0) } } }
             let paikalliset = suodatetut.filter { $0.tyyppi == "paikallinen" }
@@ -634,13 +657,22 @@ struct ChatView: View {
             let nebius = suodatetut.filter { $0.tyyppi == "nebius" }
             if !nebius.isEmpty { Section("Nebius") { ForEach(nebius) { valinta($0) } } }
             let agy = suodatetut.filter { $0.tyyppi == "agy" }
-            if !agy.isEmpty { Section("AGY") { ForEach(agy) { valinta($0) } } }
+            let agyRaja = kayttorajatKaikki?.oneplusAgy?.gemini
+            if !agy.isEmpty { Section(agyRaja?.tiivisTeksti.map { "AGY (\($0))" } ?? "AGY") { ForEach(agy) { valinta($0) } } }
         } label: {
             HStack(spacing: Teema.Vali.xs) {
-                Text(valittuAgentti?.otsikko ?? "Valitse malli").font(.subheadline.weight(.medium)).lineLimit(1)
+                if let r = kayttoraja {
+                    Circle()
+                        .fill(r.onTayna ? Color.red : (r.onVaroitus ? Color.orange : Color.secondary))
+                        .frame(width: 6, height: 6)
+                }
+                let naytettava = kayttoraja.map { " \($0.prosenttiTeksti)" } ?? ""
+                let perus = (valittuAgentti?.otsikko ?? "Valitse malli") + naytettava
+                Text(perus).font(.subheadline.weight(.medium)).lineLimit(1)
+                    .foregroundStyle(kayttoraja?.onTayna == true ? Color.red : (kayttoraja?.onVaroitus == true ? Color.orange : Color.secondary))
                 Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
             }
-            .foregroundStyle(.secondary)
         }
         .disabled(odottaa)
         .accessibilityIdentifier("chat-agentti")
@@ -649,8 +681,11 @@ struct ChatView: View {
     // Agentin vaihto aloittaa uuden keskustelun: claude-istunnon jatko kuuluu sille agentille, joka sen aloitti.
     // Valintamerkki on nimen perässä tekstinä: valikon kuvake menisi nimen vasemmalle ja siirtäisi sitä (käyttäjä 13.10.2026).
     private func valinta(_ a: Agentti) -> some View {
-        Button { if valittu != a.nimi { valittu = a.nimi; uusi() } } label: {
-            Text(a.nimi == valittu ? "\(a.otsikko)  ✓" : a.otsikko)
+        let r = kayttorajatKaikki?.raja(mallille: a.nimi)
+        let rajaTeksti = r?.tiivisTeksti.map { " (\($0))" } ?? ""
+        let valittuMerkki = a.nimi == valittu ? "  ✓" : ""
+        return Button { if valittu != a.nimi { valittu = a.nimi; uusi() } } label: {
+            Text(a.otsikko + rajaTeksti + valittuMerkki)
         }
     }
 
@@ -890,6 +925,7 @@ struct SkooppiViestitView: View {
     @State private var jumissaPuraValinta = false
     @State private var virhe: String?
     @State private var kayttoraja: Kayttoraja?
+    @State private var kayttorajatKaikki: KayttorajatKaikki?
     @State private var liitteet: [Liite] = []
     @State private var pysaytetaan = false
     @State private var pysaytetty = false
@@ -954,6 +990,24 @@ struct SkooppiViestitView: View {
                                 .accessibilityIdentifier("viestit-jumissa-palkki")
                             }
                             if !liitteet.isEmpty { LiiteRivi(liitteet: $liitteet) }
+                            if let r = kayttoraja ?? kayttorajatKaikki?.raja(mallille: malliValittu ?? t.istunto?.malli), r.suurinKaytto >= 90 {
+                                HStack(spacing: Teema.Vali.s) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundStyle(r.onTayna ? .red : .orange)
+                                    Text(r.onTayna
+                                         ? "Käyttöraja 100 % täynnä (\(r.otsikko ?? "malli")). Vaihda toiseen malliin."
+                                         : "Käyttöraja lähes täynnä (\(r.prosenttiTeksti)).")
+                                        .font(.caption2.weight(.medium))
+                                        .lineLimit(1)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, Teema.Vali.m)
+                                .padding(.vertical, 4)
+                                .background((r.onTayna ? Color.red : Color.orange).opacity(0.12))
+                                .cornerRadius(6)
+                                .padding(.horizontal, Teema.Vali.m)
+                                .accessibilityIdentifier("kayttoraja-varoitus")
+                            }
                             // Stop heti lähetyksestä ja play heti pysäytyksestä, ennen kuin palvelun tila ehtii perässä.
                             let tyossa = (["busy", "shell"].contains(t.istunto?.tila ?? "") || oletettuTyo) && !pysaytetty
                             Syottorivi(teksti: $teksti, estetty: lahettaa, tunnus: "viestit", laheta: { Task { await laheta() } },
@@ -962,7 +1016,9 @@ struct SkooppiViestitView: View {
                                 HStack(spacing: Teema.Vali.s) {
                                     LiiteValikko(liitteet: $liitteet, virhe: $virhe)
                                     MalliValikko(malli: malliValittu ?? t.istunto?.malli, effort: effortValittu ?? t.istunto?.effort,
-                                                 vapaa: t.istunto?.tila == "idle") { m, e in Task { await vaihdaMalli(m, e) } }
+                                                 vapaa: t.istunto?.tila == "idle",
+                                                 kayttoraja: kayttoraja,
+                                                 kayttorajat: kayttorajatKaikki) { m, e in Task { await vaihdaMalli(m, e) } }
                                 }
                             }
                         }
@@ -1083,6 +1139,9 @@ struct SkooppiViestitView: View {
             } else if tyyppi == "claude" {
                 KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.claude")
             }
+        }
+        if let kaikki = try? await asiakas.kayttorajatKaikki() {
+            kayttorajatKaikki = kaikki
         }
     }
 
