@@ -164,7 +164,10 @@ export function luoAgyKayttoraja({
     if (ryhma !== '3p') {
       try {
         const p = laskePyynnot({ nytMs: nyt(), brainDir });
-        if (p) viikko = p;
+        if (p) {
+          const vkNollautuu = kohde?.kiintioViikko?.nollautuu ?? kohde?.viikko?.nollautuu ?? p.nollautuu;
+          viikko = { ...p, nollautuu: vkNollautuu };
+        }
       } catch {}
     }
 
@@ -231,7 +234,8 @@ export function luoMacAgyKayttoraja({
     let viikko = kohde?.viikko ?? null;
     if (ryhma !== '3p') {
       if (d?.pyynnot) {
-        viikko = d.pyynnot;
+        const vkNollautuu = tila?.gemini?.kiintioViikko?.nollautuu ?? kohde?.kiintioViikko?.nollautuu ?? kohde?.viikko?.nollautuu ?? d.pyynnot.nollautuu;
+        viikko = { ...d.pyynnot, nollautuu: vkNollautuu };
       }
     }
 
