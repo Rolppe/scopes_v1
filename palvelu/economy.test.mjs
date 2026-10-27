@@ -269,6 +269,10 @@ test('palvelin: GET /api/economy -reitit palauttavat tiedot', async () => {
       if (muoto === 'teksti') return { teksti: 'TASK-ODOTUS: ohje' };
       return { suositusWaitMs: 10000, minimiWaitMs: 5000 };
     },
+    hybridiPakkaus(skooppi, opt = {}) {
+      if (opt?.muoto === 'teksti') return { skooppi, teksti: 'HYBRIDI: ohje' };
+      return { skooppi, strategia: { strategia: 'hybridi' } };
+    },
   };
 
   const srv = createServer(
@@ -340,6 +344,17 @@ test('palvelin: GET /api/economy -reitit palauttavat tiedot', async () => {
     assert.equal(resTaskTeksti.status, 200);
     const dataTaskTeksti = await resTaskTeksti.json();
     assert.equal(dataTaskTeksti.teksti, 'TASK-ODOTUS: ohje');
+
+    const resHybridi = await fetch(`${baseUrl}/api/economy/hybridi-pakkaus?skooppi=koe`, auth);
+    assert.equal(resHybridi.status, 200);
+    const dataHybridi = await resHybridi.json();
+    assert.equal(dataHybridi.skooppi, 'koe');
+    assert.equal(dataHybridi.strategia.strategia, 'hybridi');
+
+    const resHybridiTeksti = await fetch(`${baseUrl}/api/economy/hybridi-pakkaus?skooppi=koe&muoto=teksti`, auth);
+    assert.equal(resHybridiTeksti.status, 200);
+    const dataHybridiTeksti = await resHybridiTeksti.json();
+    assert.equal(dataHybridiTeksti.teksti, 'HYBRIDI: ohje');
   } finally {
     srv.close();
   }

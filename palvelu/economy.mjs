@@ -25,6 +25,12 @@ import {
   muotoileTiedostokartta,
   haeJaMuotoileTiedostokartta,
 } from '../siirto/economy/tiedostokartta.mjs';
+import {
+  selvitaPakkausStrategia,
+  muodostaPakkausKomento,
+  laskePakkausSaasto,
+  muotoileHybridiOhje,
+} from '../siirto/economy/hybridi-pakkaus.mjs';
 
 export {
   muotoileTaskOdotusOhje,
@@ -38,6 +44,10 @@ export {
   etsiSymboli,
   muotoileTiedostokartta,
   haeJaMuotoileTiedostokartta,
+  selvitaPakkausStrategia,
+  muodostaPakkausKomento,
+  laskePakkausSaasto,
+  muotoileHybridiOhje,
 };
 
 const OLETUS_TTL_MS = 5_000;
@@ -347,6 +357,26 @@ export function luoEconomyPalvelu({
         minimiWaitMs: MINIMI_WAIT_MS,
         ohje: muotoileTaskOdotusOhje(),
         lyhyt: muotoileTaskOdotusOhje({ lyhyt: true }),
+      };
+    },
+    hybridiPakkaus(skooppi = null, opt = {}) {
+      const valinnat = typeof opt === 'string' ? { muoto: opt } : opt;
+      const { muoto } = valinnat;
+      const strategia = skooppi ? selvitaPakkausStrategia(skooppi, juuri) : null;
+      const saasto = laskePakkausSaasto();
+      if (muoto === 'teksti' || muoto === 'markdown') {
+        return {
+          skooppi,
+          strategia,
+          saasto,
+          teksti: muotoileHybridiOhje(skooppi, valinnat),
+        };
+      }
+      return {
+        skooppi,
+        strategia,
+        saasto,
+        ohje: muotoileHybridiOhje(skooppi, valinnat),
       };
     },
   };
