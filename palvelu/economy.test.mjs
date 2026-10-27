@@ -193,6 +193,14 @@ test('luoEconomyPalvelu: tarjoaa kootut rajapinnat', async () => {
   const kartta = p.tiedostokartta('koe');
   assert.equal(kartta.skooppi, 'koe');
 
+  const karttaTeksti = p.tiedostokartta('koe', 'teksti');
+  assert.equal(karttaTeksti.skooppi, 'koe');
+  assert.ok(karttaTeksti.teksti.includes('## Skoopin tiedostokartta'));
+
+  const karttaHaku = p.tiedostokartta('koe', { haku: 'rekisteri' });
+  assert.equal(karttaHaku.skooppi, 'koe');
+  assert.ok(Array.isArray(karttaHaku.osumat));
+
   const tilasto = p.tilasto();
   assert.ok('plannerResponses' in tilasto);
 
@@ -247,8 +255,12 @@ test('palvelin: GET /api/economy -reitit palauttavat tiedot', async () => {
       if (muoto === 'teksti') return { ...perus, teksti: 'GIT-TILA: puhdas' };
       return perus;
     },
-    tiedostokartta(skooppi) {
-      return { skooppi, maara: 1, tiedostot: [{ polku: 'scopes/koe/REKISTERI.md' }] };
+    tiedostokartta(skooppi, opt = {}) {
+      const { muoto, haku } = opt;
+      if (haku) return { skooppi, haku, osumat: [{ polku: 'scopes/koe/REKISTERI.md' }] };
+      const perus = { skooppi, maara: 1, tiedostot: [{ polku: 'scopes/koe/REKISTERI.md' }] };
+      if (muoto === 'teksti') return { ...perus, teksti: 'KARTTA: scopes/koe/REKISTERI.md' };
+      return perus;
     },
     tilasto() {
       return { userInputs: 10, plannerResponses: 50 };
@@ -302,6 +314,16 @@ test('palvelin: GET /api/economy -reitit palauttavat tiedot', async () => {
     const dataKartta = await resKartta.json();
     assert.equal(dataKartta.skooppi, 'koe');
     assert.equal(dataKartta.maara, 1);
+
+    const resKarttaTeksti = await fetch(`${baseUrl}/api/economy/tiedostokartta?skooppi=koe&muoto=teksti`, auth);
+    assert.equal(resKarttaTeksti.status, 200);
+    const dataKarttaTeksti = await resKarttaTeksti.json();
+    assert.equal(dataKarttaTeksti.teksti, 'KARTTA: scopes/koe/REKISTERI.md');
+
+    const resKarttaHaku = await fetch(`${baseUrl}/api/economy/tiedostokartta?skooppi=koe&haku=rekisteri`, auth);
+    assert.equal(resKarttaHaku.status, 200);
+    const dataKarttaHaku = await resKarttaHaku.json();
+    assert.equal(dataKarttaHaku.osumat.length, 1);
 
     const resTilasto = await fetch(`${baseUrl}/api/economy/tilasto`, auth);
     assert.equal(resTilasto.status, 200);

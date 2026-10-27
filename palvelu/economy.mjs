@@ -17,6 +17,14 @@ import {
   SUOSITUS_WAIT_MS,
   MINIMI_WAIT_MS,
 } from '../siirto/economy/task-odotus.mjs';
+import {
+  luokitteleTiedostotyyppi,
+  poimiKoodiIndeksi,
+  haeTiedostokartta,
+  etsiSymboli,
+  muotoileTiedostokartta,
+  haeJaMuotoileTiedostokartta,
+} from '../siirto/economy/tiedostokartta.mjs';
 
 export {
   muotoileTaskOdotusOhje,
@@ -24,6 +32,12 @@ export {
   analysoiTaskOdotus,
   SUOSITUS_WAIT_MS,
   MINIMI_WAIT_MS,
+  luokitteleTiedostotyyppi,
+  poimiKoodiIndeksi,
+  haeTiedostokartta,
+  etsiSymboli,
+  muotoileTiedostokartta,
+  haeJaMuotoileTiedostokartta,
 };
 
 const OLETUS_TTL_MS = 5_000;
@@ -168,81 +182,6 @@ export function muotoileGitEsitiedot(tila, skooppi = null) {
   return rivit.join('\n');
 }
 
-export function haeTiedostokartta({
-  juuri = process.cwd(),
-  skooppi,
-  maxSyvyys = 6,
-  maxTiedostot = 500,
-} = {}) {
-  if (!skooppi) return { virhe: 'skooppi puuttuu' };
-
-  const peruspolut = skoopinPolut(skooppi, juuri);
-  const tiedostot = [];
-  let yhteensaKoko = 0;
-
-  function skannaa(hakemisto, syvyys) {
-    if (syvyys > maxSyvyys || tiedostot.length >= maxTiedostot) return;
-    let lapset;
-    try {
-      lapset = readdirSync(hakemisto, { withFileTypes: true });
-    } catch {
-      return;
-    }
-
-    for (const lapsi of lapset) {
-      if (lapsi.name.startsWith('.') && lapsi.name !== '.agents') continue;
-      if (OHITETTAVAT_KANSIOT.has(lapsi.name)) continue;
-
-      const kokoPolku = join(hakemisto, lapsi.name);
-      const relPolku = relative(juuri, kokoPolku);
-
-      if (lapsi.isDirectory()) {
-        skannaa(kokoPolku, syvyys + 1);
-      } else if (lapsi.isFile()) {
-        try {
-          const st = statSync(kokoPolku);
-          tiedostot.push({
-            polku: relPolku,
-            koko: st.size,
-            mtime: st.mtimeMs,
-          });
-          yhteensaKoko += st.size;
-        } catch {}
-      }
-    }
-  }
-
-  for (const p of peruspolut) {
-    const koko = join(juuri, p);
-    if (existsSync(koko)) {
-      try {
-        const st = statSync(koko);
-        if (st.isDirectory()) {
-          skannaa(koko, 1);
-        } else if (st.isFile()) {
-          tiedostot.push({
-            polku: p,
-            koko: st.size,
-            mtime: st.mtimeMs,
-          });
-          yhteensaKoko += st.size;
-        }
-      } catch {}
-    }
-  }
-
-  // Järjestetään polun mukaan aakkosjärjestykseen
-  tiedostot.sort((a, b) => a.polku.localeCompare(b.polku));
-
-  return {
-    skooppi,
-    peruspolut,
-    tiedostot,
-    yhteensaKoko,
-    maara: tiedostot.length,
-  };
-}
-
 let tilastoCache = null;
 
 export function luokitteleTyokalu(kutsu) {
@@ -369,8 +308,33 @@ export function luoEconomyPalvelu({
     muotoileGit(tila, skooppi = null) {
       return muotoileGitEsitiedot(tila, skooppi);
     },
-    tiedostokartta(skooppi) {
-      return haeTiedostokartta({ juuri, skooppi });
+    tiedostokartta(skooppi, opt = {}) {
+      const valinnat = typeof opt === 'string' ? { muoto: opt } : opt;
+      const { muoto, indeksi, haku, lyhyt, maxRivit } = valinnat;
+      const kartta = haeTiedostokartta({
+        juuri,
+        skooppi,
+        sisallytaIndeksi: Boolean(indeksi || haku),
+      });
+      if (haku) {
+        return {
+          skooppi,
+          haku,
+          osumat: etsiSymboli(kartta, haku),
+        };
+      }
+      if (muoto === 'teksti' || muoto === 'markdown') {
+        return {
+          ...kartta,
+          teksti: muotoileTiedostokartta(kartta, {
+            juuri,
+            maxRivit,
+            naytaSymbolit: Boolean(indeksi),
+            lyhyt: Boolean(lyhyt),
+          }),
+        };
+      }
+      return kartta;
     },
     tilasto() {
       return laskeKulutusJakauma({ brainDir });
