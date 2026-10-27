@@ -62,10 +62,9 @@ test('laskePyyntomaara: laskee transcript.jsonl-mallipyynnöt annetulta päiväl
   writeFileSync(
     join(convDir, 'transcript.jsonl'),
     [
-      JSON.stringify({ created_at: '2026-10-17T06:50:00.000Z', source: 'MODEL', type: 'PLANNER_RESPONSE' }),
+      JSON.stringify({ created_at: '2026-10-17T06:50:00.000Z', source: 'USER_EXPLICIT', type: 'USER_INPUT' }),
       JSON.stringify({ created_at: '2026-10-17T07:05:00.000Z', source: 'USER_EXPLICIT', type: 'USER_INPUT' }),
-      JSON.stringify({ created_at: '2026-10-17T07:05:05.000Z', source: 'MODEL', type: 'PLANNER_RESPONSE' }),
-      JSON.stringify({ created_at: '2026-10-17T07:05:10.000Z', source: 'MODEL', type: 'PLANNER_RESPONSE' }),
+      JSON.stringify({ created_at: '2026-10-17T07:10:00.000Z', source: 'USER_EXPLICIT', type: 'USER_INPUT' }),
     ].join('\n')
   );
 

@@ -14,11 +14,11 @@
 //   POST /api/skoopit/<nimi>/pakkaa   /pakkaa skoopin vapaaseen tmux-istuntoon → { istunto, komento }
 //   POST /api/skoopit/<nimi>/automaattisiirto | herata | herata-pois   samoin /automaattisiirto, /sa, /sa pois
 //            varatulle istunnolle jonoon → { istunto, komento, jonossa: true }; GET-näkymän jonossa: [{ komento, aika }]
-//   GET /api/asetukset                Automaattijatko- ja Autopack-kytkimet { automaattijatko, autopack } (toiminnot-asetukset.mjs)
-//   POST /api/asetukset/<automaattijatko|autopack>/<paalle|pois>   kytkimen asetus → samat kaksi arvoa (käyttäjä 14.10.2026)
-//   GET /api/skoopit/<nimi>/asetukset[?istunto=<tunnus>]   keskustelukohtaiset kytkimet { istunto, istuntoja, automaattijatko, autopack };
+//   GET /api/asetukset                Automaattijatko-, Autopack- ja Automaattisiirto-kytkimet { automaattijatko, autopack, automaattisiirto } (toiminnot-asetukset.mjs)
+//   POST /api/asetukset/<automaattijatko|autopack|automaattisiirto>/<paalle|pois>   kytkimen asetus → samat arvot (käyttäjä 14.10.2026, 19.10.2026)
+//   GET /api/skoopit/<nimi>/asetukset[?istunto=<tunnus>]   keskustelukohtaiset kytkimet { istunto, istuntoja, automaattijatko, autopack, automaattisiirto };
 //            yksi avoin istunto valitaan itsestään, ei istuntoa → istunto null ja yhteinen oletus
-//   POST /api/skoopit/<nimi>/asetukset/<automaattijatko|autopack>/<paalle|pois>[?istunto=<tunnus>]   istunnon kytkin; 409 ilman valittavaa istuntoa
+//   POST /api/skoopit/<nimi>/asetukset/<automaattijatko|autopack|automaattisiirto>/<paalle|pois>[?istunto=<tunnus>]   istunnon kytkin; 409 ilman valittavaa istuntoa
 //   POST /api/uusi  {"nimi", "purkaja"?, "malli"?}   uusi istunto, ensimmäinen viesti /pura uusi <nimi> [--ajaja=…] → { osoite }
 //   POST /api/skoopit/<nimi>/arkistoi   skoopin arkistointi ja commit (arkistoi-skooppi.mjs) → { commit, polut }
 //   GET /api/kayttoraja               Clauden 5 h ja viikkoraja { viisiTuntia, viikko: { kaytto %, nollautuu } | null } (kayttoraja.mjs)
@@ -144,6 +144,7 @@ function runko(req, raja = 1024) {
 }
 
 export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset, { android: () => android }), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), purkajat = luoPurkajat({ juuri: asetukset.juuri, paikalliset: () => viestit.agentit() }), linux = luoLinuxServer({ loki: asetukset.toimintoloki, kuiva: asetukset.linuxKuiva === true }), android = luoAndroid({ loki: asetukset.toimintoloki, kuiva: asetukset.androidKuiva === true, ...(asetukset.androidLaite && { laite: asetukset.androidLaite }), ...(asetukset.androidDir && { tuotoksetDir: asetukset.androidDir }) }), agyKayttoraja = luoAgyKayttoraja(), kordinaattori = luoKordinaattori(asetukset.juuri), macAgyKayttoraja = luoMacAgyKayttoraja({ aja: ajaKomento })) {
+  suorita?.asetaKytkimet?.(kytkimet);
   const istuntoValinta = luoIstuntoValinta(asetukset);
   const nebius = luoNebiusAvain({ tiedosto: asetukset.nebiusTiedosto ?? join(homedir(), '.config/scopes/nebius-avain') });
   // Chat suoratoistona (DEMO-SCOPES-SUORATOISTO): NDJSON-rivit {tyyppi: 'pala', teksti} …, lopuksi
@@ -348,7 +349,7 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
           || malliNimi.startsWith('mac-agy')
           || malliNimi.startsWith('macos-agy')
           || (istunto?.onMac === true)
-          || (skooppi && !agentti && (await viestit.onkoMacAgy?.(skooppi)));
+          || (skooppi && (await viestit.onkoMacAgy?.(skooppi)));
 
         const onAgy = onMac
           || tyyppi === 'agy'
@@ -439,6 +440,8 @@ if (paaohjelma) {
   }).kaynnista();
   const lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null });
   lr.ajasta();
-  createServer(diagnostiikka.kaari(kasittelija(asetukset, undefined, undefined, undefined, undefined, diagnostiikka, undefined, lr))).listen(portti, osoite, () =>
+  const toiminnot = luoToiminnot(asetukset);
+  toiminnot.kaynnistaVahti?.(5_000);
+  createServer(diagnostiikka.kaari(kasittelija(asetukset, toiminnot, undefined, undefined, undefined, diagnostiikka, undefined, lr))).listen(portti, osoite, () =>
     console.log(`scopes-palvelu: http://${osoite}:${portti}/api/skoopit`));
 }

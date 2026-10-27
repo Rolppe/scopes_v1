@@ -191,6 +191,7 @@ enum Toiminto: String {
 struct PakkausKytkimet: Decodable, Hashable {
     var automaattijatko: Bool
     var autopack: Bool
+    var automaattisiirto: Bool?
     var istunto: String?
     var istuntoja: Int?
 }
@@ -208,7 +209,7 @@ struct LupaKytkin: Decodable {
 }
 
 enum PakkausKytkin: String {
-    case automaattijatko, autopack
+    case automaattijatko, autopack, automaattisiirto
 }
 
 struct ToimintoVastaus: Decodable, Hashable {
@@ -425,11 +426,17 @@ struct KayttorajatKaikki: Codable, Equatable {
     func raja(mallille malliNimi: String?) -> Kayttoraja? {
         guard let m = malliNimi?.lowercased() else { return nil }
         let on3p = m.contains("claude") || m.contains("gpt") || m.contains("3p") || m.contains("oss")
-        if m.contains("mac-agy") || m.contains("macos") {
+        if m.contains("mac") {
             return on3p ? (macAgy?.kolmasOsapuoli ?? macAgy?.gemini) : (macAgy?.gemini ?? macAgy?.kolmasOsapuoli)
         }
-        if m.contains("agy/") || m.contains("linux") {
+        if m.contains("oneplus") || m.contains("linux") || m.contains("agy") {
             return on3p ? (oneplusAgy?.kolmasOsapuoli ?? oneplusAgy?.gemini) : (oneplusAgy?.gemini ?? oneplusAgy?.kolmasOsapuoli)
+        }
+        if m.contains("gemini") {
+            return macAgy?.gemini ?? oneplusAgy?.gemini
+        }
+        if m.contains("gpt") || m.contains("oss") {
+            return macAgy?.kolmasOsapuoli ?? oneplusAgy?.kolmasOsapuoli
         }
         if m.contains("claude") || m.contains("sonnet") || m.contains("opus") || m.contains("haiku") {
             return claude
