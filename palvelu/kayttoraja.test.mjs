@@ -88,14 +88,20 @@ test('palvelin: /api/kayttoraja reitittää agy-kiintiöön kun tyyppi=agy tai a
   const { createServer } = await import('node:http');
   const { kasittelija } = await import('./palvelin.mjs');
   const claudeRaja = async () => ({ viisiTuntia: { kaytto: 10, nollautuu: null }, viikko: { kaytto: 20, nollautuu: null } });
-  const agyRaja = async () => ({ viisiTuntia: { kaytto: 30, nollautuu: null }, viikko: { kaytto: 40, nollautuu: null }, ymparisto: 'oneplus' });
-  const macAgyRaja = async () => ({ viisiTuntia: { kaytto: 50, nollautuu: null }, viikko: { kaytto: 60, nollautuu: null }, ymparisto: 'macos' });
+  const agyRaja = async () => ({ viisiTuntia: { kaytto: 30, nollautuu: null }, viikko: { kaytto: 40, nollautuu: null }, otsikko: 'OnePlus Linux AGY' });
+  const macAgyRaja = async () => ({ viisiTuntia: { kaytto: 50, nollautuu: null }, viikko: { kaytto: 60, nollautuu: null }, otsikko: 'Mac AGY' });
 
   const srv = createServer(
     kasittelija(
       { avain: 'salaisuus', juuri: '/nonexistent', toimintoloki: null },
       async () => ({}),
-      { skoopinViestit: () => ({ istunto: null }) },
+      {
+        skoopinViestit: (nimi) => (nimi === 'mac-skooppi'
+          ? { istunto: { malli: 'mac-agy/gemini-3.8-flash-high', onMac: true, tyyppi: 'agy' } }
+          : { istunto: null }),
+        onkoMacAgy: (nimi) => nimi === 'mac-skooppi',
+        onkoAgy: (nimi) => nimi === 'mac-skooppi',
+      },
       claudeRaja,
       undefined,
       undefined,
@@ -123,36 +129,32 @@ test('palvelin: /api/kayttoraja reitittää agy-kiintiöön kun tyyppi=agy tai a
     // Oletus: claude
     const oletus = await hae('/api/kayttoraja');
     assert.equal(oletus.viisiTuntia.kaytto, 10);
+    assert.equal(oletus.otsikko, 'Claude');
 
     // tyyppi=agy: oneplus agy
     const agy = await hae('/api/kayttoraja?tyyppi=agy');
     assert.equal(agy.viisiTuntia.kaytto, 30);
-    assert.equal(agy.ymparisto, 'oneplus');
+    assert.equal(agy.otsikko, 'OnePlus Linux AGY');
 
-    // agentti=android/gemini: oneplus agy
+    // agentti=android/gemini: agy
     const gemini = await hae('/api/kayttoraja?agentti=android/gemini');
     assert.equal(gemini.viisiTuntia.kaytto, 30);
 
-    // tyyppi=mac-agy: mac agy
-    const macAgy = await hae('/api/kayttoraja?tyyppi=mac-agy');
+    // agentti=mac-agy/gemini-3.8-flash-high: mac agy
+    const macAgy = await hae('/api/kayttoraja?agentti=mac-agy/gemini-3.8-flash-high');
     assert.equal(macAgy.viisiTuntia.kaytto, 50);
-    assert.equal(macAgy.ymparisto, 'macos');
+    assert.equal(macAgy.otsikko, 'Mac AGY');
 
-    // ymparisto=macos: mac agy
-    const macYmp = await hae('/api/kayttoraja?ymparisto=macos');
-    assert.equal(macYmp.viisiTuntia.kaytto, 50);
+    // skooppi=mac-skooppi: mac agy
+    const macSkooppi = await hae('/api/kayttoraja?skooppi=mac-skooppi');
+    assert.equal(macSkooppi.viisiTuntia.kaytto, 50);
+    assert.equal(macSkooppi.otsikko, 'Mac AGY');
 
-    // Koontikysely: /api/kayttorajat-kaikki
+    // /api/kayttorajat-kaikki
     const kaikki = await hae('/api/kayttorajat-kaikki');
     assert.equal(kaikki.claude.viisiTuntia.kaytto, 10);
     assert.equal(kaikki.oneplusAgy.gemini.viisiTuntia.kaytto, 30);
     assert.equal(kaikki.macAgy.gemini.viisiTuntia.kaytto, 50);
-
-    // Koontikysely: /api/kayttoraja?kaikki=1
-    const kaikkiKysely = await hae('/api/kayttoraja?kaikki=1');
-    assert.equal(kaikkiKysely.claude.viisiTuntia.kaytto, 10);
-    assert.equal(kaikkiKysely.oneplusAgy.gemini.viisiTuntia.kaytto, 30);
-    assert.equal(kaikkiKysely.macAgy.gemini.viisiTuntia.kaytto, 50);
   } finally {
     srv.close();
   }
