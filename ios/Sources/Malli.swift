@@ -362,6 +362,38 @@ struct Kayttoraja: Codable, Equatable {
     let viikko: Raja?
     let otsikko: String?
     var ymparisto: String? = nil
+
+    var tiivisTeksti: String? {
+        if let v = viikko {
+            if let teksti = v.teksti, !teksti.isEmpty {
+                return teksti.replacingOccurrences(of: " ", with: "")
+            }
+            if let p5 = viisiTuntia {
+                return "5h: \(Int(p5.kaytto)) %, 7pv: \(Int(v.kaytto)) %"
+            }
+            return "\(Int(v.kaytto)) %"
+        }
+        if let p5 = viisiTuntia {
+            return "5h: \(Int(p5.kaytto)) %"
+        }
+        return nil
+    }
+
+    var suurinKaytto: Double {
+        max(viisiTuntia?.kaytto ?? 0, viikko?.kaytto ?? 0)
+    }
+
+    var prosenttiTeksti: String {
+        "\(Int(suurinKaytto)) %"
+    }
+
+    var onVaroitus: Bool {
+        suurinKaytto >= 85 && suurinKaytto < 100
+    }
+
+    var onTayna: Bool {
+        suurinKaytto >= 100
+    }
 }
 
 struct KayttorajatKaikki: Codable, Equatable {
@@ -372,6 +404,38 @@ struct KayttorajatKaikki: Codable, Equatable {
     let claude: Kayttoraja?
     let oneplusAgy: AgyRyhmat?
     let macAgy: AgyRyhmat?
+
+    func raja(ryhmalle ryhma: String, malli: String? = nil) -> Kayttoraja? {
+        let r = ryhma.lowercased()
+        let m = malli?.lowercased() ?? ""
+        let on3p = m.contains("claude") || m.contains("gpt") || m.contains("3p") || m.contains("oss")
+
+        if r.contains("mac") {
+            return on3p ? (macAgy?.kolmasOsapuoli ?? macAgy?.gemini) : (macAgy?.gemini ?? macAgy?.kolmasOsapuoli)
+        }
+        if r.contains("oneplus") || r.contains("linux") || (r.contains("agy") && !r.contains("mac")) {
+            return on3p ? (oneplusAgy?.kolmasOsapuoli ?? oneplusAgy?.gemini) : (oneplusAgy?.gemini ?? oneplusAgy?.kolmasOsapuoli)
+        }
+        if r.contains("claude") {
+            return claude
+        }
+        return nil
+    }
+
+    func raja(mallille malliNimi: String?) -> Kayttoraja? {
+        guard let m = malliNimi?.lowercased() else { return nil }
+        let on3p = m.contains("claude") || m.contains("gpt") || m.contains("3p") || m.contains("oss")
+        if m.contains("mac-agy") || m.contains("macos") {
+            return on3p ? (macAgy?.kolmasOsapuoli ?? macAgy?.gemini) : (macAgy?.gemini ?? macAgy?.kolmasOsapuoli)
+        }
+        if m.contains("agy/") || m.contains("linux") {
+            return on3p ? (oneplusAgy?.kolmasOsapuoli ?? oneplusAgy?.gemini) : (oneplusAgy?.gemini ?? oneplusAgy?.kolmasOsapuoli)
+        }
+        if m.contains("claude") || m.contains("sonnet") || m.contains("opus") || m.contains("haiku") {
+            return claude
+        }
+        return nil
+    }
 }
 
 // Käyttörajan pysyväistallennus päätteelle (UserDefaults): lukemat eivät katoa tyhjäkäynnillä tai äpin uudelleenkäynnistyksessä.

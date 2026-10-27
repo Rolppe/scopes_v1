@@ -248,7 +248,17 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
       await aja('scp', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', tiedosto, json, 'mac:~/.local/state/pura/']).catch(() => {});
     }
     const viestiTiedosto = malli?.startsWith(MAC_AGY_MALLI) ? `~/.local/state/pura/${mallitonSlug(nimi)}.md` : tiedosto;
-    for (const i of suljettavat) { await tarkistaRuutu(i); await kirjoita(i, '/exit'); }
+    for (const i of suljettavat) {
+      await tarkistaRuutu(i);
+      if (i.tyyppi === 'agy' || i.ruutu?.includes('agy') || i.pid == null) {
+        await aja('tmux', ['send-keys', '-t', i.ruutu, 'C-c']).catch(() => {});
+        await aja('tmux', ['send-keys', '-t', i.ruutu, 'C-d']).catch(() => {});
+        await new Promise((r) => setTimeout(r, 200));
+        await aja('tmux', ['kill-window', '-t', i.ruutu]).catch(() => {});
+      } else {
+        await kirjoita(i, '/exit');
+      }
+    }
     const tulos = await avaaIstunto(nimi, `Malliton purku: lue ${viestiTiedosto} ja noudata sitä.`, malli);
     return { ...tulos, suljettiin: suljettavat.map((i) => i.id), tiedosto: viestiTiedosto, ...(malli ? { malli } : {}), ...(r.koodi === 4 ? { varoitus: true } : {}) };
   }
@@ -294,7 +304,17 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
       if (p.koodi === 0) return puraMallitta(nimi, suljettavat, malli);
       if ((malli?.startsWith(AGY_MALLI) || malli?.startsWith(MAC_AGY_MALLI)) && p.koodi === 1) throw new Hylatty(400, 'agy-istunto kuuluu vain scopes- ja infra-perheen skoopeille');
       if (p.koodi !== 1) throw new Hylatty(500, (p.stderr.trim().split('\n').filter(Boolean).pop() ?? `pura-malliton --perhe exit ${p.koodi}`).slice(0, 300));
-      for (const i of suljettavat) { await tarkistaRuutu(i); await kirjoita(i, '/exit'); }
+      for (const i of suljettavat) {
+      await tarkistaRuutu(i);
+      if (i.tyyppi === 'agy' || i.ruutu?.includes('agy') || i.pid == null) {
+        await aja('tmux', ['send-keys', '-t', i.ruutu, 'C-c']).catch(() => {});
+        await aja('tmux', ['send-keys', '-t', i.ruutu, 'C-d']).catch(() => {});
+        await new Promise((r) => setTimeout(r, 200));
+        await aja('tmux', ['kill-window', '-t', i.ruutu]).catch(() => {});
+      } else {
+        await kirjoita(i, '/exit');
+      }
+    }
       const tulos = await avaaIstunto(nimi, `/pura ${nimi}${ajaja ? ` --ajaja=${ajaja}` : ''}`, malli);
       return { ...tulos, suljettiin: suljettavat.map((i) => i.id), ...(ajaja ? { purkaja: ajaja } : {}), ...(malli ? { malli } : {}) };
     },
