@@ -1013,11 +1013,15 @@ final class SkoopitUITests: XCTestCase {
         for _ in 0..<3 where !autopack.exists { app.swipeUp() }
         XCTAssertTrue(autopack.exists, "autopack-kytkin puuttuu")
         XCTAssertLessThan(jatko.frame.minY, autopack.frame.minY)
+        let siirtoKytkin = app.switches["toiminto-automaattisiirto-kytkin"]
+        for _ in 0..<3 where !siirtoKytkin.exists { app.swipeUp() }
+        XCTAssertTrue(siirtoKytkin.exists, "automaattisiirto-kytkin puuttuu")
+        XCTAssertLessThan(autopack.frame.minY, siirtoKytkin.frame.minY)
         // Keskustelukohtainen palvelu (scopes infra setting 16.10.2026) lukitsee kytkimet, kun skoopilla ei ole yhtä avointa
         // istuntoa; vanha palvelu antaa yhteiset kytkimet, jotka eivät lukitu.
         let kytkinSelite = app.staticTexts["toiminto-kytkimet-selite"]
         let yhteiset = kytkinSelite.label.hasPrefix("Koskevat kaikkia")
-        XCTAssertEqual(jatko.isEnabled && autopack.isEnabled, yhteiset, "kytkinten lukitus ei vastaa selitettä: \(kytkinSelite.label)")
+        XCTAssertEqual(jatko.isEnabled && autopack.isEnabled && siirtoKytkin.isEnabled, yhteiset, "kytkinten lukitus ei vastaa selitettä: \(kytkinSelite.label)")
         // Selite on kytkinten alla, joten se haetaan vasta rullauksen jälkeen.
         XCTAssertTrue(app.staticTexts["toiminto-ei-istuntoa"].exists, "selite puuttuu")
         kuva("toiminnot")
