@@ -10,6 +10,21 @@ import { join, relative } from 'node:path';
 import { pacificResetAika } from './agy-kayttoraja.mjs';
 import { lueSkoopit } from './lahteet.mjs';
 import { ajaKomento } from './toiminnot.mjs';
+import {
+  muotoileTaskOdotusOhje,
+  luokitteleTaskToiminto,
+  analysoiTaskOdotus,
+  SUOSITUS_WAIT_MS,
+  MINIMI_WAIT_MS,
+} from '../siirto/economy/task-odotus.mjs';
+
+export {
+  muotoileTaskOdotusOhje,
+  luokitteleTaskToiminto,
+  analysoiTaskOdotus,
+  SUOSITUS_WAIT_MS,
+  MINIMI_WAIT_MS,
+};
 
 const OLETUS_TTL_MS = 5_000;
 const OHITETTAVAT_KANSIOT = new Set(['.git', 'node_modules', 'target', '.build', '.gemini', 'dist']);
@@ -264,6 +279,7 @@ export function laskeKulutusJakauma({
   const { resetAika, seuraavaReset } = pacificResetAika(nytMs);
   let userInputs = 0;
   let plannerResponses = 0;
+  let statusPollaus = 0;
   const tyokalut = {
     tiedonhaku: 0,
     tiedostoluku: 0,
@@ -302,6 +318,10 @@ export function laskeKulutusJakauma({
                 const luokka = luokitteleTyokalu(tk);
                 if (luokka in tyokalut) tyokalut[luokka]++;
                 else tyokalut.muut++;
+                const taskLuokka = luokitteleTaskToiminto(tk);
+                if (taskLuokka.tyyppi === 'manage_task_status') {
+                  statusPollaus++;
+                }
               }
             }
           }
@@ -323,6 +343,7 @@ export function laskeKulutusJakauma({
     userInputs,
     plannerResponses,
     tyokalutYhteensa: yhteensaTyokalut,
+    statusPollausKerrat: statusPollaus,
     kutsut: osuudet,
     nollautuu: seuraavaReset,
     aikaleima: nytMs,
@@ -353,6 +374,16 @@ export function luoEconomyPalvelu({
     },
     tilasto() {
       return laskeKulutusJakauma({ brainDir });
+    },
+    taskOdotus(muoto = null) {
+      if (muoto === 'teksti') return { teksti: muotoileTaskOdotusOhje() };
+      if (muoto === 'lyhyt') return { teksti: muotoileTaskOdotusOhje({ lyhyt: true }) };
+      return {
+        suositusWaitMs: SUOSITUS_WAIT_MS,
+        minimiWaitMs: MINIMI_WAIT_MS,
+        ohje: muotoileTaskOdotusOhje(),
+        lyhyt: muotoileTaskOdotusOhje({ lyhyt: true }),
+      };
     },
   };
 }
