@@ -220,6 +220,15 @@ test('luoEconomyPalvelu: tarjoaa kootut rajapinnat', async () => {
   const kuluttajatTeksti = p.kuluttajat({ skooppi: 'scopes siirto git', muoto: 'teksti' });
   assert.ok(kuluttajatTeksti.teksti.includes('scopes siirto git'));
   assert.ok(kuluttajatTeksti.teksti.includes('+517 kutsua'));
+
+  const budjetti = p.budjetti({ skooppi: 'koe' });
+  assert.equal(budjetti.kiintio, 1500);
+  assert.ok('kaytettyKutsuja' in budjetti);
+  assert.ok('jaljellaKutsuja' in budjetti);
+  assert.ok(budjetti.ohje.includes('# Scopes Economy — 1500 Kutsun Vuorokausibudjetti'));
+
+  const budjettiTeksti = p.budjetti({ skooppi: 'koe', muoto: 'teksti', lyhyt: true });
+  assert.ok(budjettiTeksti.teksti.includes('AGY 1500 Budjetti:'));
 });
 
 test('muotoileGitEsitiedot: tuottaa selkeän markdown-lohkon ja ohjeen', () => {
@@ -289,6 +298,10 @@ test('palvelin: GET /api/economy -reitit palauttavat tiedot', async () => {
     kuluttajat(opt = {}) {
       if (opt?.muoto === 'teksti') return { skooppi: opt?.skooppi, teksti: 'KULUTTAJAT: ohje' };
       return { skooppi: opt?.skooppi, kuluttajat: [{ skooppi: 'infra expresso', plannerResponses: 585 }] };
+    },
+    budjetti(opt = {}) {
+      if (opt?.muoto === 'teksti') return { skooppi: opt?.skooppi, teksti: 'BUDJETTI: ohje' };
+      return { skooppi: opt?.skooppi, kiintio: 1500, kaytettyKutsuja: 450, jaljellaKutsuja: 1050 };
     },
   };
 
@@ -383,6 +396,19 @@ test('palvelin: GET /api/economy -reitit palauttavat tiedot', async () => {
     assert.equal(resKuluttajatTeksti.status, 200);
     const dataKuluttajatTeksti = await resKuluttajatTeksti.json();
     assert.equal(dataKuluttajatTeksti.teksti, 'KULUTTAJAT: ohje');
+
+    const resBudjetti = await fetch(`${baseUrl}/api/economy/budjetti?skooppi=koe`, auth);
+    assert.equal(resBudjetti.status, 200);
+    const dataBudjetti = await resBudjetti.json();
+    assert.equal(dataBudjetti.skooppi, 'koe');
+    assert.equal(dataBudjetti.kiintio, 1500);
+    assert.equal(dataBudjetti.kaytettyKutsuja, 450);
+    assert.equal(dataBudjetti.jaljellaKutsuja, 1050);
+
+    const resBudjettiTeksti = await fetch(`${baseUrl}/api/economy/budjetti?skooppi=koe&muoto=teksti`, auth);
+    assert.equal(resBudjettiTeksti.status, 200);
+    const dataBudjettiTeksti = await resBudjettiTeksti.json();
+    assert.equal(dataBudjettiTeksti.teksti, 'BUDJETTI: ohje');
   } finally {
     srv.close();
   }

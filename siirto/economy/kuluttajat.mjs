@@ -55,9 +55,9 @@ export function tunnistaKulutusSkooppi(transcriptTeksti) {
   if (!transcriptTeksti || typeof transcriptTeksti !== 'string') return 'tuntematon';
 
   // 1. Etsi purkukomennosta tai raportin SKOOPPI-kentästä
-  const mPurku = transcriptTeksti.match(/SKOOPPI:\s*([a-zA-Z0-9_\- ]+?)(?:\s*\(|$|\n)/i)
+  const mPurku = transcriptTeksti.match(/SKOOPPI:\s*([a-zA-Z0-9_\- ]+?)(?:\s*\(|$|\n|\\n|")/i)
     || transcriptTeksti.match(/Malliton purku:\s*lue\s+[^\n]+?([a-zA-Z0-9_\-]+)\.md/i)
-    || transcriptTeksti.match(/\/pura\s+(?:uusi\s+)?([a-zA-Z0-9_\- ]+?)(?:\s+--|\s*$|\n|<)/i);
+    || transcriptTeksti.match(/\/pura\s+(?:uusi\s+)?([a-zA-Z0-9_\- ]+?)(?:\s+--|\s*$|\n|\\n|"|<)/i);
 
   if (mPurku && mPurku[1]) {
     const raw = mPurku[1].trim().toLowerCase().replace(/-/g, ' ');
