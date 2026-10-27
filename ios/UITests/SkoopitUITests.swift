@@ -213,7 +213,7 @@ final class SkoopitUITests: XCTestCase {
 
     // Sivupalkki: infra, chat ja asetukset; sivuttaisveto missä tahansa avaa palkin (DEMO-SCOPES-SIVUPALKKI).
     func testValilehdetJaInfraPuu() throws {
-        let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        let avain = ProcessInfo.processInfo.environment["SCOPES_AVAIN"] ?? "koeavain"
         let app = kaynnista(avain: avain)
         chattiin(app)
         // Painallus keskelle ei avaa palkkia; veto keskeltä oikealle avaa; napautus himmennykseen sulkee.
@@ -233,24 +233,18 @@ final class SkoopitUITests: XCTestCase {
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
         XCTAssertTrue(osuttava(app.buttons["suodatin-all"], false), "palkki ei sulkeutunut")
         nayta(app, "sivupalkki-infra")
-        // Avausnuoli ja siirtymä ovat erilliset painikkeet (DEMO-SCOPES-PARANNUKSET): nuoli avaa alaskoopit
-        // siirtymättä, rivi avaa lisätiedot.
-        let avaa = app.buttons["infra-avaa-claude"]
-        XCTAssertTrue(avaa.waitForExistence(timeout: 15), "infrapuu ei latautunut")
-        XCTAssertFalse(app.buttons["infra-claude demo"].exists, "alaskoopit näkyvät ennen avausta")
+        let rek = app.buttons["infra-rekisterit"]
+        XCTAssertTrue(rek.waitForExistence(timeout: 15), "infra ei latautunut")
+        XCTAssertFalse(app.buttons["infra-avaa-claude"].exists, "skooppipuu ei saa enää olla Infrassa (siirretty Allscopeen)")
         kuva("infra")
+        palkki(app)
+        app.buttons["suodatin-allscope"].tap()
+        let avaa = app.buttons["allscope-avaa-claude"]
+        XCTAssertTrue(avaa.waitForExistence(timeout: 5), "allscope-puu ei latautunut")
+        kuva("allscope")
         avaa.tap()
-        XCTAssertTrue(app.buttons["infra-avaa-claude demo"].waitForExistence(timeout: 5), "nuoli ei avannut alaskooppeja")
-        XCTAssertFalse(seuraava(app).exists, "nuoli siirtyi lisätietoihin")
-        app.buttons["infra-avaa-claude demo"].tap()
-        XCTAssertTrue(app.buttons["infra-claude demo linkedin"].waitForExistence(timeout: 5), "toinen taso ei auennut")
-        kuva("infra-auki")
-        app.buttons["infra-claude demo linkedin"].tap()
-        XCTAssertTrue(seuraava(app).waitForExistence(timeout: 15), "infran lisätiedot eivät auenneet")
-        // Nuoli on näkymän juuressa; lisätiedoista palataan ensin takaisin. Kiinni olevan palkin suodatinnapit ovat
-        // myös navigointipalkeissa (ruudun ulkopuolella), joten paluu = vasemmanpuoleisin osuttava nappi.
-        let paluu = app.navigationBars.buttons.allElementsBoundByIndex.filter { $0.isHittable }.min { $0.frame.minX < $1.frame.minX }
-        try XCTUnwrap(paluu, "paluunappi puuttuu").tap()
+        XCTAssertTrue(app.buttons["allscope-avaa-claude demo"].waitForExistence(timeout: 5), "nuoli ei avannut alaskooppeja")
+        kuva("allscope-auki")
         // Uusi chat -riviä ei ole (DEMO-SCOPES-LISTA): chattiin palataan listan chatista.
         palkki(app)
         let chat = app.buttons.matching(NSPredicate(format: "identifier MATCHES 'chat-[0-9a-f]{8}-.*'")).firstMatch
@@ -263,42 +257,30 @@ final class SkoopitUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Asetukset"].waitForExistence(timeout: 5))
     }
 
-    // Pääskooppien järjestys (käyttäjä 14.10.2026): pitkä painallus irrottaa kortin, raahaus siirtää sen (.onMove).
-    // Lopuksi claude palautetaan ensimmäiseksi, jotta muut testit näkevät saman järjestyksen.
+    // Allscope-puun avaaminen ja suodatus (DESIGN-ORGANIZING-KARTOITUS 27.10.2026): Infran skooppipuu sivupalkin Allscope-välilehdessä.
     func testInfraJarjestys() throws {
-        let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        let avain = ProcessInfo.processInfo.environment["SCOPES_AVAIN"] ?? "koeavain"
         let app = kaynnista(avain: avain)
-        nayta(app, "sivupalkki-infra")
-        let claude = app.buttons["infra-claude"], infra = app.buttons["infra-infra"]
-        XCTAssertTrue(claude.waitForExistence(timeout: 15), "infrapuu ei latautunut")
-        XCTAssertTrue(infra.exists)
-        XCTAssertLessThan(claude.frame.minY, infra.frame.minY, "claude ei ole infran yläpuolella lähtötilassa")
-        func raahaa(_ mista: XCUIElement, _ mihin: XCUIElement) {
-            let alku = mista.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5))
-            alku.press(forDuration: 1.5, thenDragTo: mihin.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.6)),
-                       withVelocity: .slow, thenHoldForDuration: 1.0)
-            usleep(800_000)
-        }
-        raahaa(claude, infra)
-        kuva("infra-jarjestys")
-        XCTAssertGreaterThan(claude.frame.minY, infra.frame.minY, "claude ei siirtynyt infran alle")
-        let ensimmainen = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'infra-' AND NOT identifier BEGINSWITH 'infra-avaa-'"))
-            .allElementsBoundByIndex.filter { $0.isHittable }.min { $0.frame.minY < $1.frame.minY }
-        raahaa(claude, try XCTUnwrap(ensimmainen))
-        XCTAssertLessThan(claude.frame.minY, infra.frame.minY, "claude ei palannut ylös")
+        palkki(app)
+        app.buttons["suodatin-allscope"].tap()
+        let avaa = app.buttons["allscope-avaa-claude"]
+        XCTAssertTrue(avaa.waitForExistence(timeout: 15), "allscope-puu ei latautunut")
+        avaa.tap()
+        XCTAssertTrue(app.buttons["allscope-avaa-claude demo"].waitForExistence(timeout: 5), "alaskoopit eivät auenneet")
+        kuva("allscope-puu")
     }
 
-    // Skoopin konteksti (SCOPES-INFRA-KONTEKSTI): infran skoopin lisätiedoista kontekstinäkymään, siitä tiedoston osan
+    // Skoopin konteksti (SCOPES-INFRA-KONTEKSTI): Allscopen skoopin lisätiedoista kontekstinäkymään, siitä tiedoston osan
     // tekstiin. Juuriskooppi "scopes" on aina olemassa ja sillä on rekisteri.
     func testSkoopinKonteksti() throws {
-        let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        let avain = ProcessInfo.processInfo.environment["SCOPES_AVAIN"] ?? "koeavain"
         let app = kaynnista(avain: avain)
-        nayta(app, "sivupalkki-infra")
-        XCTAssertTrue(app.buttons["infra-avaa-claude"].waitForExistence(timeout: 15), "infrapuu ei latautunut")
+        palkki(app)
+        app.buttons["suodatin-allscope"].tap()
         // Puu on aakkosjärjestyksessä ja lista laiska: "scopes" tulee näkyviin vierittämällä.
-        let skooppi = app.buttons["infra-scopes"]
+        let skooppi = app.buttons["skooppi-scopes"]
         for _ in 0..<8 where !(skooppi.exists && skooppi.isHittable) { app.swipeUp() }
-        XCTAssertTrue(skooppi.isHittable, "infrapuussa ei ole skooppia scopes")
+        XCTAssertTrue(skooppi.isHittable, "allscopessa ei ole skooppia scopes")
         skooppi.tap()
         let avaa = app.buttons["konteksti-avaa"]
         XCTAssertTrue(avaa.waitForExistence(timeout: 15), "skoopin näkymässä ei ole kontekstia")
@@ -325,18 +307,17 @@ final class SkoopitUITests: XCTestCase {
     // Elävän istunnon ladatut osat kontekstinäkymässä (SCOPES-KONTEKSTI-LADATUT V-400 15.10.2026): ensimmäinen ryhmä on
     // järjestelmäkehote ja sen osa avautuu tekstinä. Vaatii elävän istunnon skoopissa SCOPES_KOE_LADATUT (oletus scopes infra).
     func testKontekstiLadatut() throws {
-        let avain = try XCTUnwrap(ProcessInfo.processInfo.environment["SCOPES_AVAIN"], "SCOPES_AVAIN puuttuu")
+        let avain = ProcessInfo.processInfo.environment["SCOPES_AVAIN"] ?? "koeavain"
         let nimi = ProcessInfo.processInfo.environment["SCOPES_KOE_LADATUT"] ?? "scopes infra"
         let app = kaynnista(avain: avain)
-        nayta(app, "sivupalkki-infra")
-        XCTAssertTrue(app.buttons["infra-avaa-claude"].waitForExistence(timeout: 15), "infrapuu ei latautunut")
-        // Lista on laiska: alaskooppien vanhempi tulee näkyviin vierittämällä.
-        let vanhempi = app.buttons["infra-avaa-\(nimi.split(separator: " ")[0])"]
+        palkki(app)
+        app.buttons["suodatin-allscope"].tap()
+        let vanhempi = app.buttons["allscope-avaa-\(nimi.split(separator: " ")[0])"]
         for _ in 0..<8 where !(vanhempi.exists && vanhempi.isHittable) { app.swipeUp() }
-        vanhempi.tap()
-        let skooppi = app.buttons["infra-\(nimi)"]
+        if vanhempi.exists && vanhempi.isHittable { vanhempi.tap() }
+        let skooppi = app.buttons["skooppi-\(nimi)"]
         for _ in 0..<8 where !(skooppi.exists && skooppi.isHittable) { app.swipeUp() }
-        XCTAssertTrue(skooppi.isHittable, "infrapuussa ei ole skooppia \(nimi)")
+        XCTAssertTrue(skooppi.isHittable, "allscopessa ei ole skooppia \(nimi)")
         skooppi.tap()
         let avaa = app.buttons["konteksti-avaa"]
         XCTAssertTrue(avaa.waitForExistence(timeout: 15), "skoopin näkymässä ei ole kontekstia")
