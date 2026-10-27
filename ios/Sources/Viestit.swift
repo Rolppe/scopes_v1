@@ -514,7 +514,8 @@ struct ChatView: View {
     @State private var vastausKesken = false
     @State private var pysaytetty = false
     @State private var yhdistetaan = false
-    @State private var kayttoraja: Kayttoraja? = KayttorajaMuisti.lue(avain: "scopes.kayttoraja.chat") ?? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.oletus")
+    @State private var kayttoraja: Kayttoraja? = KayttorajaMuisti.lue(avain: "scopes.kayttoraja.chat")
+    @State private var kayttorajatKaikki: KayttorajatKaikki?
 
     private var valittuAgentti: Agentti? { agentit.first { $0.nimi == valittu } }
     private var asiakas: Asiakas { Asiakas(osoite: asetukset.osoite, avain: asetukset.avain) }
@@ -546,6 +547,24 @@ struct ChatView: View {
                 if odottaa && viestit.last?.omaViesti == false {
                     Text("kirjoittaa…").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("chat-kirjoittaa")
                 }
+                if let r = kayttoraja, r.suurinKaytto >= 90 {
+                    HStack(spacing: Teema.Vali.s) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(r.onTayna ? .red : .orange)
+                        Text(r.onTayna
+                             ? "Käyttöraja 100 % täynnä (\(r.otsikko ?? "malli")). Vaihda toiseen malliin."
+                             : "Käyttöraja lähes täynnä (\(r.prosenttiTeksti)).")
+                            .font(.caption2.weight(.medium))
+                            .lineLimit(1)
+                        Spacer()
+                    }
+                    .padding(.horizontal, Teema.Vali.m)
+                    .padding(.vertical, 4)
+                    .background((r.onTayna ? Color.red : Color.orange).opacity(0.12))
+                    .cornerRadius(6)
+                    .padding(.horizontal, Teema.Vali.m)
+                    .accessibilityIdentifier("chat-kayttoraja-varoitus")
+                }
                 Syottorivi(teksti: $teksti, estetty: odottaa || valittu == nil || vastausKesken, tunnus: "chat", laheta: { Task { await laheta() } },
                            stop: (odottaa || vastausKesken) && !pysaytetty ? { Task { await pysayta() } } : nil,
                            jatka: pysaytetty && valittu != nil ? { Task { await laheta("jatka") } } : nil) {
@@ -557,7 +576,7 @@ struct ChatView: View {
             .lapinakyvaYlapalkki()
             .toolbar {
                 Sivupalkkipainike()
-                ToolbarItem(placement: .topBarTrailing) { KayttorajaRenkaat(raja: kayttoraja) }
+                ToolbarItem(placement: .topBarTrailing) { KayttorajaRenkaat(raja: kayttoraja, malli: valittuAgentti?.nimi ?? valittu) }
                     .kapseliPois()
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { uusi() } label: { Image(systemName: "square.and.pencil") }
@@ -595,14 +614,26 @@ struct ChatView: View {
 
     private func paivitaKayttoraja() async {
         let avain = KayttorajaMuisti.avain(agentti: valittu, tyyppi: valittuAgentti?.tyyppi)
-        if let tallessa = KayttorajaMuisti.lue(avain: avain) {
+        if let tallessa = KayttorajaMuisti.lue(avain: avain)
+            ?? (valittu?.hasPrefix("mac-agy") == true ? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.mac-agy") : nil)
+            ?? (valittuAgentti?.tyyppi == "agy" ? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.agy") : nil)
+            ?? (valittuAgentti?.tyyppi == "malli" ? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.claude") : nil) {
             kayttoraja = tallessa
         }
         if let k = try? await asiakas.kayttoraja(tyyppi: valittuAgentti?.tyyppi, agentti: valittu) {
             kayttoraja = k
             KayttorajaMuisti.tallenna(k, avain: avain)
             KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.chat")
-            KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.oletus")
+            if valittu?.hasPrefix("mac-agy") == true {
+                KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.mac-agy")
+            } else if valittuAgentti?.tyyppi == "agy" {
+                KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.agy")
+            } else if valittuAgentti?.tyyppi == "malli" {
+                KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.claude")
+            }
+        }
+        if let kaikki = try? await asiakas.kayttorajatKaikki() {
+            kayttorajatKaikki = kaikki
         }
     }
 
@@ -611,19 +642,37 @@ struct ChatView: View {
     // Gemini (CHAT-GEMINI 15.10.2026) on puhelinpalvelimen Android-äppi, jota palvelu ajaa ruudun kautta.
     private var mallinValinta: some View {
         Menu {
-            Section("Claude") { ForEach(agentit.filter { $0.tyyppi == "malli" }) { valinta($0) } }
-            let android = agentit.filter { $0.tyyppi == "gemini" }
+            let suodatetut = agentit.filter { a in
+                if asetukset.kaikkiMallit.contains(where: { $0.nimi == a.nimi }) {
+                    return asetukset.sallitutMallit.contains(a.nimi)
+                }
+                return true
+            }
+            let claudeRaja = kayttorajatKaikki?.claude
+            Section(claudeRaja?.tiivisTeksti.map { "Claude (\($0))" } ?? "Claude") { ForEach(suodatetut.filter { $0.tyyppi == "malli" }) { valinta($0) } }
+            let android = suodatetut.filter { $0.tyyppi == "gemini" }
             if !android.isEmpty { Section("Android") { ForEach(android) { valinta($0) } } }
-            let paikalliset = agentit.filter { $0.tyyppi == "paikallinen" }
+            let paikalliset = suodatetut.filter { $0.tyyppi == "paikallinen" }
             if !paikalliset.isEmpty { Section("Paikalliset") { ForEach(paikalliset) { valinta($0) } } }
-            let nebius = agentit.filter { $0.tyyppi == "nebius" }
+            let nebius = suodatetut.filter { $0.tyyppi == "nebius" }
             if !nebius.isEmpty { Section("Nebius") { ForEach(nebius) { valinta($0) } } }
+            let agy = suodatetut.filter { $0.tyyppi == "agy" }
+            let agyRaja = kayttorajatKaikki?.oneplusAgy?.gemini
+            if !agy.isEmpty { Section(agyRaja?.tiivisTeksti.map { "AGY (\($0))" } ?? "AGY") { ForEach(agy) { valinta($0) } } }
         } label: {
             HStack(spacing: Teema.Vali.xs) {
-                Text(valittuAgentti?.otsikko ?? "Valitse malli").font(.subheadline.weight(.medium)).lineLimit(1)
+                if let r = kayttoraja {
+                    Circle()
+                        .fill(r.onTayna ? Color.red : (r.onVaroitus ? Color.orange : Color.secondary))
+                        .frame(width: 6, height: 6)
+                }
+                let naytettava = kayttoraja.map { " \($0.prosenttiTeksti)" } ?? ""
+                let perus = (valittuAgentti?.otsikko ?? "Valitse malli") + naytettava
+                Text(perus).font(.subheadline.weight(.medium)).lineLimit(1)
+                    .foregroundStyle(kayttoraja?.onTayna == true ? Color.red : (kayttoraja?.onVaroitus == true ? Color.orange : Color.secondary))
                 Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
             }
-            .foregroundStyle(.secondary)
         }
         .disabled(odottaa)
         .accessibilityIdentifier("chat-agentti")
@@ -632,8 +681,11 @@ struct ChatView: View {
     // Agentin vaihto aloittaa uuden keskustelun: claude-istunnon jatko kuuluu sille agentille, joka sen aloitti.
     // Valintamerkki on nimen perässä tekstinä: valikon kuvake menisi nimen vasemmalle ja siirtäisi sitä (käyttäjä 13.10.2026).
     private func valinta(_ a: Agentti) -> some View {
-        Button { if valittu != a.nimi { valittu = a.nimi; uusi() } } label: {
-            Text(a.nimi == valittu ? "\(a.otsikko)  ✓" : a.otsikko)
+        let r = kayttorajatKaikki?.raja(mallille: a.nimi)
+        let rajaTeksti = r?.tiivisTeksti.map { " (\($0))" } ?? ""
+        let valittuMerkki = a.nimi == valittu ? "  ✓" : ""
+        return Button { if valittu != a.nimi { valittu = a.nimi; uusi() } } label: {
+            Text(a.otsikko + rajaTeksti + valittuMerkki)
         }
     }
 
@@ -792,14 +844,45 @@ struct ChatView: View {
 // myötäpäivään. Napautus näyttää prosentit ja nollautumishetket. Ilman lukemaa renkaat ovat tyhjiä.
 struct KayttorajaRenkaat: View {
     let raja: Kayttoraja?
+    var malli: String? = nil
+
+    var otsikkoTeksti: String {
+        if let otsikko = raja?.otsikko, !otsikko.isEmpty {
+            return otsikko
+        }
+        if let m = malli?.lowercased() {
+            if m.contains("mac") { return "Mac AGY" }
+            if m.contains("oneplus") || m.contains("linux") || m.contains("agy") { return "OnePlus Linux AGY" }
+            if m.contains("claude") || m.contains("sonnet") || m.contains("opus") || m.contains("haiku") { return "Claude" }
+            return malli ?? "Käyttöraja"
+        }
+        if let y = raja?.ymparisto?.lowercased() {
+            if y.contains("mac") { return "Mac AGY" }
+            if y.contains("oneplus") || y.contains("linux") { return "OnePlus Linux AGY" }
+        }
+        return "Käyttöraja"
+    }
+
+    func rivi5h(nyt: Date = Date()) -> String {
+        let p5 = raja?.viisiTuntia
+        let p5Teksti = p5?.teksti ?? prosenttiTeksti(p5)
+        let p5Reset = countdown(p5?.nollautuu, nyt: nyt).map { " Reset in \($0)" } ?? ""
+        return "5h - \(p5Teksti) (yellow)\(p5Reset)"
+    }
+
+    func riviVk(nyt: Date = Date()) -> String {
+        let vk = raja?.viikko
+        let vkTeksti = vk?.teksti ?? prosenttiTeksti(vk)
+        let vkReset = countdown(vk?.nollautuu, nyt: nyt).map { " Reset \($0)" } ?? ""
+        return "Vk - \(vkTeksti) (red)\(vkReset)"
+    }
 
     var body: some View {
         Menu {
-            // Valikko nimeää renkaat (DESIGN-SKOOPPINAKYMA U8): väri yksin ei kerro, kumpi raja on kumpi.
-            Section("Käyttöraja") {
-                Text(rivi(raja?.viikko != nil ? "Ulompi keltainen, 5 h" : "Keltainen, 5 h", raja?.viisiTuntia, muoto: .dateTime.hour().minute()))
-                if let v = raja?.viikko {
-                    Text(rivi(v.otsikko ?? "Sisempi punainen, viikko", v, muoto: v.teksti != nil ? .dateTime.hour().minute() : .dateTime.weekday(.abbreviated).hour().minute()))
+            Section(otsikkoTeksti) {
+                Text(rivi5h())
+                if raja?.viikko != nil || raja == nil {
+                    Text(riviVk())
                 }
             }
         } label: {
@@ -811,18 +894,10 @@ struct KayttorajaRenkaat: View {
             }
             .frame(width: 36, height: 36)
         }
-        .accessibilityLabel("Käyttöraja")
-        .accessibilityValue(arvoTeksti)
+        .accessibilityLabel(otsikkoTeksti)
+        .accessibilityValue("\(rivi5h()), \(riviVk())")
         .accessibilityIdentifier("kayttoraja")
-    }
-
-    private var arvoTeksti: String {
-        if let v = raja?.viikko {
-            let nimi = v.otsikko?.contains("pyynnöt") == true ? "pyynnöt" : "viikko"
-            let lukema = v.teksti.map { "\($0) (\(prosentti(v)))" } ?? prosentti(v)
-            return "5 h \(prosentti(raja?.viisiTuntia)), \(nimi) \(lukema)"
-        }
-        return "5 h \(prosentti(raja?.viisiTuntia))"
+        .help("\(otsikkoTeksti)\n\(rivi5h())\n\(riviVk())")
     }
 
     private func rengas(_ r: Kayttoraja.Raja?, vari: Color, koko: CGFloat) -> some View {
@@ -835,19 +910,37 @@ struct KayttorajaRenkaat: View {
         .frame(width: koko, height: koko)
     }
 
-    private func prosentti(_ r: Kayttoraja.Raja?) -> String {
-        guard let r else { return "ei tiedossa" }
-        if r.kaytto > 0 && r.kaytto < 1 { return String(format: "%.2f %%", r.kaytto) }
-        if r.kaytto >= 1 && r.kaytto < 10 { return String(format: "%.1f %%", r.kaytto) }
-        return "\(Int(r.kaytto.rounded())) %"
+    private func prosenttiTeksti(_ r: Kayttoraja.Raja?) -> String {
+        guard let r else { return "0%" }
+        if r.kaytto > 0 && r.kaytto < 1 { return String(format: "%.1f%%", r.kaytto) }
+        return "\(Int(r.kaytto.rounded()))%"
     }
 
-    private func rivi(_ nimi: String, _ r: Kayttoraja.Raja?, muoto: Date.FormatStyle) -> String {
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let aika = r?.nollautuu.flatMap { iso.date(from: $0) ?? ISO8601DateFormatter().date(from: $0) }.map { " · nollautuu \($0.formatted(muoto))" } ?? ""
-        let luku = r?.teksti.map { "\($0) (\(prosentti(r)))" } ?? prosentti(r)
-        return "\(nimi): \(luku)\(aika)"
+    private func jasennaPvm(_ str: String) -> Date? {
+        let f1 = ISO8601DateFormatter()
+        f1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = f1.date(from: str) { return d }
+        let f2 = ISO8601DateFormatter()
+        f2.formatOptions = [.withInternetDateTime]
+        return f2.date(from: str)
+    }
+
+    private func countdown(_ nollautuu: String?, nyt: Date = Date()) -> String? {
+        guard let nollautuu, let kohdeAika = jasennaPvm(nollautuu) else { return nil }
+        let erotus = kohdeAika.timeIntervalSince(nyt)
+        if erotus <= 0 { return "0min" }
+        let s = Int(erotus)
+        let d = s / 86400
+        let h = (s % 86400) / 3600
+        let m = (s % 3600) / 60
+
+        if d > 0 {
+            return "\(d)d \(h)h \(m)min"
+        } else if h > 0 {
+            return "\(h)h \(m)min"
+        } else {
+            return "\(max(m, 1))min"
+        }
     }
 }
 
@@ -873,6 +966,7 @@ struct SkooppiViestitView: View {
     @State private var jumissaPuraValinta = false
     @State private var virhe: String?
     @State private var kayttoraja: Kayttoraja?
+    @State private var kayttorajatKaikki: KayttorajatKaikki?
     @State private var liitteet: [Liite] = []
     @State private var pysaytetaan = false
     @State private var pysaytetty = false
@@ -904,9 +998,11 @@ struct SkooppiViestitView: View {
         self.nimi = nimi
         _teksti = State(initialValue: Luonnos.lue("skooppi.\(nimi)"))
         let tallennettuTyyppi = UserDefaults.standard.string(forKey: "scopes.istuntoTyyppi.\(nimi)") ?? (nimi.contains("agy") ? "agy" : nil)
-        let alkuraja = KayttorajaMuisti.lue(avain: KayttorajaMuisti.avain(skooppi: nimi))
+        let tallennettuMalli = UserDefaults.standard.string(forKey: "scopes.istuntoMalli.\(nimi)")
+        let alkuraja = KayttorajaMuisti.lue(avain: KayttorajaMuisti.avain(skooppi: nimi, agentti: tallennettuMalli, tyyppi: tallennettuTyyppi))
+            ?? (tallennettuMalli?.hasPrefix("mac-agy") == true ? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.mac-agy") : nil)
             ?? (tallennettuTyyppi == "agy" ? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.agy") : nil)
-            ?? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.oletus")
+            ?? (tallennettuTyyppi == "claude" ? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.claude") : nil)
         _kayttoraja = State(initialValue: alkuraja)
     }
 
@@ -935,6 +1031,24 @@ struct SkooppiViestitView: View {
                                 .accessibilityIdentifier("viestit-jumissa-palkki")
                             }
                             if !liitteet.isEmpty { LiiteRivi(liitteet: $liitteet) }
+                            if let r = kayttoraja ?? kayttorajatKaikki?.raja(mallille: malliValittu ?? t.istunto?.malli), r.suurinKaytto >= 90 {
+                                HStack(spacing: Teema.Vali.s) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundStyle(r.onTayna ? .red : .orange)
+                                    Text(r.onTayna
+                                         ? "Käyttöraja 100 % täynnä (\(r.otsikko ?? "malli")). Vaihda toiseen malliin."
+                                         : "Käyttöraja lähes täynnä (\(r.prosenttiTeksti)).")
+                                        .font(.caption2.weight(.medium))
+                                        .lineLimit(1)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, Teema.Vali.m)
+                                .padding(.vertical, 4)
+                                .background((r.onTayna ? Color.red : Color.orange).opacity(0.12))
+                                .cornerRadius(6)
+                                .padding(.horizontal, Teema.Vali.m)
+                                .accessibilityIdentifier("kayttoraja-varoitus")
+                            }
                             // Stop heti lähetyksestä ja play heti pysäytyksestä, ennen kuin palvelun tila ehtii perässä.
                             let tyossa = (["busy", "shell"].contains(t.istunto?.tila ?? "") || oletettuTyo) && !pysaytetty
                             Syottorivi(teksti: $teksti, estetty: lahettaa, tunnus: "viestit", laheta: { Task { await laheta() } },
@@ -943,7 +1057,9 @@ struct SkooppiViestitView: View {
                                 HStack(spacing: Teema.Vali.s) {
                                     LiiteValikko(liitteet: $liitteet, virhe: $virhe)
                                     MalliValikko(malli: malliValittu ?? t.istunto?.malli, effort: effortValittu ?? t.istunto?.effort,
-                                                 vapaa: t.istunto?.tila == "idle") { m, e in Task { await vaihdaMalli(m, e) } }
+                                                 vapaa: t.istunto?.tila == "idle",
+                                                 kayttoraja: kayttoraja,
+                                                 kayttorajat: kayttorajatKaikki) { m, e in Task { await vaihdaMalli(m, e) } }
                                 }
                             }
                         }
@@ -974,11 +1090,18 @@ struct SkooppiViestitView: View {
         .navigationTitle(nimi)
         .navigationBarTitleDisplayMode(.inline)
         .lapinakyvaYlapalkki()
-        .onChange(of: tila?.istunto?.malli) { _, _ in malliValittu = nil }
+        .onChange(of: tila?.istunto?.malli) { _, uusi in
+            malliValittu = nil
+            if let uusi { UserDefaults.standard.set(uusi, forKey: "scopes.istuntoMalli.\(nimi)") }
+            Task { await paivitaKayttoraja() }
+        }
+        .onChange(of: malliValittu) { _, _ in
+            Task { await paivitaKayttoraja() }
+        }
         .onChange(of: tila?.istunto?.effort) { _, _ in effortValittu = nil }
         .toolbar {
             // Renkaat ilman kapselia ja omana kohtanaan aivo-napin vierellä (CHAT-TOPBAR, käyttäjä 16.10.2026).
-            ToolbarItem(placement: .topBarTrailing) { KayttorajaRenkaat(raja: kayttoraja) }
+            ToolbarItem(placement: .topBarTrailing) { KayttorajaRenkaat(raja: kayttoraja, malli: malliValittu ?? tila?.istunto?.malli) }
                 .kapseliPois()
             // Aivo-kuvake (aiemmin kolme pistettä, käyttäjä 16.10.2026), avaa skoopin tiedot; väri kertoo istunnon kontekstin täyttymisen.
             ToolbarItem(placement: .topBarTrailing) {
@@ -1039,18 +1162,27 @@ struct SkooppiViestitView: View {
 
     private func paivitaKayttoraja() async {
         let tyyppi = tila?.istunto?.tyyppi ?? UserDefaults.standard.string(forKey: "scopes.istuntoTyyppi.\(nimi)") ?? (nimi.contains("agy") ? "agy" : nil)
-        if let tallessa = KayttorajaMuisti.lue(avain: KayttorajaMuisti.avain(skooppi: nimi))
+        let malli = malliValittu ?? tila?.istunto?.malli ?? UserDefaults.standard.string(forKey: "scopes.istuntoMalli.\(nimi)")
+        let avain = KayttorajaMuisti.avain(skooppi: nimi, agentti: malli, tyyppi: tyyppi)
+        if let tallessa = KayttorajaMuisti.lue(avain: avain)
+            ?? (malli?.hasPrefix("mac-agy") == true || tila?.istunto?.onMac == true ? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.mac-agy") : nil)
             ?? (tyyppi == "agy" ? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.agy") : nil)
-            ?? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.oletus") {
+            ?? (tyyppi == "claude" ? KayttorajaMuisti.lue(avain: "scopes.kayttoraja.claude") : nil) {
             kayttoraja = tallessa
         }
-        if let k = try? await asiakas.kayttoraja(tyyppi: tyyppi, skooppi: nimi) {
+        if let k = try? await asiakas.kayttoraja(tyyppi: tyyppi, agentti: malli, skooppi: nimi) {
             kayttoraja = k
-            KayttorajaMuisti.tallenna(k, avain: KayttorajaMuisti.avain(skooppi: nimi))
-            if tyyppi == "agy" || nimi.contains("agy") {
+            KayttorajaMuisti.tallenna(k, avain: avain)
+            if malli?.hasPrefix("mac-agy") == true || tila?.istunto?.onMac == true {
+                KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.mac-agy")
+            } else if tyyppi == "agy" || nimi.contains("agy") {
                 KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.agy")
+            } else if tyyppi == "claude" {
+                KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.claude")
             }
-            KayttorajaMuisti.tallenna(k, avain: "scopes.kayttoraja.oletus")
+        }
+        if let kaikki = try? await asiakas.kayttorajatKaikki() {
+            kayttorajatKaikki = kaikki
         }
     }
 
@@ -1063,9 +1195,10 @@ struct SkooppiViestitView: View {
             if let tyyppi = uusi.istunto?.tyyppi {
                 UserDefaults.standard.set(tyyppi, forKey: "scopes.istuntoTyyppi.\(nimi)")
             }
-            if kayttoraja == nil {
-                await paivitaKayttoraja()
+            if let malli = uusi.istunto?.malli {
+                UserDefaults.standard.set(malli, forKey: "scopes.istuntoMalli.\(nimi)")
             }
+            await paivitaKayttoraja()
             if ["busy", "shell"].contains(uusi.istunto?.tila ?? "") {
                 oletettuTyo = false
                 // Pysäytyksen jälkeen uudelleen työhön ryhtynyt istunto (esim. päätteeltä) palauttaa stopin.
@@ -1152,9 +1285,13 @@ struct SkooppiViestitView: View {
     private func vaihdaMalli(_ malli: String?, _ effort: String?) async {
         do {
             _ = try await asiakas.vaihdaMalli(nimi, malli: malli, effort: effort)
-            if let malli { malliValittu = malli }
+            if let malli {
+                malliValittu = malli
+                UserDefaults.standard.set(malli, forKey: "scopes.istuntoMalli.\(nimi)")
+            }
             if let effort { effortValittu = effort }
             virhe = nil
+            await paivitaKayttoraja()
             try? await Task.sleep(for: .seconds(1))
             await lataa()
         } catch {

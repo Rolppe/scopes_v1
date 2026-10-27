@@ -2,18 +2,31 @@ import SwiftUI
 
 public struct KeyboardRootView: View {
     public weak var controller: KeyboardViewController?
+    @ObservedObject public var state: KeyboardViewState
 
     @State private var shiftState: ShiftState = .off
     @State private var mode: KeyboardMode = .letters
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.colorScheme) private var colorScheme
 
-    public init(controller: KeyboardViewController? = nil) {
+    public init(controller: KeyboardViewController? = nil, state: KeyboardViewState? = nil) {
         self.controller = controller
+        self.state = state ?? controller?.state ?? KeyboardViewState()
     }
 
     private var isLandscape: Bool {
-        verticalSizeClass == .compact
+        // 1. iPhone-laitteilla pystytilan verticalSizeClass on aina .regular ja vaakatilan .compact
+        if verticalSizeClass == .compact {
+            return true
+        }
+        if verticalSizeClass == .regular && UIDevice.current.userInterfaceIdiom != .pad {
+            return false
+        }
+        // 2. iPadilla tai ilman määritettyä kokoluokkaa käytetään ohjaimen/tilan arvoa
+        if let controller = controller {
+            return controller.isLandscape
+        }
+        return state.isLandscape
     }
 
     private var keyboardBackgroundColor: Color {
@@ -23,16 +36,16 @@ public struct KeyboardRootView: View {
     }
 
     public var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             keyboardBackgroundColor
                 .ignoresSafeArea()
 
             if isLandscape {
-                LandscapeKeyboardView(shiftState: shiftState, mode: mode) { action in
+                LandscapeKeyboardView(shiftState: shiftState, mode: mode, safeAreaInsets: state.safeAreaInsets) { action in
                     handleAction(action)
                 }
             } else {
-                PortraitKeyboardView(shiftState: shiftState, mode: mode) { action in
+                PortraitKeyboardView(shiftState: shiftState, mode: mode, safeAreaInsets: state.safeAreaInsets) { action in
                     handleAction(action)
                 }
             }
@@ -40,9 +53,6 @@ public struct KeyboardRootView: View {
     }
 
     private func handleAction(_ action: KeyAction) {
-        controller?.playClick()
-        controller?.playHaptic()
-
         switch action {
         case .character(let char):
             controller?.insertText(char)

@@ -79,7 +79,7 @@ export function laskePyyntomaara({
           if (!step.created_at) continue;
           const t = new Date(step.created_at).getTime();
           if (t < resetAika) break;
-          if (step.source === 'MODEL' && step.type === 'PLANNER_RESPONSE') maara++;
+          if (step.type === 'USER_INPUT') maara++;
         } catch {}
       }
     }
@@ -164,7 +164,10 @@ export function luoAgyKayttoraja({
     if (ryhma !== '3p') {
       try {
         const p = laskePyynnot({ nytMs: nyt(), brainDir });
-        if (p) viikko = p;
+        if (p) {
+          const vkNollautuu = kohde?.kiintioViikko?.nollautuu ?? kohde?.viikko?.nollautuu ?? p.nollautuu;
+          viikko = { ...p, nollautuu: vkNollautuu };
+        }
       } catch {}
     }
 
@@ -231,7 +234,8 @@ export function luoMacAgyKayttoraja({
     let viikko = kohde?.viikko ?? null;
     if (ryhma !== '3p') {
       if (d?.pyynnot) {
-        viikko = d.pyynnot;
+        const vkNollautuu = tila?.gemini?.kiintioViikko?.nollautuu ?? kohde?.kiintioViikko?.nollautuu ?? kohde?.viikko?.nollautuu ?? d.pyynnot.nollautuu;
+        viikko = { ...d.pyynnot, nollautuu: vkNollautuu };
       }
     }
 

@@ -101,7 +101,7 @@ struct SkooppiNakymaView: View {
                     .tint(Teema.kytkin)
                     .disabled(avoinIstunto == nil)
                     .accessibilityIdentifier("toiminto-hereilla")
-                // Automaattijatko ja Autopack ovat keskustelukohtaisia (scopes infra setting 16.10.2026): palvelu valitsee skoopin
+                // Automaattijatko, Autopack ja Automaattisiirto ovat keskustelukohtaisia (scopes infra setting 16.10.2026, 19.10.2026): palvelu valitsee skoopin
                 // ainoan avoimen istunnon; vanha palvelu antaa yhteiset kytkimet, jotka koskevat kaikkia skooppeja.
                 if let k = kytkimet {
                     let lukossa = k.istuntoja != nil && k.istunto == nil
@@ -113,6 +113,10 @@ struct SkooppiNakymaView: View {
                         .tint(Teema.kytkin)
                         .disabled(lukossa)
                         .accessibilityIdentifier("toiminto-autopack")
+                    Toggle("Automaattisiirto", isOn: Binding(get: { k.automaattisiirto ?? false }, set: { p in Task { await asetaKytkin(.automaattisiirto, p) } }))
+                        .tint(Teema.kytkin)
+                        .disabled(lukossa)
+                        .accessibilityIdentifier("toiminto-automaattisiirto-kytkin")
                     Text(kytkinSelite(k)).font(.caption).foregroundStyle(.secondary)
                         .accessibilityIdentifier("toiminto-kytkimet-selite")
                 }
@@ -286,7 +290,18 @@ struct ToimintoTulos: View {
                 }
                 Link("Avaa istunto Claudessa", destination: url).buttonStyle(.borderless)
             } else if tulos.tmux != nil {
-                Text("Istunto avattu paikallisella mallilla. Se näkyy vain tämän äpin chatissa.").accessibilityIdentifier("toiminto-tulos")
+                let kuvaus: String = {
+                    if tulos.malli?.hasPrefix("mac-agy") == true {
+                        return "Mac AGY -istunto avattu Macilla. Se näkyy tämän äpin chatissa."
+                    } else if tulos.malli?.hasPrefix("agy/") == true {
+                        return "OnePlus Linux AGY -istunto avattu puhelimella. Se näkyy tämän äpin chatissa."
+                    } else if tulos.malli?.hasPrefix("nebius/") == true {
+                        return "Nebius-istunto avattu. Se näkyy vain tämän äpin chatissa."
+                    } else {
+                        return "Istunto avattu paikallisella mallilla. Se näkyy vain tämän äpin chatissa."
+                    }
+                }()
+                Text(kuvaus).accessibilityIdentifier("toiminto-tulos")
                 if let skooppi {
                     Button("Avaa chat") { avattu(); navigaatio.avaaSkooppi(skooppi) }
                         .buttonStyle(.borderless).accessibilityIdentifier("toiminto-avaa-chat")
@@ -391,6 +406,10 @@ struct AsetuksetView: View {
                     Label("Yhteys", systemImage: "network")
                 }
                 .accessibilityIdentifier("asetukset-yhteys")
+                NavigationLink { MalliAsetuksetView() } label: {
+                    Label("Mallit", systemImage: "cpu")
+                }
+                .accessibilityIdentifier("asetukset-mallit")
                 NavigationLink { AGYAsetukset().toolbar { tallennaPainike } } label: {
                     Label("AGY-agentit", systemImage: "sparkles")
                 }
@@ -568,6 +587,108 @@ struct YhteysAsetukset: View {
         case .eiTunnelia: return Avainnippu.lue("wg") == nil ? "Ei yhteyttä — tunnelin asetus puuttuu (avaa äppi kerran kotiverkossa)" : "Ei yhteyttä — tunneli ei auennut"
         case .tuntematon: return "Ei vielä yhdistetty"
         }
+    }
+}
+
+// Mallien keskitetty hallinta (SCOPES-MALLIVALINNAT): sallitut mallit, automaattivalinta ja oletusmalli.
+struct MalliAsetuksetView: View {
+    @EnvironmentObject private var asetukset: Asetukset
+    @State private var latausVirhe: String?
+    @State private var lataa = false
+
+    private var asiakas: Asiakas { Asiakas(osoite: asetukset.osoite, avain: asetukset.avain) }
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Ota uudet mallit käyttöön automaattisesti", isOn: $asetukset.otaUudetMallitAutomaattisesti)
+                    .accessibilityIdentifier("ota-uudet-mallit")
+            } header: {
+                Text("Automaatio")
+            } footer: {
+                Text("Kun asetus on päällä, kaikki palvelimelta tai AGY:stä löytyvät uudet mallit ovat heti valittavissa kaikissa skoopeissa ja keskusteluissa.")
+            }
+
+            Section("Oletusmalli") {
+                Picker("Oletus", selection: $asetukset.oletusMalli) {
+                    ForEach(asetukset.kaikkiMallit.isEmpty ? Asetukset.oletusMallit : asetukset.kaikkiMallit, id: \.nimi) { m in
+                        Text(m.kuvaus).tag(m.nimi)
+                    }
+                }
+                .pickerStyle(.navigationLink)
+            }
+
+            let ryhmat = jarjestetytRyhmat
+            ForEach(ryhmat, id: \.0) { ryhma, mallit in
+                Section(ryhma) {
+                    ForEach(mallit, id: \.nimi) { m in
+                        Toggle(isOn: Binding(
+                            get: { asetukset.sallitutMallit.contains(m.nimi) },
+                            set: { paalla in
+                                if paalla {
+                                    asetukset.sallitutMallit.insert(m.nimi)
+                                } else {
+                                    asetukset.sallitutMallit.remove(m.nimi)
+                                }
+                            }
+                        )) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(m.kuvaus)
+                                Text(m.nimi).font(.caption2).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Section {
+                Button("Ota kaikki mallit käyttöön") {
+                    let lista = asetukset.kaikkiMallit.isEmpty ? Asetukset.oletusMallit : asetukset.kaikkiMallit
+                    asetukset.sallitutMallit = Set(lista.map(\.nimi))
+                }
+                Button("Palauta oletusvalinnat", role: .destructive) {
+                    asetukset.sallitutMallit = Set(Asetukset.oletusMallit.map(\.nimi))
+                    asetukset.otaUudetMallitAutomaattisesti = true
+                }
+            }
+        }
+        .navigationTitle("Mallit")
+        .task {
+            await paivitaMallit()
+        }
+        .refreshable {
+            await paivitaMallit()
+        }
+    }
+
+    private var jarjestetytRyhmat: [(String, [IstunnonMalli])] {
+        let lista = asetukset.kaikkiMallit.isEmpty ? Asetukset.oletusMallit : asetukset.kaikkiMallit
+        let jarjestys = ["Claude", "Mac AGY", "OnePlus Linux AGY", "Nebius", "Paikalliset"]
+        var map: [String: [IstunnonMalli]] = [:]
+        for m in lista {
+            let r = m.ryhma ?? "Muut"
+            map[r, default: []].append(m)
+        }
+        var tulos: [(String, [IstunnonMalli])] = []
+        for r in jarjestys {
+            if let l = map[r], !l.isEmpty { tulos.append((r, l)) }
+        }
+        for (r, l) in map where !jarjestys.contains(r) && !l.isEmpty {
+            tulos.append((r, l))
+        }
+        return tulos
+    }
+
+    private func paivitaMallit() async {
+        guard asetukset.valmis else { return }
+        lataa = true
+        do {
+            let valinnat = try await asiakas.purkuValinnat()
+            asetukset.paivitaMallit(valinnat.mallit)
+        } catch {
+            latausVirhe = error.localizedDescription
+        }
+        lataa = false
     }
 }
 

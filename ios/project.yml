@@ -93,7 +93,7 @@ targets:
     type: bundle.ui-testing
     platform: iOS
     deploymentTarget: "18.0"
-    sources: [UITests]
+    sources: [UITests, Keyboard]
     dependencies:
       - target: Skoopit
     settings:

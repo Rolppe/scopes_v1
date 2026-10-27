@@ -170,7 +170,7 @@ struct Asiakas {
     }
 
     func kayttorajatKaikki() async throws -> KayttorajatKaikki {
-        return try await hae("/api/kayttorajat-kaikki")
+        try await hae("/api/kayttorajat-kaikki")
     }
 
     // Vastaus kirjain kerrallaan (DEMO-SCOPES-SUORATOISTO): palvelu kirjoittaa NDJSON-rivejä sitä mukaa kuin agentti

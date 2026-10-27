@@ -85,13 +85,15 @@ export const oletusJonotiedosto = (asetukset) =>
 const kelpaaJonoon = (j) => j && typeof j.nimi === 'string' && typeof j.istunto === 'string' &&
   typeof j.toiminto === 'string' && Object.hasOwn(JONO_RYHMA, j.komento) && Number.isFinite(j.aika);
 
-export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toimintoloki, jonoVali = 5_000, jonoTiedosto = oletusJonotiedosto(asetukset) } = {}) {
+export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toimintoloki, jonoVali = 5_000, jonoTiedosto = oletusJonotiedosto(asetukset), kytkimet = asetukset.kytkimet } = {}) {
   const autovaihto = join(asetukset.juuri, 'claude/siirto/tools/autovaihto.sh');
   const malliton = join(asetukset.juuri, 'claude/siirto/tools/pura-malliton.mjs');
   const arkistoija = join(asetukset.juuri, 'claude/siirto/tools/arkistoi-skooppi.mjs');
   let kaynnissa = null;
   const jono = new Map(); // `${skooppi}\n${ryhmä}` → { nimi, istunto, komento, toiminto, aika }
   let ajastin = null;
+  let kytkimetAsetus = kytkimet ?? null;
+  const laukaistutAutomaattisiirrot = new Set();
 
   // Tallennus kirjoittaa väliaikaiseen ja nimeää sen, ettei kesken katkennut kirjoitus jätä rikkinäistä tiedostoa.
   const tallennaJono = () => {
@@ -155,11 +157,12 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
 
   // Valmis komento skoopin ainoaan vapaaseen tmux-istuntoon, kun sen vuoro on valmis; jonotettava komento odottaa
   // varatun istunnon vapautumista.
-  async function istuntoon(nimi, komento, toiminto) {
+  async function istuntoon(nimi, komento, toiminto, haluttuIstunto = null) {
     const skoopit = lueSkoopit(asetukset.juuri);
     if (!skoopit[nimi]) throw new Hylatty(404, 'tuntematon skooppi');
     const omat = skoopinIstunnot(nimi, skoopit).filter((i) => i.ruutu && !i.pakattu);
-    if (omat.length !== 1) {
+    const i = haluttuIstunto ? omat.find((x) => x.id === haluttuIstunto) : (omat.length === 1 ? omat[0] : null);
+    if (!i) {
       if (omat.length === 0) {
         const agy = await agyRuudut(aja, nimi);
         if (agy.length === 1) {
@@ -173,7 +176,6 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
       }
       throw new Hylatty(409, omat.length ? 'skoopissa on useita tmux-istuntoja' : `skoopilla ei ole tmux-istuntoa, johon ${komento} voi lähettää`);
     }
-    const [i] = omat;
     const ryhma = JONO_RYHMA[komento];
     if (ryhma && jono.delete(`${nimi}\n${ryhma}`)) tallennaJono();
     if (i.tila === 'waiting' && (komento === '/pakkaa' || komento === '/automaattisiirto') && (i.kysely || kysymysAuki(i))) {
@@ -233,12 +235,56 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
       break;
     }
     if (!jono.size && ajastin) { clearInterval(ajastin); ajastin = null; }
+    await tarkistaAutomaattisiirto().catch(() => {});
+  }
+
+  // Automaattisiirto-vahti (scopes siirto automaattisiirto 19.10.2026): kun kytkin on päällä, istunto pysähtynyt
+  // ja kontekstiraja täyttynyt, automaattisiirto toteutetaan ilman kyselyitä.
+  async function tarkistaAutomaattisiirto({ raja = 120_000, kytkimet = kytkimetAsetus } = {}) {
+    if (kaynnissa || !kytkimet) return [];
+    const skoopit = lueSkoopit(asetukset.juuri);
+    const kaikki = istunnot({ ...asetukset, skooppiNimet: Object.keys(skoopit) });
+    const tulokset = [];
+    for (const i of kaikki) {
+      if (i.pakattu || !i.ruutu || laukaistutAutomaattisiirrot.has(i.id)) continue;
+      const paalla = kytkimet.lueIstunto ? (kytkimet.lueIstunto(i.id)?.automaattisiirto ?? kytkimet.lue()?.automaattisiirto) : kytkimet.lue()?.automaattisiirto;
+      if (!paalla) continue;
+      const lim = asetukset.kontekstiraja ?? raja;
+      const tokenit = i.konteksti?.tokenit ?? 0;
+      if (tokenit < lim) continue;
+      const kysymys = i.tila === 'waiting' && (i.kysely || kysymysAuki(i));
+      if (i.tila !== 'idle' && !kysymys) continue;
+
+      laukaistutAutomaattisiirrot.add(i.id);
+      try {
+        const tulos = await istuntoon(i.skooppi, '/automaattisiirto', 'automaattisiirto', i.id);
+        kirjaa({ toiminto: 'automaattisiirto-vahti', nimi: i.skooppi, istunto: i.id, tokenit, tulos: 'ok' });
+        tulokset.push({ skooppi: i.skooppi, istunto: i.id, ...tulos });
+      } catch (e) {
+        kirjaa({ toiminto: 'automaattisiirto-vahti', nimi: i.skooppi, istunto: i.id, tulos: 'hylätty', syy: e.message });
+      }
+    }
+    return tulokset;
+  }
+
+  let vahtiAjastin = null;
+  function kaynnistaVahti(vali = 5_000) {
+    if (vali <= 0 || vahtiAjastin) return;
+    vahtiAjastin = setInterval(() => {
+      puraJono().catch(() => {});
+      tarkistaAutomaattisiirto().catch(() => {});
+    }, vali);
+    vahtiAjastin.unref();
+  }
+  function pysaytaVahti() {
+    if (vahtiAjastin) { clearInterval(vahtiAjastin); vahtiAjastin = null; }
   }
 
   // Mallivapaa purku (PURA-MALLITON T6b): purkutiedosto kirjoitetaan ennen kuin mitään suljetaan, joten skriptin virhe ei
   // jätä skooppia ilman istuntoa eikä vaihdu mallireittiin. Suljettavat pois tiedoston ISTUNNOT-riviltä (PURASCRIPT-ISTUNNOT).
   async function puraMallitta(nimi, suljettavat, malli) {
-    const r = await aja('node', [malliton, nimi, '--kohde', (malli?.startsWith(AGY_MALLI) || malli?.startsWith(MAC_AGY_MALLI)) ? 'neutraali' : 'claude', ...(suljettavat.length ? ['--suljettavat', suljettavat.map((i) => i.id).join(',')] : [])]);
+    const auto = Boolean(kytkimetAsetus?.lue?.()?.automaattijatko);
+    const r = await aja('node', [malliton, nimi, '--kohde', (malli?.startsWith(AGY_MALLI) || malli?.startsWith(MAC_AGY_MALLI)) ? 'neutraali' : 'claude', ...(auto ? ['--autojatko'] : []), ...(suljettavat.length ? ['--suljettavat', suljettavat.map((i) => i.id).join(',')] : [])]);
     if (r.koodi !== 0 && r.koodi !== 4) {
       throw new Hylatty(500, (r.stderr.trim().split('\n').filter(Boolean).pop() ?? `pura-malliton exit ${r.koodi}`).slice(0, 300));
     }
@@ -246,6 +292,13 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
     if (malli?.startsWith(MAC_AGY_MALLI) && process.platform !== 'darwin') {
       const json = join(homedir(), '.local/state/pura', `${mallitonSlug(nimi)}.json`);
       await aja('scp', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', tiedosto, json, 'mac:~/.local/state/pura/']).catch(() => {});
+      const tilaHak = join(homedir(), '.claude/skills/keskustelun-siirto/state');
+      for (const tilaTiedosto of ['automaattivalinta.txt', 'autopack.txt', 'agy-luvat.txt']) {
+        const lahde = join(tilaHak, tilaTiedosto);
+        if (existsSync(lahde)) {
+          await aja('scp', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', lahde, `mac:~/.claude/skills/keskustelun-siirto/state/${tilaTiedosto}`]).catch(() => {});
+        }
+      }
     }
     const viestiTiedosto = malli?.startsWith(MAC_AGY_MALLI) ? `~/.local/state/pura/${mallitonSlug(nimi)}.md` : tiedosto;
     for (const i of suljettavat) {
@@ -315,7 +368,8 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
         await kirjoita(i, '/exit');
       }
     }
-      const tulos = await avaaIstunto(nimi, `/pura ${nimi}${ajaja ? ` --ajaja=${ajaja}` : ''}`, malli);
+      const auto = Boolean(kytkimetAsetus?.lue?.()?.automaattijatko);
+      const tulos = await avaaIstunto(nimi, `/pura ${nimi}${ajaja ? ` --ajaja=${ajaja}` : ''}${auto ? ' --autojatko' : ''}`, malli);
       return { ...tulos, suljettiin: suljettavat.map((i) => i.id), ...(ajaja ? { purkaja: ajaja } : {}), ...(malli ? { malli } : {}) };
     },
     pakkaa: (nimi) => istuntoon(nimi, '/pakkaa', 'pakkaa'),
@@ -403,5 +457,9 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
   // Skoopin jonossa odottavat komennot näkymää varten (palvelin.mjs: GET /api/skoopit/<nimi> → jonossa).
   suorita.jono = (nimi) => [...jono.values()].filter((j) => j.nimi === nimi).map(({ komento, aika }) => ({ komento, aika }));
   suorita.puraJono = puraJono;
+  suorita.tarkistaAutomaattisiirto = tarkistaAutomaattisiirto;
+  suorita.asetaKytkimet = (k) => { kytkimetAsetus = k; };
+  suorita.kaynnistaVahti = kaynnistaVahti;
+  suorita.pysaytaVahti = pysaytaVahti;
   return suorita;
 }

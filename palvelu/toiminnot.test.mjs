@@ -471,3 +471,44 @@ test('jono: kaksi samanaikaista kierrosta lähettää jonossa olevan komennon ke
   assert.deepEqual(v.kutsut.filter((k) => k[1] === 'send-keys').map((k) => k.at(-1)), ['/sa', 'Enter']);
   assert.deepEqual(suorita.jono('a'), []);
 });
+
+test('automaattisiirto-vahti: laukeaa kun kytkin on päällä, kontekstiraja täyttynyt ja istunto pysähtynyt', async () => {
+  const a = ymparisto({ tila: 'idle' });
+  const transkriptiPolku = join(a.projektitDir, projektiNimi('/x'), 's1.jsonl');
+  writeFileSync(transkriptiPolku, JSON.stringify({ type: 'assistant', message: { usage: { input_tokens: 125_000 } } }) + '\n');
+  const v = vaarennos();
+  const kytkimetPois = { lue: () => ({ automaattisiirto: false }), lueIstunto: () => ({ automaattisiirto: false }) };
+  const kytkimetPaalla = { lue: () => ({ automaattisiirto: true }), lueIstunto: () => ({ automaattisiirto: true }) };
+
+  const suorita = luoToiminnot(a, { aja: v.aja, jonoVali: 0, kytkimet: kytkimetPois });
+  // 1. Kytkin pois: ei laukea
+  assert.deepEqual(await suorita.tarkistaAutomaattisiirto(), []);
+  assert.equal(v.kutsut.length, 0);
+
+  // 2. Kytkin päälle, mutta konteksti alle rajan (esim. 50k): ei laukea
+  writeFileSync(transkriptiPolku, JSON.stringify({ type: 'assistant', message: { usage: { input_tokens: 50_000 } } }) + '\n');
+  suorita.asetaKytkimet(kytkimetPaalla);
+  assert.deepEqual(await suorita.tarkistaAutomaattisiirto(), []);
+  assert.equal(v.kutsut.length, 0);
+
+  // 3. Konteksti yli rajan (125k), mutta istunto busy: ei laukea
+  writeFileSync(transkriptiPolku, JSON.stringify({ type: 'assistant', message: { usage: { input_tokens: 125_000 } } }) + '\n');
+  writeFileSync(join(a.istunnotDir, `${process.pid}.json`),
+    JSON.stringify({ pid: process.pid, sessionId: 's1', cwd: '/x', name: 'a', status: 'busy', tmux: 'siirto-a-1:@1.%5' }));
+  assert.deepEqual(await suorita.tarkistaAutomaattisiirto(), []);
+  assert.equal(v.kutsut.length, 0);
+
+  // 4. Istunto muuttuu idleksi: laukeaa!
+  writeFileSync(join(a.istunnotDir, `${process.pid}.json`),
+    JSON.stringify({ pid: process.pid, sessionId: 's1', cwd: '/x', name: 'a', status: 'idle', tmux: 'siirto-a-1:@1.%5' }));
+  const tulokset = await suorita.tarkistaAutomaattisiirto();
+  assert.equal(tulokset.length, 1);
+  assert.equal(tulokset[0].skooppi, 'a');
+  assert.equal(tulokset[0].komento, '/automaattisiirto');
+  assert.deepEqual(v.kutsut.filter((k) => k[1] === 'send-keys').map((k) => k.at(-1)), ['/automaattisiirto', 'Enter']);
+
+  // 5. Seuraava tarkistuskierros: ei laukaise uudelleen samalle istunnolle
+  v.kutsut.length = 0;
+  assert.deepEqual(await suorita.tarkistaAutomaattisiirto(), []);
+  assert.equal(v.kutsut.length, 0);
+});
