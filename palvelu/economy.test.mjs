@@ -195,6 +195,10 @@ test('luoEconomyPalvelu: tarjoaa kootut rajapinnat', async () => {
 
   const tilasto = p.tilasto();
   assert.ok('plannerResponses' in tilasto);
+
+  const taskOd = p.taskOdotus();
+  assert.equal(taskOd.suositusWaitMs, 10000);
+  assert.ok(taskOd.ohje.includes('ECONOMY-TASK-ODOTUS'));
 });
 
 test('muotoileGitEsitiedot: tuottaa selkeän markdown-lohkon ja ohjeen', () => {
@@ -249,6 +253,10 @@ test('palvelin: GET /api/economy -reitit palauttavat tiedot', async () => {
     tilasto() {
       return { userInputs: 10, plannerResponses: 50 };
     },
+    taskOdotus(muoto) {
+      if (muoto === 'teksti') return { teksti: 'TASK-ODOTUS: ohje' };
+      return { suositusWaitMs: 10000, minimiWaitMs: 5000 };
+    },
   };
 
   const srv = createServer(
@@ -300,6 +308,16 @@ test('palvelin: GET /api/economy -reitit palauttavat tiedot', async () => {
     const dataTilasto = await resTilasto.json();
     assert.equal(dataTilasto.userInputs, 10);
     assert.equal(dataTilasto.plannerResponses, 50);
+
+    const resTask = await fetch(`${baseUrl}/api/economy/task-odotus`, auth);
+    assert.equal(resTask.status, 200);
+    const dataTask = await resTask.json();
+    assert.equal(dataTask.suositusWaitMs, 10000);
+
+    const resTaskTeksti = await fetch(`${baseUrl}/api/economy/task-odotus?muoto=teksti`, auth);
+    assert.equal(resTaskTeksti.status, 200);
+    const dataTaskTeksti = await resTaskTeksti.json();
+    assert.equal(dataTaskTeksti.teksti, 'TASK-ODOTUS: ohje');
   } finally {
     srv.close();
   }

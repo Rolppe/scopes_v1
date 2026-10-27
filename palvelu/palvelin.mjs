@@ -334,6 +334,7 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
       if (polku === '/api/economy/git-tila') return vastaa(200, await economy.gitTila(url.searchParams.get('skooppi'), url.searchParams.get('muoto')));
       if (polku === '/api/economy/tiedostokartta') return vastaa(200, economy.tiedostokartta(url.searchParams.get('skooppi')));
       if (polku === '/api/economy/tilasto') return vastaa(200, economy.tilasto());
+      if (polku === '/api/economy/task-odotus') return vastaa(200, economy.taskOdotus(url.searchParams.get('muoto')));
       if (polku === '/api/kayttorajat-kaikki' || (polku === '/api/kayttoraja' && url.searchParams.get('kaikki') === '1')) {
         const [claude, opGemini, op3p, macGemini, mac3p] = await Promise.all([
           Promise.resolve().then(() => kayttoraja()).catch(() => null),
