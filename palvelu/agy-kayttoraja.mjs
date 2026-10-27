@@ -79,7 +79,7 @@ export function laskePyyntomaara({
           if (!step.created_at) continue;
           const t = new Date(step.created_at).getTime();
           if (t < resetAika) break;
-          if (step.source === 'MODEL' && step.type === 'PLANNER_RESPONSE') maara++;
+          if (step.type === 'USER_INPUT') maara++;
         } catch {}
       }
     }

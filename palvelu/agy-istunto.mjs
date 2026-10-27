@@ -240,18 +240,22 @@ export async function agyRuudut(aja, nimi) {
 // - waiting + kysely: true: auki oleva monivalinta (ask_question: Navigate · enter Select / Question 1/1)
 // - waiting + kysely: false: lupakysely (Run this command? / Allow access to this file?)
 // - busy: työssä (ajattelu, työkalut, käynnissä oleva komento)
+// - idle: syötekehote avoinna käyttäjälle (? for shortcuts / prompt >)
 export function jasennaAgyRuutu(stdout) {
   const teksti = String(stdout ?? '');
   const rivit = teksti.split('\n').map((r) => r.trim()).filter(Boolean);
-  const alarivit = rivit.slice(-4);
-  if (alarivit.some((r) => r.includes('? for shortcuts'))) {
-    return { tila: 'idle', kysely: false };
-  }
   if (/Navigate\s*·\s*enter\s*Select|enter\s+Select|Question\s+\d+\/\d+|\bWrite-in\.\.\./.test(teksti)) {
     return { tila: 'waiting', kysely: true };
   }
   if (/Run this command\?|Allow access to this file\?|Allow\s+.*?to\s+execute|Do you want to run\?|^\s*(?:>\s*)?1\.\s+(?:Yes|Kyllä|Always allow)\b/m.test(teksti)) {
     return { tila: 'waiting', kysely: false };
+  }
+  if (/Thinking|esc to cancel|Esc to cancel|Cancel\s*\(esc\)|[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/.test(teksti)) {
+    return { tila: 'busy', kysely: false };
+  }
+  const alarivit = rivit.slice(-4);
+  if (alarivit.some((r) => r.includes('? for shortcuts') || r.startsWith('>'))) {
+    return { tila: 'idle', kysely: false };
   }
   return { tila: 'busy', kysely: false };
 }
@@ -319,9 +323,11 @@ export function agyKyselyAuki(db) {
   } catch { return false; }
 }
 
-// AGY-transkriptin lukeminen (transcript.jsonl): tokenit, viimeisin pysähdys ja avoin kyselytila.
+// AGY-transkriptin lukeminen (transcript.jsonl / transcript_full.jsonl): tokenit, viimeisin pysähdys ja avoin kyselytila.
 export function lueAgyTranskripti(convId, brainHakemisto = BRAIN_HAKEMISTO) {
-  const polku = convId.endsWith('.jsonl') ? convId : join(brainHakemisto, convId, '.system_generated/logs/transcript.jsonl');
+  const perus = convId.endsWith('.jsonl') ? convId : join(brainHakemisto, convId, '.system_generated/logs/transcript.jsonl');
+  const fullPolku = convId.endsWith('.jsonl') ? null : join(brainHakemisto, convId, '.system_generated/logs/transcript_full.jsonl');
+  const polku = fullPolku && existsSync(fullPolku) ? fullPolku : perus;
   if (!existsSync(polku)) return null;
   try {
     const koko = statSync(polku).size;
@@ -355,12 +361,12 @@ export function lueAgyTranskripti(convId, brainHakemisto = BRAIN_HAKEMISTO) {
         }
       }
       if (!pakattuLoytyi) {
-        if (j.type === 'PLANNER_RESPONSE' && typeof j.content === 'string') {
+        if ((j.type === 'PLANNER_RESPONSE' || j.type === 'GENERIC') && typeof j.content === 'string') {
           if (PAKKAUSRIVI.test(j.content)) {
             pakattu = true;
             pakattuLoytyi = true;
           }
-        } else if (j.type === 'USER_INPUT') {
+        } else if (j.type === 'USER_INPUT' && j.source !== 'SYSTEM') {
           pakattu = false;
           pakattuLoytyi = true;
         }

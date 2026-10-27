@@ -4,6 +4,7 @@
 // nimeä, joilla kummallakin kiinteä tiedostonimi, ja arvo on vain boolean; puhelimelta ei tule polkua eikä tekstiä.
 // Puuttuva tai lukukelvoton tiedosto tarkoittaa pois päältä.
 
+import { spawnSync } from 'node:child_process';
 import { appendFileSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -16,6 +17,7 @@ export const OLETUS_HAKEMISTO = join(homedir(), '.claude/skills/keskustelun-siir
 export const ASETUKSET = Object.freeze({
   automaattijatko: 'automaattivalinta.txt',
   autopack: 'autopack.txt',
+  automaattisiirto: 'automaattisiirto.txt',
   // Agy-istuntojen lupakyselyihin vastaaminen (agy-luvat.mjs); globaali, ei keskustelukohtainen.
   agyluvat: 'agy-luvat.txt',
 });
@@ -43,6 +45,9 @@ export function luoAsetukset({ hakemisto = OLETUS_HAKEMISTO, loki = null } = {})
         mkdirSync(hakemisto, { recursive: true });
         writeFileSync(`${tiedosto}.tmp`, arvo ? 'true\n' : 'false\n');
         renameSync(`${tiedosto}.tmp`, tiedosto);
+        if (process.platform !== 'darwin') {
+          spawnSync('ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=3', 'mac', `mkdir -p ~/.claude/skills/keskustelun-siirto/state && echo '${arvo ? 'true' : 'false'}' > ~/.claude/skills/keskustelun-siirto/state/${ASETUKSET[nimi]}`]);
+        }
       } catch { throw new Hylatty(500, 'asetuksen tallennus epäonnistui'); }
       kirjaa({ toiminto: 'asetus', nimi, arvo, tulos: 'ok' });
       return lue();

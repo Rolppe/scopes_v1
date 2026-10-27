@@ -101,7 +101,7 @@ struct SkooppiNakymaView: View {
                     .tint(Teema.kytkin)
                     .disabled(avoinIstunto == nil)
                     .accessibilityIdentifier("toiminto-hereilla")
-                // Automaattijatko ja Autopack ovat keskustelukohtaisia (scopes infra setting 16.10.2026): palvelu valitsee skoopin
+                // Automaattijatko, Autopack ja Automaattisiirto ovat keskustelukohtaisia (scopes infra setting 16.10.2026, 19.10.2026): palvelu valitsee skoopin
                 // ainoan avoimen istunnon; vanha palvelu antaa yhteiset kytkimet, jotka koskevat kaikkia skooppeja.
                 if let k = kytkimet {
                     let lukossa = k.istuntoja != nil && k.istunto == nil
@@ -113,6 +113,10 @@ struct SkooppiNakymaView: View {
                         .tint(Teema.kytkin)
                         .disabled(lukossa)
                         .accessibilityIdentifier("toiminto-autopack")
+                    Toggle("Automaattisiirto", isOn: Binding(get: { k.automaattisiirto ?? false }, set: { p in Task { await asetaKytkin(.automaattisiirto, p) } }))
+                        .tint(Teema.kytkin)
+                        .disabled(lukossa)
+                        .accessibilityIdentifier("toiminto-automaattisiirto-kytkin")
                     Text(kytkinSelite(k)).font(.caption).foregroundStyle(.secondary)
                         .accessibilityIdentifier("toiminto-kytkimet-selite")
                 }
