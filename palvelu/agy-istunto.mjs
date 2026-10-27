@@ -261,6 +261,23 @@ export const ruudunTila = (ruutu) => {
   return rivit.slice(-2).some((r) => r.startsWith('? for shortcuts')) ? 'idle' : 'busy';
 };
 
+// Poimii AGY-ruudun alareunasta aktiivisen mallin ja effort-tason (esim. "? for shortcuts ... · Gemini 3.8 Flash · medium").
+export function poimiAgyRuudunAsetukset(ruutuTeksti) {
+  if (!ruutuTeksti) return { malli: null, effort: null };
+  const rivit = String(ruutuTeksti).split('\n').map((r) => r.trim()).filter(Boolean);
+  const tilarivi = rivit.slice(-4).find((r) => r.includes('? for shortcuts')) ?? rivit.at(-1);
+  if (!tilarivi || !tilarivi.includes('·')) return { malli: null, effort: null };
+  const osat = tilarivi.split(/\s*·\s*/);
+  let effort = null;
+  let malli = null;
+  for (const osa of osat.slice(1)) {
+    const o = osa.toLowerCase().trim();
+    if (['low', 'medium', 'high', 'xhigh', 'max'].includes(o)) effort = o;
+    else if (osa.trim()) malli = osa.trim();
+  }
+  return { malli, effort };
+}
+
 export const mallitonSlug = (nimi) => String(nimi).trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
 // Viimeisimmän agenttivastauksen (step_type 15) tokenimäärä metadatan kentästä 9 (input + output).
@@ -593,7 +610,13 @@ function rakennaAgyIstunto({ slug, skooppi, ruutu, alkoi, pid, ruutuTeksti, proc
       }
     }
   }
-  const { malli, effort } = lueAgyMalliEffort(pid, proc);
+  let { malli, effort } = lueAgyMalliEffort(pid, proc);
+  const ruutuAsetukset = poimiAgyRuudunAsetukset(ruutuTeksti);
+  if (ruutuAsetukset.effort) effort = ruutuAsetukset.effort;
+  if (ruutuAsetukset.malli && !malli) malli = ruutuAsetukset.malli;
+  if (effort && malli && /-(low|medium|high|xhigh|max)$/.test(malli)) {
+    malli = malli.replace(/-(low|medium|high|xhigh|max)$/, `-${effort}`);
+  }
   return {
     id: ruutu,
     nimi: ruutu,

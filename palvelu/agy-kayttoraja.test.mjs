@@ -147,6 +147,23 @@ test('ei tee verkkokutsuja jos tila luetaan levyltä', async () => {
   assert.equal(r.lahde, 'cli-statusline');
   assert.equal(r.ymparisto, 'oneplus');
   assert.ok(r.viisiTuntia);
+  assert.equal(r.otsikko, 'OnePlus Linux AGY');
+});
+
+test('luoMacAgyKayttoraja: paikallinen haku asettaa otsikoksi Mac AGY', { skip: process.platform !== 'darwin' }, async () => {
+  const d = mkdtempSync(join(tmpdir(), 'mac-agy-tila-'));
+  const tilaTiedosto = join(d, 'scopes-agy-kayttoraja.json');
+  tallennaTila(muotoileAgyTila(STATUSLINE_DATA), tilaTiedosto);
+
+  const raja = luoMacAgyKayttoraja({
+    tilaTiedosto,
+    brainDir: d,
+  });
+
+  const r = await raja({ ryhma: 'gemini' });
+  assert.equal(r.otsikko, 'Mac AGY');
+  assert.equal(r.ymparisto, 'macos');
+  assert.ok(r.viisiTuntia);
 });
 
 test('luoMacAgyKayttoraja: hakee Macilta ssh:lla ja palauttaa erilliset käyttörajat', async () => {
@@ -169,6 +186,7 @@ test('luoMacAgyKayttoraja: hakee Macilta ssh:lla ja palauttaa erilliset käyttö
   const gemini = await macRaja({ ryhma: 'gemini' });
   assert.equal(gemini.ymparisto, 'macos');
   assert.equal(gemini.lahde, 'mac-ssh');
+  assert.equal(gemini.otsikko, 'Mac AGY');
   assert.equal(gemini.viisiTuntia.kaytto, 45);
   assert.equal(gemini.viikko.kaytto, 75.5);
   assert.equal(gemini.viikko.teksti, '1132 / 1500');

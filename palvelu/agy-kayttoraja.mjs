@@ -6,7 +6,7 @@
 // (nollautuu klo 07:00 UTC / 10:00 Suomen aikaa).
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { homedir, platform } from 'node:os';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { ajaKomento } from './toiminnot.mjs';
 
@@ -174,6 +174,7 @@ export function luoAgyKayttoraja({
       haettu: oma ? new Date(oma.haettu ?? viimMtime ?? nyt()).toISOString() : null,
       paivitetty: oma?.paivitetty ?? null,
       lahde: oma?.lahde ?? 'levy',
+      otsikko: 'OnePlus Linux AGY',
       ymparisto: 'oneplus',
     };
   };
@@ -192,23 +193,22 @@ export function luoMacAgyKayttoraja({
   let kesken = null;
 
   async function haeMacilta() {
-    if (platform() === 'darwin' && !process.env.SCOPES_TEST_REMOTE) {
+    if (process.platform === 'darwin' && !process.env.SCOPES_TEST_REMOTE && !aja) {
       const tila = lueTila(tilaTiedosto);
       const pyynnot = laskePyynnot({ nytMs: nyt(), brainDir });
       return { tila, pyynnot, haettu: nyt(), lahde: 'mac-paikallinen' };
     }
 
     const suorita = aja ?? ajaKomento;
+    if (!suorita) return { tila: null, pyynnot: null, haettu: nyt(), lahde: 'virhe' };
     const koodi = `export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"; node -e 'import { lueAgyTila, laskePyyntomaara } from "~/sessions-repo/scopes/palvelu/agy-kayttoraja.mjs"; const tila = lueAgyTila("${tilaTiedosto}"); const pyynnot = laskePyyntomaara({ brainDir: "${brainDir}" }); console.log(JSON.stringify({ tila, pyynnot }));'`;
     try {
       const res = await suorita('ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=3', 'mac', koodi], { aikaraja: 8000 });
-      if (res.koodi === 0) {
+      if (res?.koodi === 0 && res.stdout) {
         const parsed = JSON.parse(res.stdout.trim());
         return { tila: parsed.tila, pyynnot: parsed.pyynnot, haettu: nyt(), lahde: 'mac-ssh' };
       }
-    } catch {
-      // ssh virhe tai timeout
-    }
+    } catch {}
     return valimuisti?.data ?? { tila: null, pyynnot: null, haettu: nyt(), lahde: 'virhe' };
   }
 
@@ -242,6 +242,7 @@ export function luoMacAgyKayttoraja({
       paivitetty: tila?.paivitetty ?? null,
       lahde: d?.lahde ?? 'mac',
       ymparisto: 'macos',
+      otsikko: 'Mac AGY',
     };
   };
 }

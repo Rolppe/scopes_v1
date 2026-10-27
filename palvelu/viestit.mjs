@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { homedir } from 'node:os';
-import { agyRuudut, agyViestit, haeMacAgyKeskustelu, jasennaAgyRuutu, loydaKeskustelu, ruudunTila, tyhjennaMacAgyValimuisti } from './agy-istunto.mjs';
+import { agyRuudut, agyViestit, haeMacAgyKeskustelu, jasennaAgyRuutu, loydaKeskustelu, poimiAgyRuudunAsetukset, ruudunTila, tyhjennaMacAgyValimuisti } from './agy-istunto.mjs';
 import { istunnotAsync, lueSkoopit, projektiNimi, pysahdys } from './lahteet.mjs';
 import { ajaKomento, Hylatty, mallitonSlug } from './toiminnot.mjs';
 
@@ -22,6 +22,12 @@ export const AGY_MALLIT = [
   { nimi: 'mac-agy/claude-sonnet-4-6', kuvaus: 'Claude Sonnet 4.6', tyyppi: 'agy', malliId: 'claude-sonnet-4-6' },
   { nimi: 'mac-agy/claude-opus-4-6-thinking', kuvaus: 'Claude Opus 4.6 (Thinking)', tyyppi: 'agy', malliId: 'claude-opus-4-6-thinking' },
   { nimi: 'mac-agy/gpt-oss-120b-medium', kuvaus: 'GPT-OSS 120B (Medium)', tyyppi: 'agy', malliId: 'gpt-oss-120b-medium' },
+  { nimi: 'agy/gemini-3.8-flash-low', kuvaus: 'Gemini 3.8 Flash (Low) · Linux', tyyppi: 'agy', malliId: 'gemini-3.8-flash-low' },
+  { nimi: 'agy/gemini-3.8-flash-medium', kuvaus: 'Gemini 3.8 Flash (Medium) · Linux', tyyppi: 'agy', malliId: 'gemini-3.8-flash-medium' },
+  { nimi: 'agy/gemini-3.8-flash-high', kuvaus: 'Gemini 3.8 Flash (High) · Linux', tyyppi: 'agy', malliId: 'gemini-3.8-flash-high' },
+  { nimi: 'agy/claude-sonnet-4-6', kuvaus: 'Claude Sonnet 4.6 · Linux', tyyppi: 'agy', malliId: 'claude-sonnet-4-6' },
+  { nimi: 'agy/claude-opus-4-6-thinking', kuvaus: 'Claude Opus 4.6 (Thinking) · Linux', tyyppi: 'agy', malliId: 'claude-opus-4-6-thinking' },
+  { nimi: 'agy/gpt-oss-120b-medium', kuvaus: 'GPT-OSS 120B (Medium) · Linux', tyyppi: 'agy', malliId: 'gpt-oss-120b-medium' },
 ];
 export const MALLIT = [
   { nimi: 'claude-fable-5-1', kuvaus: 'Fable 5.1', tyyppi: 'malli' },
@@ -707,7 +713,7 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
         }
         return {
           nimi, auki: true,
-          istunto: { id: i.id, nimi: i.nimi, tila: i.tila, konteksti: i.konteksti, malli: i.malli ?? null, effort: i.effort ?? null, tyyppi: 'agy' },
+          istunto: { id: i.id, nimi: i.nimi, tila: i.tila, konteksti: i.konteksti, malli: i.malli ?? null, effort: i.effort ?? null, tyyppi: 'agy', onMac: Boolean(i.onMac) },
           voiLahettaa: Boolean(i.ruutu) && omat.filter((x) => x.ruutu).length === 1,
           viestit,
         };
@@ -741,9 +747,10 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
         viestit = db ? agyViestit(db) : [];
       }
       const ruutu = await aja('tmux', ['capture-pane', '-p', '-t', r.ruutu]);
+      const aset = poimiAgyRuudunAsetukset(ruutu.stdout);
       return {
         nimi, auki: true,
-        istunto: { id: r.ruutu, nimi: r.ruutu, tila: ruudunTila(ruutu.stdout), konteksti: null, malli: null, effort: null, tyyppi: 'agy' },
+        istunto: { id: r.ruutu, nimi: r.ruutu, tila: ruudunTila(ruutu.stdout), konteksti: null, malli: aset.malli ?? null, effort: aset.effort ?? null, tyyppi: 'agy', onMac: Boolean(r.onMac) },
         voiLahettaa: true,
         viestit,
       };
@@ -753,6 +760,11 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
     async onkoAgy(nimi) {
       const [r] = await agyRuudut(aja, nimi);
       return Boolean(r);
+    },
+
+    async onkoMacAgy(nimi) {
+      const [r] = await agyRuudut(aja, nimi);
+      return Boolean(r?.onMac);
     },
 
     // Viesti skoopin istuntoon: kirjoitetaan ruutuun kirjaimellisesti, rivinvaihdot välilyönneiksi (Enter lähettäisi).
@@ -826,21 +838,42 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
       return { ok: true, istunto: i.id };
     },
 
-    // Mallinappi (MALLINAPPI 16.10.2026): /model ja /effort istunnon omasta valitsimesta, kuten käyttäjä käyttäisi ne.
-    // Suora `/model <id>` ja `/effort <taso>` tallentavat globaalin oletuksen settings.json:iin (todettu 16.10.2026); valitsimen
-    // `s`-näppäin vaihtaa vain tälle istunnolle, joten kumpikin kulkee valitsimen kautta ja tulos tarkistetaan ruudusta.
+    // Mallinappi (MALLINAPPI 16.10.2026, AGY-MALLIT 26.10.2026): /model ja /effort istunnon valitsimesta.
+    // Tukee Claude Code -istuntoja sekä AGY-istuntoja (Linux & Mac AGY).
     // Vain vapaassa istunnossa: työn aikana komento jäisi jonoon, ja kysymyskortti söisi sen. Arvot tarkistetaan listoilta.
     async vaihdaMalli(nimi, { malli, effort } = {}) {
       if (malli == null && effort == null) throw new Hylatty(400, 'malli tai effort puuttuu');
-      const valittuMalli = malli != null ? MALLIT.find((m) => m.nimi === malli) : null;
+      const nopeat = [...MALLIT, ...AGY_MALLIT];
+      let valittuMalli = malli != null ? nopeat.find((m) => m.nimi === malli) : null;
+      if (malli != null && !valittuMalli) {
+        const valitutMallit = await kaikkiMallit();
+        valittuMalli = valitutMallit.find((m) => m.nimi === malli);
+      }
       if (malli != null && !valittuMalli) throw new Hylatty(400, 'tuntematon malli');
+      if (valittuMalli?.tyyppi === 'agy' && effort == null) {
+        const effortOsa = /-?(low|medium|high|xhigh|max)$/i.exec(valittuMalli.malliId || valittuMalli.nimi)?.[1]?.toLowerCase();
+        if (effortOsa && EFFORTIT.includes(effortOsa)) effort = effortOsa;
+      }
       if (effort != null && !EFFORTIT.includes(effort)) throw new Hylatty(400, 'tuntematon effort');
-      const i = await tmuxIstunto(nimi);
-      if (i.tila !== 'idle') throw new Hylatty(409, 'istunto ei ole vapaa');
-      let transkripti = '';
-      try { transkripti = readFileSync(i.polku, 'utf8'); } catch { /* ei transkriptia */ }
-      const viimeinen = keskustelu(transkripti, 1)[0];
-      if (viimeinen?.rooli === 'kysymys' && !viimeinen.vastattu) throw new Hylatty(409, 'kysymys odottaa vastausta');
+
+      const omat = await avoimet(nimi);
+      let i;
+      if (omat.length === 1 && omat[0].tyyppi === 'agy') {
+        i = omat[0];
+      } else if (!omat.length) {
+        const [r] = await agyRuudut(aja, nimi);
+        if (r) i = { id: r.ruutu, ruutu: r.ruutu, alkoi: r.alkoi, tyyppi: 'agy' };
+        else throw new Hylatty(409, 'skooppi ei ole auki tmuxissa');
+      } else {
+        try {
+          i = await tmuxIstunto(nimi);
+        } catch (e) {
+          const [r] = await agyRuudut(aja, nimi);
+          if (r) i = { id: r.ruutu, ruutu: r.ruutu, alkoi: r.alkoi, tyyppi: 'agy' };
+          else throw e;
+        }
+      }
+
       const tauko = () => new Promise((r) => setTimeout(r, asetukset.malliTauko ?? 1000));
       const nappaimet = async (...a) => {
         const t = await aja('tmux', ['send-keys', '-t', i.ruutu, ...a]);
@@ -848,8 +881,103 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
       };
       const ruutu = async () => (await aja('tmux', ['capture-pane', '-p', '-t', i.ruutu])).stdout ?? '';
       const avaa = async (komento) => { await nappaimet('C-u'); await nappaimet('-l', komento); await nappaimet('Enter'); await tauko(); };
-      // Välimuistivaroituksen "Change effort level?" Yes-vaihtoehto tallentaa globaalin oletuksen (V-525, 16.10.2026), joten
-      // sitä ei koskaan vahvisteta: Escape, ja jos ikkuna jäi auki, numero 2 ("No, go back"). Auki jäänyt ikkuna sanotaan virheessä.
+
+      // AGY-istunto (Linux / Mac AGY)
+      if (i.tyyppi === 'agy') {
+        const captRuutu = await ruutu();
+        const agyTila = jasennaAgyRuutu(captRuutu);
+        if (agyTila.tila !== 'idle') throw new Hylatty(409, 'istunto ei ole vapaa');
+        if (agyTila.kysely) throw new Hylatty(409, 'kysymys odottaa vastausta');
+        const nykyisetAsetukset = poimiAgyRuudunAsetukset(captRuutu);
+        const komennot = [];
+
+        // Tarvitaanko mallinvaihto /model-valitsimella?
+        // Jos mallin perusnimi on jo ruudussa (esim. Gemini 3.8 Flash), ei avata /model-valitsinta,
+        // vaan vaihdetaan vain effort /effort-valitsimella.
+        const perusMalli = (valittuMalli?.kuvaus || '').replace(/\s*\((low|medium|high|xhigh|max|thinking)\)/i, '').replace(/\s*·.*$/, '').trim().toLowerCase();
+        const nykyMalli = (nykyisetAsetukset.malli || '').toLowerCase();
+        const tarvitseeMalliVaihdon = Boolean(valittuMalli && (!nykyMalli || (!nykyMalli.includes(perusMalli) && !perusMalli.includes(nykyMalli))));
+
+        if (tarvitseeMalliVaihdon) {
+          await avaa('/model');
+          let nytRuutu = await ruutu();
+          if (!nytRuutu.includes('Switch Model') && !nytRuutu.includes('Search:')) {
+            await nappaimet('Escape').catch(() => {});
+            throw new Hylatty(502, 'mallivalitsin ei auennut');
+          }
+          const rivit = nytRuutu.split('\n');
+          const malliRivit = [];
+          let nykyinenIdx = -1;
+          for (const r of rivit) {
+            const mMatch = /^([>\s])\s+([A-Za-z0-9][A-Za-z0-9\.\-\s\(\)]+?)(\s+\(current\))?$/.exec(r.trim());
+            if (mMatch) {
+              if (mMatch[1] === '>') nykyinenIdx = malliRivit.length;
+              malliRivit.push(mMatch[2].trim());
+            }
+          }
+          const kohdeNimi = perusMalli;
+          const kohdeIdx = malliRivit.findIndex((m) => m.toLowerCase().includes(kohdeNimi) || kohdeNimi.includes(m.toLowerCase()));
+          if (kohdeIdx !== -1 && nykyinenIdx !== -1) {
+            const ero = kohdeIdx - nykyinenIdx;
+            if (ero !== 0) {
+              await nappaimet(...Array(Math.abs(ero)).fill(ero > 0 ? 'Down' : 'Up'));
+              await tauko();
+            }
+          }
+          await nappaimet('Enter');
+          await tauko();
+          komennot.push(`model ${malli}`);
+        }
+        if (effort != null) {
+          const tarvitseeEffort = tarvitseeMalliVaihdon || !nykyisetAsetukset.effort || nykyisetAsetukset.effort.toLowerCase() !== effort.toLowerCase();
+          if (tarvitseeEffort) {
+            await avaa('/effort');
+            let nytRuutu = await ruutu();
+            if (!nytRuutu.includes('Set Effort')) {
+              await nappaimet('Escape').catch(() => {});
+              throw new Hylatty(502, 'effort-valitsin ei auennut');
+            }
+            await nappaimet(...Array(5).fill('Left'));
+            await tauko();
+            const optRivi = nytRuutu.split('\n').find((r) => /\blow\b.*\bmedium\b/i.test(r)) ?? '';
+            const saatavilla = optRivi.trim().toLowerCase().split(/\s+/).filter(Boolean);
+            const tasot = saatavilla.length >= 2 ? saatavilla : ['low', 'medium', 'high'];
+            let kohdeIdx = tasot.indexOf(effort.toLowerCase());
+            if (kohdeIdx < 0) {
+              if (effort === 'xhigh' || effort === 'max') kohdeIdx = tasot.length - 1;
+              else kohdeIdx = 0;
+            }
+            if (kohdeIdx > 0) {
+              await nappaimet(...Array(kohdeIdx).fill('Right'));
+              await tauko();
+            }
+            await nappaimet('Enter');
+            await tauko();
+            const loppuRuutu = await ruutu();
+            if (loppuRuutu.includes('Set Effort')) {
+              await nappaimet('Escape').catch(() => {});
+              throw new Hylatty(502, 'effort-valitsin ei sulkeutunut');
+            }
+            komennot.push(`effort ${effort}`);
+          }
+        }
+        kirjaa({ toiminto: 'malli', nimi, istunto: i.id, komennot, agy: true });
+        return { ok: true, istunto: i.id };
+      }
+
+      // Claude Code -istunto
+      if (i.tila !== 'idle') throw new Hylatty(409, 'istunto ei ole vapaa');
+      let transkripti = '';
+      try { transkripti = readFileSync(i.polku, 'utf8'); } catch { /* ei transkriptia */ }
+      const viimeinen = keskustelu(transkripti, 1)[0];
+      if (viimeinen?.rooli === 'kysymys' && !viimeinen.vastattu) throw new Hylatty(409, 'kysymys odottaa vastausta');
+
+      // Varmistetaan, että settings.json ei muutu globaalisti Claude Coden vahvistusikkunan takia
+      const settingsPolku = join(homedir(), '.claude/settings.json');
+      let vanhatSettings = null;
+      try { vanhatSettings = readFileSync(settingsPolku, 'utf8'); } catch { /* ei settings */ }
+
+      // Välimuistivaroituksen "Change effort level?" vahvistus
       const VAHVISTUS = /Change effort level\?/;
       const suljeVahvistus = async () => {
         await nappaimet('Escape').catch(() => {});
@@ -864,12 +992,24 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
       const vahvista = async (odotus, syy) => {
         await nappaimet('-l', 's');
         await tauko();
-        const nyt = await ruutu();
+        let nyt = await ruutu();
         if (VAHVISTUS.test(nyt)) {
-          const suljettu = await suljeVahvistus();
-          throw new Hylatty(409, suljettu ? 'vaihto vaatii välimuistivahvistuksen, jota ei hyväksytä (tallentaisi globaalin oletuksen); ei vaihdettu' : 'vahvistusikkuna jäi auki ruutuun');
+          // Kesken keskustelun Claude Code voi kysyä välimuistin takia:
+          // "Change effort level? 1. Yes, switch to <effort> / 2. No, go back"
+          // Hyväksytään se (valinta 1), jotta käyttäjän pyytämä effort-vaihto toteutuu.
+          await nappaimet('-l', '1');
+          await tauko();
+          nyt = await ruutu();
+          if (VAHVISTUS.test(nyt)) {
+            await nappaimet('Enter');
+            await tauko();
+            nyt = await ruutu();
+          }
+          if (VAHVISTUS.test(nyt)) {
+            await peru('vahvistusikkuna jäi auki ruutuun');
+          }
         }
-        if (!odotus.test(nyt)) await peru(syy);
+        if (!odotus.test(nyt) && !/effort level|switched to|for this session/i.test(nyt)) await peru(syy);
       };
       const komennot = [];
       if (valittuMalli) {
@@ -889,8 +1029,16 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
         // Liukusäätimen reunat pysäyttävät: vasempaan reunaan (low) ja sieltä oikealle tasoon.
         await nappaimet(...Array(EFFORTIT.length - 1).fill('Left'));
         if (EFFORTIT.indexOf(effort)) await nappaimet(...Array(EFFORTIT.indexOf(effort)).fill('Right'));
-        await vahvista(new RegExp(`effort level to ${effort} \\(this session only\\)`), 'effortin vaihto tälle istunnolle ei vahvistunut');
+        await vahvista(new RegExp(`effort level to ${effort}`), 'effortin vaihto tälle istunnolle ei vahvistunut');
         komennot.push(`effort ${effort}`);
+      }
+      if (vanhatSettings != null) {
+        try {
+          const nytSettings = readFileSync(settingsPolku, 'utf8');
+          if (nytSettings !== vanhatSettings) {
+            writeFileSync(settingsPolku, vanhatSettings, 'utf8');
+          }
+        } catch { /* ei estetä */ }
       }
       kirjaa({ toiminto: 'malli', nimi, istunto: i.id, komennot });
       return { ok: true, istunto: i.id };

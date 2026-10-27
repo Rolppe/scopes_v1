@@ -117,6 +117,20 @@ test('automaattisiirto ja herätys: valmis komento samaan ruutuun kuin /pakkaa',
   }
 });
 
+test('sulje: avoin istunto suljetaan Escape ja /exitillä ilman pakkausta', async () => {
+  const v = vaarennos();
+  const suorita = luoToiminnot(ymparisto(), { aja: v.aja });
+  const r = await suorita('sulje', 'a');
+  assert.deepEqual(r, { ok: true, toiminto: 'sulje', nimi: 'a', suljettiin: ['s1'], istunto: 's1' });
+  assert.deepEqual(v.kutsut.slice(1), [
+    ['tmux', 'send-keys', '-t', '%5', 'Escape'],
+    ['tmux', 'send-keys', '-t', '%5', '-l', '/exit'],
+    ['tmux', 'send-keys', '-t', '%5', 'Enter'],
+  ]);
+  await hylkaa(suorita('sulje', 'b'), 409);
+  await hylkaa(suorita('sulje', 'tuntematon'), 404);
+});
+
 test('jono: varatulle istunnolle herätys ja siirto odottavat vapautumista, /pakkaa hylätään (V-294)', async () => {
   const a = ymparisto({ tila: 'waiting' });
   const tila = (t) => writeFileSync(join(a.istunnotDir, `${process.pid}.json`),
@@ -385,6 +399,13 @@ test('pura: mac-agy mallin istunto palauttaa tmux-nimen osoitteen tilalla', asyn
   assert.deepEqual(r, { ok: true, toiminto: 'pura', nimi: 'scopes test', tmux: 'siirto-scopes-test-120000', suljettiin: [], tiedosto: '~/.local/state/pura/scopes-test.md', malli: 'mac-agy/gemini-3.8-flash-high' });
 });
 
+test('pura: mac-agy mallin istunto toimii myös infra expresso -skoopille', async () => {
+  const a = ymparisto({ skoopit: { 'infra expresso': ['Infra/iot/expresso/REKISTERI.md'] } });
+  const v = vaarennos({ perhe: true, autovaihto: { koodi: 0, stdout: 'UUSI: …\nOK: mac-agy tmux siirto-infra-expresso-120000\n', stderr: '' } });
+  const r = await luoToiminnot(a, { aja: v.aja })('pura', 'infra expresso', { malli: 'mac-agy/gemini-3.8-flash-high' });
+  assert.deepEqual(r, { ok: true, toiminto: 'pura', nimi: 'infra expresso', tmux: 'siirto-infra-expresso-120000', suljettiin: [], tiedosto: '~/.local/state/pura/infra-expresso.md', malli: 'mac-agy/gemini-3.8-flash-high' });
+});
+
 test('palvelin: POST-reitit vaativat avaimen ja ohjautuvat toimintoihin', async () => {
   const avain = 'k'.repeat(32);
   const kutsut = [];
@@ -418,9 +439,21 @@ test('palvelin: POST-reitit vaativat avaimen ja ohjautuvat toimintoihin', async 
     assert.equal((await laheta('/api/skoopit/a/pura', '{"malli":"claude-sonnet-5-5"}'))[0], 200);
     assert.deepEqual(await laheta('/api/skoopit/a/pura', '{"malli":"gpt-4"}'), [400, { virhe: 'tuntematon istunnon malli gpt-4' }]);
     assert.equal((await laheta('/api/skoopit/a/arkistoi'))[0], 200);
+    assert.equal((await laheta('/api/skoopit/a/sulje'))[0], 200);
     assert.equal((await laheta('/api/uusi', '{"nimi":"koe2","malli":"claude-sonnet-5-5"}'))[0], 200);
+    // IPA-lataus ilman tiedostoa palauttaa 404
+    assert.deepEqual(await laheta('/api/ios/ipa', '', avain, 'GET'), [404, { virhe: 'Skoopit.ipa ei löydy, aja scopes/ios/asenna.sh --ipa' }]);
+    // Kyselyparametriavain toimii myös ilman Authorization-otsaketta
+    const ilmanOtsaketta = (polku) => new Promise((ok, ei) => {
+      const req = request({ host: '127.0.0.1', port: srv.address().port, path: polku, method: 'GET' }, (res) => {
+        let b = ''; res.on('data', (c) => { b += c; }); res.on('end', () => ok([res.statusCode, JSON.parse(b)]));
+      });
+      req.on('error', ei); req.end();
+    });
+    assert.deepEqual(await ilmanOtsaketta('/api/ios/ipa'), [401, { virhe: 'avain puuttuu tai väärä' }]);
+    assert.deepEqual(await ilmanOtsaketta(`/api/ios/ipa?avain=${avain}`), [404, { virhe: 'Skoopit.ipa ei löydy, aja scopes/ios/asenna.sh --ipa' }]);
     assert.deepEqual(kutsut, [['pura', 'a b'], ['pakkaa', 'a'], ['herata-pois', 'a'], ['uusi', 'koe'], ['pura', 'x'], ['pura', 'a'],
-      ['arkistoi', 'a'], ['uusi', 'koe2']]);
+      ['arkistoi', 'a'], ['sulje', 'a'], ['uusi', 'koe2']]);
     assert.deepEqual(valinnat, [{ ajaja: null, malli: null }, { ajaja: null, malli: null }, { ajaja: null, malli: null }, { ajaja: null, malli: 'claude-sonnet-5-5' },
       { ajaja: null, malli: 'claude-sonnet-5-5' }]);
   } finally { srv.close(); }

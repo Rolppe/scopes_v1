@@ -990,6 +990,18 @@ struct SkooppiViestitView: View {
                     .accessibilityLabel("Skoopin tiedot")
                     .accessibilityValue(tila?.istunto?.konteksti.map { "konteksti \(tokenit($0.tokenit))" } ?? "")
                     .accessibilityIdentifier("tiedot")
+                    .contextMenu {
+                        if tila?.istunto != nil {
+                            Button(role: .destructive) {
+                                Task {
+                                    _ = try? await asiakas.toiminto(.sulje, nimi)
+                                    await lataa()
+                                }
+                            } label: {
+                                Label("Sulje istunto ilman pakkausta", systemImage: "xmark.circle")
+                            }
+                        }
+                    }
             }
             .kapseliPois()
         }

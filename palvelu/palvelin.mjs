@@ -143,7 +143,7 @@ function runko(req, raja = 1024) {
   });
 }
 
-export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset, { android: () => android }), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), purkajat = luoPurkajat({ juuri: asetukset.juuri, paikalliset: () => viestit.agentit() }), linux = luoLinuxServer({ loki: asetukset.toimintoloki, kuiva: asetukset.linuxKuiva === true }), android = luoAndroid({ loki: asetukset.toimintoloki, kuiva: asetukset.androidKuiva === true, ...(asetukset.androidLaite && { laite: asetukset.androidLaite }), ...(asetukset.androidDir && { tuotoksetDir: asetukset.androidDir }) }), agyKayttoraja = luoAgyKayttoraja(), kordinaattori = luoKordinaattori(asetukset.juuri), macAgyKayttoraja = luoMacAgyKayttoraja()) {
+export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset, { android: () => android }), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), purkajat = luoPurkajat({ juuri: asetukset.juuri, paikalliset: () => viestit.agentit() }), linux = luoLinuxServer({ loki: asetukset.toimintoloki, kuiva: asetukset.linuxKuiva === true }), android = luoAndroid({ loki: asetukset.toimintoloki, kuiva: asetukset.androidKuiva === true, ...(asetukset.androidLaite && { laite: asetukset.androidLaite }), ...(asetukset.androidDir && { tuotoksetDir: asetukset.androidDir }) }), agyKayttoraja = luoAgyKayttoraja(), kordinaattori = luoKordinaattori(asetukset.juuri), macAgyKayttoraja = luoMacAgyKayttoraja({ aja: ajaKomento })) {
   const istuntoValinta = luoIstuntoValinta(asetukset);
   const nebius = luoNebiusAvain({ tiedosto: asetukset.nebiusTiedosto ?? join(homedir(), '.config/scopes/nebius-avain') });
   // Chat suoratoistona (DEMO-SCOPES-SUORATOISTO): NDJSON-rivit {tyyppi: 'pala', teksti} …, lopuksi
@@ -312,7 +312,7 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
           Promise.resolve().then(() => macAgyKayttoraja({ ryhma: '3p' })).catch(() => null),
         ]);
         return vastaa(200, {
-          claude,
+          claude: claude ? { ...claude, otsikko: 'Claude' } : claude,
           oneplusAgy: {
             gemini: opGemini,
             kolmasOsapuoli: op3p,
@@ -328,28 +328,53 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         const ymparisto = url.searchParams.get('ymparisto');
         const agentti = url.searchParams.get('agentti');
         const skooppi = url.searchParams.get('skooppi');
-        const ryhma = url.searchParams.get('ryhma');
+        let ryhma = url.searchParams.get('ryhma');
+        const laite = url.searchParams.get('laite');
 
-        let onMacAgy = ymparisto === 'macos' || tyyppi === 'mac-agy' || tyyppi === 'macos-agy' || tyyppi === 'macos' || agentti?.startsWith('mac-agy') || agentti?.startsWith('macos-agy');
-        let onAgy = onMacAgy || tyyppi === 'agy' || tyyppi === 'gemini' || agentti === 'android/gemini' || agentti?.startsWith('agy') || agentti?.startsWith('antigravity') || agentti?.includes('gemini');
+        let istunto = null;
+        if (skooppi) {
+          try {
+            const sv = await viestit.skoopinViestit?.(skooppi);
+            istunto = sv?.istunto ?? null;
+          } catch {}
+        }
 
-        if (skooppi && tyyppi !== 'claude' && !agentti?.startsWith('claude')) {
-          const sv = await viestit.skoopinViestit?.(skooppi);
-          if (sv?.istunto) {
-            if (sv.istunto.onMac || sv.istunto.malli?.includes('mac-agy') || sv.istunto.malli?.includes('macos')) {
-              onMacAgy = true;
-              onAgy = true;
-            } else if (sv.istunto.tyyppi === 'agy') {
-              onAgy = true;
-            }
-          } else if (await viestit.onkoAgy?.(skooppi)) {
-            onAgy = true;
+        const malliNimi = agentti || istunto?.malli || '';
+        const onMac = ymparisto === 'macos'
+          || laite === 'mac'
+          || tyyppi === 'mac-agy'
+          || tyyppi === 'macos-agy'
+          || tyyppi === 'macos'
+          || malliNimi.startsWith('mac-agy')
+          || malliNimi.startsWith('macos-agy')
+          || (istunto?.onMac === true)
+          || (skooppi && !agentti && (await viestit.onkoMacAgy?.(skooppi)));
+
+        const onAgy = onMac
+          || tyyppi === 'agy'
+          || tyyppi === 'gemini'
+          || malliNimi.startsWith('agy')
+          || malliNimi.startsWith('antigravity')
+          || agentti === 'android/gemini'
+          || (skooppi && (await viestit.onkoAgy?.(skooppi)));
+
+        if (!ryhma) {
+          if (malliNimi.includes('claude') || malliNimi.includes('gpt') || malliNimi.includes('3p')) {
+            ryhma = '3p';
+          } else {
+            ryhma = 'gemini';
           }
         }
 
-        if (onMacAgy) return vastaa(200, await macAgyKayttoraja({ ryhma: ryhma || 'gemini' }));
-        if (onAgy) return vastaa(200, await agyKayttoraja({ ryhma: ryhma || 'gemini' }));
-        return vastaa(200, await kayttoraja());
+        if (onMac) {
+          const m = await macAgyKayttoraja({ ryhma });
+          if (m) return vastaa(200, m);
+        }
+        if (onAgy) {
+          return vastaa(200, await agyKayttoraja({ ryhma }));
+        }
+        const c = await kayttoraja();
+        return vastaa(200, c ? { ...c, otsikko: 'Claude' } : c);
       }
       // Luetaan joka pyynnöllä: avaimen vaihto ei vaadi palvelun uudelleenkäynnistystä.
       if (polku === '/api/nebius-avain') return vastaa(200, nebius.tila());
