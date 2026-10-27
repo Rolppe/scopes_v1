@@ -95,6 +95,7 @@ import { agyIstunnot } from './agy-istunto.mjs';
 import { luoViestit } from './viestit.mjs';
 import { LrVirhe, luoLr } from '../localregister/palvelu.mjs';
 import { luoKordinaattori } from './kordinaattori.mjs';
+import { luoTerminaali } from './terminal.mjs';
 
 const tama = dirname(fileURLToPath(import.meta.url));
 
@@ -143,7 +144,7 @@ function runko(req, raja = 1024) {
   });
 }
 
-export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset, { android: () => android }), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), purkajat = luoPurkajat({ juuri: asetukset.juuri, paikalliset: () => viestit.agentit() }), linux = luoLinuxServer({ loki: asetukset.toimintoloki, kuiva: asetukset.linuxKuiva === true }), android = luoAndroid({ loki: asetukset.toimintoloki, kuiva: asetukset.androidKuiva === true, ...(asetukset.androidLaite && { laite: asetukset.androidLaite }), ...(asetukset.androidDir && { tuotoksetDir: asetukset.androidDir }) }), agyKayttoraja = luoAgyKayttoraja(), kordinaattori = luoKordinaattori(asetukset.juuri), macAgyKayttoraja = luoMacAgyKayttoraja({ aja: ajaKomento })) {
+export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset, { android: () => android }), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), purkajat = luoPurkajat({ juuri: asetukset.juuri, paikalliset: () => viestit.agentit() }), linux = luoLinuxServer({ loki: asetukset.toimintoloki, kuiva: asetukset.linuxKuiva === true }), android = luoAndroid({ loki: asetukset.toimintoloki, kuiva: asetukset.androidKuiva === true, ...(asetukset.androidLaite && { laite: asetukset.androidLaite }), ...(asetukset.androidDir && { tuotoksetDir: asetukset.androidDir }) }), agyKayttoraja = luoAgyKayttoraja(), kordinaattori = luoKordinaattori(asetukset.juuri), macAgyKayttoraja = luoMacAgyKayttoraja({ aja: ajaKomento }), terminal = luoTerminaali(asetukset)) {
   suorita?.asetaKytkimet?.(kytkimet);
   const istuntoValinta = luoIstuntoValinta(asetukset);
   const nebius = luoNebiusAvain({ tiedosto: asetukset.nebiusTiedosto ?? join(homedir(), '.config/scopes/nebius-avain') });
@@ -199,14 +200,24 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         ...(nimi && { 'content-disposition': `inline; filename*=UTF-8''${encodeURIComponent(nimi)}` }) });
       res.end(data);
     };
-    if (req.method !== 'GET' && req.method !== 'POST') return vastaa(405, { virhe: 'vain GET ja POST' });
     const url = new URL(req.url, 'http://x');
     const polku = url.pathname;
+    const isTerminalDelete = req.method === 'DELETE' && /^\/api\/terminal\/sessions\/[^/]+$/.test(polku);
+    if (req.method !== 'GET' && req.method !== 'POST' && !isTerminalDelete) return vastaa(405, { virhe: 'vain GET ja POST' });
     try {
       if (polku === '/api/terveys') return vastaa(200, { ok: true });
       const authOtsake = req.headers.authorization ?? (url.searchParams.get('avain') ? `Bearer ${url.searchParams.get('avain')}` : '');
       if (!avainKelpaa(authOtsake, asetukset.avain)) return vastaa(401, { virhe: 'avain puuttuu tai väärä' });
       if (polku.startsWith('/api/lr/')) return vastaa(200, await lr.kasittele(req.method, polku, () => runko(req, 16 << 20)));
+      if (req.method === 'DELETE') {
+        const ts = polku.match(/^\/api\/terminal\/sessions\/([^/]+)$/);
+        if (ts) {
+          const id = decodeURIComponent(ts[1]);
+          const killTmux = url.searchParams.get('killTmux') === 'true';
+          return vastaa(200, await terminal.suljeIstunto(id, { killTmux }));
+        }
+        return vastaa(404, { virhe: 'tuntematon DELETE-polku' });
+      }
       if (req.method === 'POST') {
         if (polku === '/api/diagnostiikka') return vastaa(200, await diagnostiikka.vastaanota(req));
         // Pakkauskytkimet (käyttäjä 14.10.2026): vain kaksi kiinteää nimeä ja paalle/pois, kirjataan toimintolokiin.
@@ -276,7 +287,22 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         if (pu) return vastaa(200, await suorita('pura', decodeURIComponent(pu[1]), await purkajat.tarkista(await runko(req))));
         const t = polku.match(/^\/api\/skoopit\/([^/]+)\/(pakkaa|automaattisiirto|herata|herata-pois|arkistoi|sulje)$/);
         if (t) return vastaa(200, await suorita(t[2], decodeURIComponent(t[1])));
+        if (polku === '/api/terminal/sessions') {
+          const data = await runko(req, 16_384);
+          const istunto = await terminal.luoIstunto(data);
+          return vastaa(201, { ok: true, session: istunto });
+        }
         return vastaa(404, { virhe: 'tuntematon toiminto' });
+      }
+      if (polku === '/api/terminal/sessions') {
+        return vastaa(200, { ok: true, sessions: await terminal.listaaIstunnot() });
+      }
+      const tsGet = polku.match(/^\/api\/terminal\/sessions\/([^/]+)$/);
+      if (tsGet) {
+        const id = decodeURIComponent(tsGet[1]);
+        const s = await terminal.haeIstunto(id);
+        if (!s) return vastaa(404, { ok: false, error: 'Istuntoa ei löydy', virhe: 'Istuntoa ei löydy' });
+        return vastaa(200, { ok: true, session: s });
       }
       if (polku === '/api/skoopit') {
         const skoopit = lueSkoopit(asetukset.juuri);
@@ -442,6 +468,9 @@ if (paaohjelma) {
   lr.ajasta();
   const toiminnot = luoToiminnot(asetukset);
   toiminnot.kaynnistaVahti?.(5_000);
-  createServer(diagnostiikka.kaari(kasittelija(asetukset, toiminnot, undefined, undefined, undefined, diagnostiikka, undefined, lr))).listen(portti, osoite, () =>
+  const terminal = luoTerminaali(asetukset, { aja: ajaKomento });
+  const srv = createServer(diagnostiikka.kaari(kasittelija(asetukset, toiminnot, undefined, undefined, undefined, diagnostiikka, undefined, lr, undefined, undefined, undefined, undefined, undefined, undefined, terminal)));
+  terminal.asennaWsUpgrade(srv, asetukset);
+  srv.listen(portti, osoite, () =>
     console.log(`scopes-palvelu: http://${osoite}:${portti}/api/skoopit`));
 }
