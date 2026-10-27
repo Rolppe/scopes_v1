@@ -576,7 +576,7 @@ struct ChatView: View {
             .lapinakyvaYlapalkki()
             .toolbar {
                 Sivupalkkipainike()
-                ToolbarItem(placement: .topBarTrailing) { KayttorajaRenkaat(raja: kayttoraja) }
+                ToolbarItem(placement: .topBarTrailing) { KayttorajaRenkaat(raja: kayttoraja, malli: valittuAgentti?.nimi ?? valittu) }
                     .kapseliPois()
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { uusi() } label: { Image(systemName: "square.and.pencil") }
@@ -844,14 +844,45 @@ struct ChatView: View {
 // myötäpäivään. Napautus näyttää prosentit ja nollautumishetket. Ilman lukemaa renkaat ovat tyhjiä.
 struct KayttorajaRenkaat: View {
     let raja: Kayttoraja?
+    var malli: String? = nil
+
+    var otsikkoTeksti: String {
+        if let otsikko = raja?.otsikko, !otsikko.isEmpty {
+            return otsikko
+        }
+        if let m = malli?.lowercased() {
+            if m.contains("mac") { return "Mac AGY" }
+            if m.contains("oneplus") || m.contains("linux") || m.contains("agy") { return "OnePlus Linux AGY" }
+            if m.contains("claude") || m.contains("sonnet") || m.contains("opus") || m.contains("haiku") { return "Claude" }
+            return malli ?? "Käyttöraja"
+        }
+        if let y = raja?.ymparisto?.lowercased() {
+            if y.contains("mac") { return "Mac AGY" }
+            if y.contains("oneplus") || y.contains("linux") { return "OnePlus Linux AGY" }
+        }
+        return "Käyttöraja"
+    }
+
+    func rivi5h(nyt: Date = Date()) -> String {
+        let p5 = raja?.viisiTuntia
+        let p5Teksti = p5?.teksti ?? prosenttiTeksti(p5)
+        let p5Reset = countdown(p5?.nollautuu, nyt: nyt).map { " Reset in \($0)" } ?? ""
+        return "5h - \(p5Teksti) (yellow)\(p5Reset)"
+    }
+
+    func riviVk(nyt: Date = Date()) -> String {
+        let vk = raja?.viikko
+        let vkTeksti = vk?.teksti ?? prosenttiTeksti(vk)
+        let vkReset = countdown(vk?.nollautuu, nyt: nyt).map { " Reset \($0)" } ?? ""
+        return "Vk - \(vkTeksti) (red)\(vkReset)"
+    }
 
     var body: some View {
         Menu {
-            // Valikko nimeää renkaat (DESIGN-SKOOPPINAKYMA U8): väri yksin ei kerro, kumpi raja on kumpi.
-            Section(raja?.otsikko.map { "Käyttöraja (\($0))" } ?? "Käyttöraja") {
-                Text(rivi(raja?.viikko != nil ? "Ulompi keltainen, 5 h" : "Keltainen, 5 h", raja?.viisiTuntia, muoto: .dateTime.hour().minute()))
-                if let v = raja?.viikko {
-                    Text(rivi(v.otsikko ?? "Sisempi punainen, viikko", v, muoto: v.teksti != nil ? .dateTime.hour().minute() : .dateTime.weekday(.abbreviated).hour().minute()))
+            Section(otsikkoTeksti) {
+                Text(rivi5h())
+                if raja?.viikko != nil || raja == nil {
+                    Text(riviVk())
                 }
             }
         } label: {
@@ -863,18 +894,10 @@ struct KayttorajaRenkaat: View {
             }
             .frame(width: 36, height: 36)
         }
-        .accessibilityLabel("Käyttöraja")
-        .accessibilityValue(arvoTeksti)
+        .accessibilityLabel(otsikkoTeksti)
+        .accessibilityValue("\(rivi5h()), \(riviVk())")
         .accessibilityIdentifier("kayttoraja")
-    }
-
-    private var arvoTeksti: String {
-        if let v = raja?.viikko {
-            let nimi = v.otsikko?.contains("pyynnöt") == true ? "pyynnöt" : "viikko"
-            let lukema = v.teksti.map { "\($0) (\(prosentti(v)))" } ?? prosentti(v)
-            return "5 h \(prosentti(raja?.viisiTuntia)), \(nimi) \(lukema)"
-        }
-        return "5 h \(prosentti(raja?.viisiTuntia))"
+        .help("\(otsikkoTeksti)\n\(rivi5h())\n\(riviVk())")
     }
 
     private func rengas(_ r: Kayttoraja.Raja?, vari: Color, koko: CGFloat) -> some View {
@@ -887,19 +910,37 @@ struct KayttorajaRenkaat: View {
         .frame(width: koko, height: koko)
     }
 
-    private func prosentti(_ r: Kayttoraja.Raja?) -> String {
-        guard let r else { return "ei tiedossa" }
-        if r.kaytto > 0 && r.kaytto < 1 { return String(format: "%.2f %%", r.kaytto) }
-        if r.kaytto >= 1 && r.kaytto < 10 { return String(format: "%.1f %%", r.kaytto) }
-        return "\(Int(r.kaytto.rounded())) %"
+    private func prosenttiTeksti(_ r: Kayttoraja.Raja?) -> String {
+        guard let r else { return "0%" }
+        if r.kaytto > 0 && r.kaytto < 1 { return String(format: "%.1f%%", r.kaytto) }
+        return "\(Int(r.kaytto.rounded()))%"
     }
 
-    private func rivi(_ nimi: String, _ r: Kayttoraja.Raja?, muoto: Date.FormatStyle) -> String {
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let aika = r?.nollautuu.flatMap { iso.date(from: $0) ?? ISO8601DateFormatter().date(from: $0) }.map { " · nollautuu \($0.formatted(muoto))" } ?? ""
-        let luku = r?.teksti.map { "\($0) (\(prosentti(r)))" } ?? prosentti(r)
-        return "\(nimi): \(luku)\(aika)"
+    private func jasennaPvm(_ str: String) -> Date? {
+        let f1 = ISO8601DateFormatter()
+        f1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = f1.date(from: str) { return d }
+        let f2 = ISO8601DateFormatter()
+        f2.formatOptions = [.withInternetDateTime]
+        return f2.date(from: str)
+    }
+
+    private func countdown(_ nollautuu: String?, nyt: Date = Date()) -> String? {
+        guard let nollautuu, let kohdeAika = jasennaPvm(nollautuu) else { return nil }
+        let erotus = kohdeAika.timeIntervalSince(nyt)
+        if erotus <= 0 { return "0min" }
+        let s = Int(erotus)
+        let d = s / 86400
+        let h = (s % 86400) / 3600
+        let m = (s % 3600) / 60
+
+        if d > 0 {
+            return "\(d)d \(h)h \(m)min"
+        } else if h > 0 {
+            return "\(h)h \(m)min"
+        } else {
+            return "\(max(m, 1))min"
+        }
     }
 }
 
@@ -1060,7 +1101,7 @@ struct SkooppiViestitView: View {
         .onChange(of: tila?.istunto?.effort) { _, _ in effortValittu = nil }
         .toolbar {
             // Renkaat ilman kapselia ja omana kohtanaan aivo-napin vierellä (CHAT-TOPBAR, käyttäjä 16.10.2026).
-            ToolbarItem(placement: .topBarTrailing) { KayttorajaRenkaat(raja: kayttoraja) }
+            ToolbarItem(placement: .topBarTrailing) { KayttorajaRenkaat(raja: kayttoraja, malli: malliValittu ?? tila?.istunto?.malli) }
                 .kapseliPois()
             // Aivo-kuvake (aiemmin kolme pistettä, käyttäjä 16.10.2026), avaa skoopin tiedot; väri kertoo istunnon kontekstin täyttymisen.
             ToolbarItem(placement: .topBarTrailing) {

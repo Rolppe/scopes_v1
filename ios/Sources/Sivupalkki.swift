@@ -47,7 +47,7 @@ private enum Kohde: Identifiable {
 }
 
 private enum Suodatin: String, CaseIterable {
-    case kaikki = "All", skoopit = "Scope", chatit = "Chat"
+    case kaikki = "All", skoopit = "Scope", allscope = "Allscope", chatit = "Chat"
 }
 
 // Equatable: juurinäkymä piirtyy vedon jokaisella ruudulla, mutta palkin sisältö riippuu vain auki-tilasta ja omasta
@@ -78,6 +78,7 @@ struct Sivupalkki: View, Equatable {
     // Palauttava kosketus ei saa samalla avata riviä: listan ele ja rivin painike laukeavat samasta kosketuksesta.
     @State private var suljettu = Date.distantPast
     @State private var vedetty = Date.distantPast
+    @State private var allscopeAuki: Set<String> = []
     @AppStorage("sivupalkinSuodatin") private var suodatin: Suodatin = .kaikki
     @AppStorage("sivupalkkiArkistoidut") private var arkistoidut = ""
 
@@ -106,16 +107,20 @@ struct Sivupalkki: View, Equatable {
             ScrollViewReader { vieritin in
             List {
                 if let virhe { Text(virhe).foregroundStyle(.red).accessibilityIdentifier("sivupalkki-virhe") }
-                Section {
-                    ForEach(kohteet) { k in
-                        if case let .skooppi(s) = k {
-                            vedettava(k, s)
-                                .listRowBackground(valittu(k) ? Teema.korostusTausta : nil)
-                        } else {
-                            Button { if !palautus() { valitse(k) } } label: { rivi(k).contentShape(Rectangle()) }
-                                .buttonStyle(.plain)
-                                .listRowBackground(valittu(k) ? Teema.korostusTausta : nil)
-                                .accessibilityIdentifier(k.id)
+                if suodatin == .allscope {
+                    allscopeOsio
+                } else {
+                    Section {
+                        ForEach(kohteet) { k in
+                            if case let .skooppi(s) = k {
+                                vedettava(k, s)
+                                    .listRowBackground(valittu(k) ? Teema.korostusTausta : nil)
+                            } else {
+                                Button { if !palautus() { valitse(k) } } label: { rivi(k).contentShape(Rectangle()) }
+                                    .buttonStyle(.plain)
+                                    .listRowBackground(valittu(k) ? Teema.korostusTausta : nil)
+                                    .accessibilityIdentifier(k.id)
+                            }
                         }
                     }
                 }
@@ -212,7 +217,7 @@ struct Sivupalkki: View, Equatable {
         HStack(spacing: Teema.Vali.s) {
             ForEach(Suodatin.allCases, id: \.self) { s in
                 Button { suodatin = s } label: {
-                    Text(s.rawValue).font(.body.weight(.semibold)).padding(.horizontal, Teema.Vali.l).padding(.vertical, Teema.Vali.s)
+                    Text(s.rawValue).font(.body.weight(.semibold)).padding(.horizontal, Teema.Vali.m).padding(.vertical, Teema.Vali.s)
                         .foregroundStyle(suodatin == s ? Teema.korostusPaalla : Color.primary)
                         .lasiPinta(suodatin == s ? Teema.korostus : Teema.passiivinen,
                                    savy: suodatin == s ? Teema.korostus : nil, in: Capsule(), kosketus: true)
@@ -264,6 +269,91 @@ struct Sivupalkki: View, Equatable {
         if juuriVedetty { return true }
         if avattu != nil { sulje(); return true }
         return Date().timeIntervalSince(suljettu) < 0.4
+    }
+
+    // Allscope (DESIGN-ORGANIZING-KARTOITUS 27.10.2026, käyttäjä): Infran skooppipuu sivupalkin omaan välilehteen.
+    // Puu suodattuu haulla (osumat ja niiden vanhemmat auki), ja rivit käyttävät samaa vedettävää pohjaa kuin suora lista.
+    private func suodataAllscopePuu(_ solmut: [SkooppiSolmu], haku: String) -> [SkooppiSolmu] {
+        let h = haku.trimmingCharacters(in: .whitespaces)
+        if h.isEmpty { return solmut }
+        return solmut.compactMap { s in
+            let lapset = s.lapset.map { suodataAllscopePuu($0, haku: h) } ?? []
+            let osuu = s.id.localizedCaseInsensitiveContains(h)
+            if osuu || !lapset.isEmpty {
+                return SkooppiSolmu(skooppi: s.skooppi, lapset: lapset.isEmpty ? nil : lapset)
+            }
+            return nil
+        }
+    }
+
+    private func nakyvatAllscope(_ solmut: [SkooppiSolmu], taso: Int) -> [(solmu: SkooppiSolmu, taso: Int)] {
+        let onHaku = !haku.trimmingCharacters(in: .whitespaces).isEmpty
+        return solmut.flatMap { s in
+            let hasLapset = s.lapset != nil && !s.lapset!.isEmpty
+            let aukiNyt = onHaku ? hasLapset : allscopeAuki.contains(s.id)
+            return [(s, taso)] + (aukiNyt ? nakyvatAllscope(s.lapset ?? [], taso: taso + 1) : [])
+        }
+    }
+
+    private var allscopeOsio: some View {
+        Section {
+            let juuret = skooppiPuu(skoopit)
+            let suodatetut = suodataAllscopePuu(juuret, haku: haku)
+            let rivit = nakyvatAllscope(suodatetut, taso: 0)
+            if rivit.isEmpty {
+                Text("Ei hakutuloksia skoopeista")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, Teema.Vali.m)
+            } else {
+                ForEach(rivit, id: \.solmu.id) { rivi in
+                    allscopeRivi(solmu: rivi.solmu, taso: rivi.taso)
+                        .listRowBackground(valittu(.skooppi(rivi.solmu.skooppi)) ? Teema.korostusTausta : nil)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func allscopeRivi(solmu: SkooppiSolmu, taso: Int) -> some View {
+        let s = solmu.skooppi
+        let k = Kohde.skooppi(s)
+        let hasLapset = solmu.lapset != nil && !solmu.lapset!.isEmpty
+        let onHaku = !haku.trimmingCharacters(in: .whitespaces).isEmpty
+        let aukiNyt = onHaku ? hasLapset : allscopeAuki.contains(solmu.id)
+
+        HStack(alignment: .top, spacing: Teema.Vali.xs) {
+            if hasLapset {
+                Button {
+                    withAnimation(.snappy) {
+                        if allscopeAuki.contains(solmu.id) {
+                            allscopeAuki.remove(solmu.id)
+                        } else {
+                            allscopeAuki.insert(solmu.id)
+                        }
+                    }
+                } label: {
+                    VStack(spacing: 2) {
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Teema.korostus)
+                            .rotationEffect(.degrees(aukiNyt ? 90 : 0))
+                        Text("\(solmu.lapset!.count)")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(width: 28, height: 38)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("allscope-avaa-\(solmu.id)")
+            } else {
+                Color.clear.frame(width: 28, height: 1)
+            }
+
+            vedettava(k, s)
+        }
+        .padding(.leading, CGFloat(taso) * 16)
     }
 
     // Skooppirivi, jonka alta veto oikealle paljastaa napit. Tausta on läpinäkymätön vain liikkeessä, ettei valinnan korostus peity.

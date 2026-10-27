@@ -181,7 +181,7 @@ test('luoMacAgyKayttoraja: hakee Macilta ssh:lla ja palauttaa erilliset käyttö
     };
   };
 
-  const macRaja = luoMacAgyKayttoraja({ aja: mockAja });
+  const macRaja = luoMacAgyKayttoraja({ aja: mockAja, nyt: () => Date.parse('2026-10-27T06:00:00.000Z') });
   const gemini = await macRaja({ ryhma: 'gemini' });
   assert.equal(gemini.ymparisto, 'macos');
   assert.equal(gemini.lahde, 'mac-ssh');
