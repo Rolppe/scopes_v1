@@ -332,7 +332,14 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
       if (polku === '/api/android/tuotokset') return vastaa(200, await android.tuotokset());
       if (polku === '/api/android/tuotos') return vastaaTavut(await android.tuotos(url.searchParams.get('polku')));
       if (polku === '/api/economy/git-tila') return vastaa(200, await economy.gitTila(url.searchParams.get('skooppi'), url.searchParams.get('muoto')));
-      if (polku === '/api/economy/tiedostokartta') return vastaa(200, economy.tiedostokartta(url.searchParams.get('skooppi')));
+      if (polku === '/api/economy/tiedostokartta') {
+        const skooppi = url.searchParams.get('skooppi');
+        const muoto = url.searchParams.get('muoto');
+        const indeksi = url.searchParams.get('indeksi') === '1' || url.searchParams.get('indeksi') === 'true';
+        const haku = url.searchParams.get('haku');
+        const lyhyt = url.searchParams.get('lyhyt') === '1' || url.searchParams.get('lyhyt') === 'true';
+        return vastaa(200, economy.tiedostokartta(skooppi, { muoto, indeksi, haku, lyhyt }));
+      }
       if (polku === '/api/economy/tilasto') return vastaa(200, economy.tilasto());
       if (polku === '/api/economy/task-odotus') return vastaa(200, economy.taskOdotus(url.searchParams.get('muoto')));
       if (polku === '/api/kayttorajat-kaikki' || (polku === '/api/kayttoraja' && url.searchParams.get('kaikki') === '1')) {
