@@ -207,6 +207,19 @@ test('luoEconomyPalvelu: tarjoaa kootut rajapinnat', async () => {
   const taskOd = p.taskOdotus();
   assert.equal(taskOd.suositusWaitMs, 10000);
   assert.ok(taskOd.ohje.includes('ECONOMY-TASK-ODOTUS'));
+
+  const hybridi = p.hybridiPakkaus('koe');
+  assert.equal(hybridi.skooppi, 'koe');
+  assert.equal(hybridi.strategia.strategia, 'hybridi');
+
+  const kuluttajat = p.kuluttajat({ skooppi: 'infra expresso' });
+  assert.equal(kuluttajat.skooppi, 'infra expresso');
+  assert.equal(kuluttajat.kohde.saastoKutsujaVrk, 490);
+  assert.ok(kuluttajat.ohje.includes('AGY Economy — Suurimpien kuluttajien karsinta'));
+
+  const kuluttajatTeksti = p.kuluttajat({ skooppi: 'scopes siirto git', muoto: 'teksti' });
+  assert.ok(kuluttajatTeksti.teksti.includes('scopes siirto git'));
+  assert.ok(kuluttajatTeksti.teksti.includes('+517 kutsua'));
 });
 
 test('muotoileGitEsitiedot: tuottaa selkeän markdown-lohkon ja ohjeen', () => {
@@ -272,6 +285,10 @@ test('palvelin: GET /api/economy -reitit palauttavat tiedot', async () => {
     hybridiPakkaus(skooppi, opt = {}) {
       if (opt?.muoto === 'teksti') return { skooppi, teksti: 'HYBRIDI: ohje' };
       return { skooppi, strategia: { strategia: 'hybridi' } };
+    },
+    kuluttajat(opt = {}) {
+      if (opt?.muoto === 'teksti') return { skooppi: opt?.skooppi, teksti: 'KULUTTAJAT: ohje' };
+      return { skooppi: opt?.skooppi, kuluttajat: [{ skooppi: 'infra expresso', plannerResponses: 585 }] };
     },
   };
 
@@ -355,6 +372,17 @@ test('palvelin: GET /api/economy -reitit palauttavat tiedot', async () => {
     assert.equal(resHybridiTeksti.status, 200);
     const dataHybridiTeksti = await resHybridiTeksti.json();
     assert.equal(dataHybridiTeksti.teksti, 'HYBRIDI: ohje');
+
+    const resKuluttajat = await fetch(`${baseUrl}/api/economy/kuluttajat?skooppi=infra%20expresso`, auth);
+    assert.equal(resKuluttajat.status, 200);
+    const dataKuluttajat = await resKuluttajat.json();
+    assert.equal(dataKuluttajat.skooppi, 'infra expresso');
+    assert.equal(dataKuluttajat.kuluttajat[0].plannerResponses, 585);
+
+    const resKuluttajatTeksti = await fetch(`${baseUrl}/api/economy/kuluttajat?skooppi=infra%20expresso&muoto=teksti`, auth);
+    assert.equal(resKuluttajatTeksti.status, 200);
+    const dataKuluttajatTeksti = await resKuluttajatTeksti.json();
+    assert.equal(dataKuluttajatTeksti.teksti, 'KULUTTAJAT: ohje');
   } finally {
     srv.close();
   }

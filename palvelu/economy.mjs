@@ -31,6 +31,17 @@ import {
   laskePakkausSaasto,
   muotoileHybridiOhje,
 } from '../siirto/economy/hybridi-pakkaus.mjs';
+import {
+  tunnistaKulutusSkooppi,
+  luokitteleKulutusKutsu,
+  analysoiIstunnonKulutus,
+  kokoaKuluttajat,
+  karsiKuluttaja,
+  muodostaExpressoTestiAjoKomento,
+  tarkistaMolemmatGitTilat,
+  muotoileKuluttajaOhje,
+  TUNNETUT_SUURKULUTTAJAT,
+} from '../siirto/economy/kuluttajat.mjs';
 
 export {
   muotoileTaskOdotusOhje,
@@ -48,6 +59,15 @@ export {
   muodostaPakkausKomento,
   laskePakkausSaasto,
   muotoileHybridiOhje,
+  tunnistaKulutusSkooppi,
+  luokitteleKulutusKutsu,
+  analysoiIstunnonKulutus,
+  kokoaKuluttajat,
+  karsiKuluttaja,
+  muodostaExpressoTestiAjoKomento,
+  tarkistaMolemmatGitTilat,
+  muotoileKuluttajaOhje,
+  TUNNETUT_SUURKULUTTAJAT,
 };
 
 const OLETUS_TTL_MS = 5_000;
@@ -377,6 +397,26 @@ export function luoEconomyPalvelu({
         strategia,
         saasto,
         ohje: muotoileHybridiOhje(skooppi, valinnat),
+      };
+    },
+    kuluttajat(opt = {}) {
+      const valinnat = typeof opt === 'string' ? { muoto: opt } : opt;
+      const { skooppi, muoto, raja } = valinnat;
+      const lista = kokoaKuluttajat({ brainDir, rajaKutsuja: raja ?? 20 });
+      const karsinta = skooppi ? karsiKuluttaja(skooppi) : null;
+      if (muoto === 'teksti' || muoto === 'markdown') {
+        return {
+          skooppi,
+          kuluttajat: lista,
+          kohde: karsinta,
+          teksti: muotoileKuluttajaOhje({ skooppi, kuluttajat: lista }),
+        };
+      }
+      return {
+        skooppi,
+        kuluttajat: lista,
+        kohde: karsinta,
+        ohje: muotoileKuluttajaOhje({ skooppi, kuluttajat: lista }),
       };
     },
   };

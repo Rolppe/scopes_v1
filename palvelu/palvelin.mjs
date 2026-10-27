@@ -347,6 +347,12 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
         const muoto = url.searchParams.get('muoto');
         return vastaa(200, economy.hybridiPakkaus(skooppi, { muoto }));
       }
+      if (polku === '/api/economy/kuluttajat') {
+        const skooppi = url.searchParams.get('skooppi');
+        const muoto = url.searchParams.get('muoto');
+        const raja = url.searchParams.has('raja') ? parseInt(url.searchParams.get('raja'), 10) : undefined;
+        return vastaa(200, economy.kuluttajat({ skooppi, muoto, raja }));
+      }
       if (polku === '/api/kayttorajat-kaikki' || (polku === '/api/kayttoraja' && url.searchParams.get('kaikki') === '1')) {
         const [claude, opGemini, op3p, macGemini, mac3p] = await Promise.all([
           Promise.resolve().then(() => kayttoraja()).catch(() => null),
