@@ -6,16 +6,35 @@ public class KeyboardViewController: UIInputViewController, UIInputViewAudioFeed
         return true
     }
 
+    public let state = KeyboardViewState()
+    public private(set) var heightConstraint: NSLayoutConstraint?
     private var hostingController: UIHostingController<KeyboardRootView>?
-    private var heightConstraint: NSLayoutConstraint?
     private let hapticGenerator = UIImpactFeedbackGenerator(style: .light)
+
+    public var isLandscape: Bool {
+        if traitCollection.verticalSizeClass == .compact {
+            return true
+        } else if traitCollection.verticalSizeClass == .regular && traitCollection.userInterfaceIdiom != .pad {
+            return false
+        }
+        let screen = currentScreenBounds
+        return screen.width > screen.height
+    }
+
+    private var currentScreenBounds: CGRect {
+        if let window = view.window {
+            return window.screen.bounds
+        }
+        return UIScreen.main.bounds
+    }
 
     public override func viewDidLoad() {
         super.viewDidLoad()
 
-        hapticGenerator.prepare()
+        KeyboardFeedback.shared.prepare()
 
-        let rootView = KeyboardRootView(controller: self)
+        state.isLandscape = isLandscape
+        let rootView = KeyboardRootView(controller: self, state: state)
         let hosting = UIHostingController(rootView: rootView)
         self.hostingController = hosting
 
@@ -39,17 +58,58 @@ public class KeyboardViewController: UIInputViewController, UIInputViewAudioFeed
         updateKeyboardHeight()
     }
 
+    public override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        updateKeyboardHeight()
+    }
+
+    public override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if previousTraitCollection?.verticalSizeClass != traitCollection.verticalSizeClass {
+            updateKeyboardHeight()
+        }
+    }
+
     public override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
-        coordinator.animate(alongsideTransition: { _ in
-            self.updateKeyboardHeight(size: size)
+
+        let screen = currentScreenBounds
+        let shortSide = min(screen.width, screen.height)
+        let isTargetLandscape = size.width > (shortSide + 50)
+
+        updateKeyboardHeight(isLandscape: isTargetLandscape)
+
+        coordinator.animate(alongsideTransition: { [weak self] _ in
+            guard let self = self else { return }
+            self.updateKeyboardHeight(isLandscape: isTargetLandscape)
+            self.view.layoutIfNeeded()
+        }, completion: { [weak self] _ in
+            guard let self = self else { return }
+            self.updateKeyboardHeight()
+            self.view.layoutIfNeeded()
         })
     }
 
-    private func updateKeyboardHeight(size: CGSize? = nil) {
-        let currentSize = size ?? view.bounds.size
-        let isLandscape = currentSize.width > currentSize.height
-        let targetHeight: CGFloat = isLandscape ? 175.0 : 255.0
+    public override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        updateInsets()
+    }
+
+    public override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        updateInsets()
+    }
+
+    private func updateInsets() {
+        let insets = view.safeAreaInsets
+        state.safeAreaInsets = EdgeInsets(top: insets.top, leading: insets.left, bottom: insets.bottom, trailing: insets.right)
+    }
+
+    public func updateKeyboardHeight(isLandscape: Bool? = nil) {
+        let landscape = isLandscape ?? self.isLandscape
+        state.isLandscape = landscape
+        updateInsets()
+        let targetHeight: CGFloat = landscape ? 175.0 : 255.0
 
         if let constraint = heightConstraint {
             constraint.constant = targetHeight
@@ -75,11 +135,10 @@ public class KeyboardViewController: UIInputViewController, UIInputViewAudioFeed
     }
 
     public func playClick() {
-        UIDevice.current.playInputClick()
+        KeyboardFeedback.shared.trigger(.standard)
     }
 
     public func playHaptic() {
-        hapticGenerator.impactOccurred()
-        hapticGenerator.prepare()
+        KeyboardFeedback.shared.trigger(.standard)
     }
 }

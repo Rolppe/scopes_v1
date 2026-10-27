@@ -1,13 +1,13 @@
 import SwiftUI
 import UIKit
 
-public enum KeyboardMode {
+public enum KeyboardMode: Hashable {
     case letters
     case numbers
     case symbols
 }
 
-public enum ShiftState {
+public enum ShiftState: Hashable {
     case off
     case shift
     case capsLock
@@ -31,13 +31,15 @@ public struct KeyItem: Identifiable, Hashable {
     public let systemImage: String?
     public let widthMultiplier: CGFloat
     public let isSpecial: Bool
+    public let customAlternates: [String]?
 
     public init(
         label: String,
         action: KeyAction,
         systemImage: String? = nil,
         widthMultiplier: CGFloat = 1.0,
-        isSpecial: Bool = false
+        isSpecial: Bool = false,
+        customAlternates: [String]? = nil
     ) {
         self.id = "\(label)_\(String(describing: action))"
         self.label = label
@@ -45,5 +47,16 @@ public struct KeyItem: Identifiable, Hashable {
         self.systemImage = systemImage
         self.widthMultiplier = widthMultiplier
         self.isSpecial = isSpecial
+        self.customAlternates = customAlternates
+    }
+}
+
+public final class KeyboardViewState: ObservableObject {
+    @Published public var isLandscape: Bool
+    @Published public var safeAreaInsets: EdgeInsets
+
+    public init(isLandscape: Bool = false, safeAreaInsets: EdgeInsets = EdgeInsets()) {
+        self.isLandscape = isLandscape
+        self.safeAreaInsets = safeAreaInsets
     }
 }

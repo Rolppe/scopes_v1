@@ -31,12 +31,17 @@ final class LasiKuvatUITests: XCTestCase {
             let infra = app.buttons["sivupalkki-infra"]
             XCTAssertTrue(infra.waitForExistence(timeout: 5))
             infra.tap()
-            let avaa = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'infra-avaa-'")).firstMatch
-            XCTAssertTrue(avaa.waitForExistence(timeout: 15), "infrapuussa ei ole laajennusnappia")
+            XCTAssertTrue(app.buttons["infra-rekisterit"].waitForExistence(timeout: 15), "infra ei latautunut")
             kuva("\(tila)-infra")
-            avaa.tap()
-            sleep(1)
-            kuva("\(tila)-infra-auki")
+            app.buttons["sivupalkki"].firstMatch.tap()
+            app.buttons["suodatin-allscope"].tap()
+            let avaa = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'allscope-avaa-'")).firstMatch
+            if avaa.waitForExistence(timeout: 5) {
+                kuva("\(tila)-allscope")
+                avaa.tap()
+                sleep(1)
+                kuva("\(tila)-allscope-auki")
+            }
             app.terminate()
         }
     }

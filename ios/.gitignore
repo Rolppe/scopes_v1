@@ -5,3 +5,5 @@ build/
 Skoopit.entitlements
 Widget/Info.plist
 Widget/*.entitlements
+*.ipa
+

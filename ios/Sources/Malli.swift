@@ -40,6 +40,7 @@ struct Istunto: Decodable, Identifiable, Hashable {
     let malli: String?
     let effort: String?
     let tyyppi: String?
+    let onMac: Bool?
 }
 
 // Rekisterin taulukkorivi: otsikkosolu → arvo. Otsikot vaihtelevat skoopeittain ("Asia", "Vika", "Tila", …).
@@ -190,6 +191,7 @@ enum Toiminto: String {
 struct PakkausKytkimet: Decodable, Hashable {
     var automaattijatko: Bool
     var autopack: Bool
+    var automaattisiirto: Bool?
     var istunto: String?
     var istuntoja: Int?
 }
@@ -207,7 +209,7 @@ struct LupaKytkin: Decodable {
 }
 
 enum PakkausKytkin: String {
-    case automaattijatko, autopack
+    case automaattijatko, autopack, automaattisiirto
 }
 
 struct ToimintoVastaus: Decodable, Hashable {
@@ -221,12 +223,64 @@ struct ToimintoVastaus: Decodable, Hashable {
     // true: istunto oli varattu, komento lähtee palvelun jonosta, kun istunto vapautuu (V-294).
     let jonossa: Bool?
     let suljettiin: [String]?
+    let malli: String?
 }
 
 // POST /api/skoopit/<nimi>/arkistoi (SCOPES-LISTA-POISTO); varoitus = install.sh epäonnistui commitin jälkeen.
 struct ArkistointiVastaus: Decodable {
     let commit: String?
     let varoitus: Bool?
+}
+
+// Mallien ja purkajan valinnat (SCOPES-MALLIVALINNAT).
+struct IstunnonMalli: Codable, Hashable, Identifiable {
+    let nimi: String
+    let kuvaus: String
+    let ryhma: String?
+
+    var id: String { nimi }
+
+    init(nimi: String, kuvaus: String, ryhma: String? = nil) {
+        self.nimi = nimi
+        self.kuvaus = kuvaus
+        self.ryhma = ryhma
+    }
+}
+
+struct PurkajaVaihtoehto: Codable, Hashable, Identifiable {
+    let tunnus: String
+    let kuvaus: String
+    let ryhma: String
+
+    var id: String { tunnus }
+
+    init(tunnus: String, kuvaus: String, ryhma: String) {
+        self.tunnus = tunnus
+        self.kuvaus = kuvaus
+        self.ryhma = ryhma
+    }
+}
+
+struct PurkuValinnat: Codable {
+    let purkajat: [PurkajaVaihtoehto]
+    let mallit: [IstunnonMalli]
+    let oletusMalli: String
+
+    init(purkajat: [PurkajaVaihtoehto] = [], mallit: [IstunnonMalli] = [], oletusMalli: String = "") {
+        self.purkajat = purkajat
+        self.mallit = mallit
+        self.oletusMalli = oletusMalli
+    }
+}
+
+struct MallitVastaus: Codable {
+    let mallit: [IstunnonMalli]
+    let oletusMalli: String?
+
+    init(mallit: [IstunnonMalli] = [], oletusMalli: String? = nil) {
+        self.mallit = mallit
+        self.oletusMalli = oletusMalli
+    }
 }
 
 // Chat ja skoopin viestit (viestit.mjs, DEMO-SCOPES-VALILEHDET).
@@ -307,7 +361,40 @@ struct Kayttoraja: Codable, Equatable {
     }
     let viisiTuntia: Raja?
     let viikko: Raja?
+    let otsikko: String?
     var ymparisto: String? = nil
+
+    var tiivisTeksti: String? {
+        if let v = viikko {
+            if let teksti = v.teksti, !teksti.isEmpty {
+                return teksti.replacingOccurrences(of: " ", with: "")
+            }
+            if let p5 = viisiTuntia {
+                return "5h: \(Int(p5.kaytto)) %, 7pv: \(Int(v.kaytto)) %"
+            }
+            return "\(Int(v.kaytto)) %"
+        }
+        if let p5 = viisiTuntia {
+            return "5h: \(Int(p5.kaytto)) %"
+        }
+        return nil
+    }
+
+    var suurinKaytto: Double {
+        max(viisiTuntia?.kaytto ?? 0, viikko?.kaytto ?? 0)
+    }
+
+    var prosenttiTeksti: String {
+        "\(Int(suurinKaytto)) %"
+    }
+
+    var onVaroitus: Bool {
+        suurinKaytto >= 85 && suurinKaytto < 100
+    }
+
+    var onTayna: Bool {
+        suurinKaytto >= 100
+    }
 }
 
 struct KayttorajatKaikki: Codable, Equatable {
@@ -318,6 +405,44 @@ struct KayttorajatKaikki: Codable, Equatable {
     let claude: Kayttoraja?
     let oneplusAgy: AgyRyhmat?
     let macAgy: AgyRyhmat?
+
+    func raja(ryhmalle ryhma: String, malli: String? = nil) -> Kayttoraja? {
+        let r = ryhma.lowercased()
+        let m = malli?.lowercased() ?? ""
+        let on3p = m.contains("claude") || m.contains("gpt") || m.contains("3p") || m.contains("oss")
+
+        if r.contains("mac") {
+            return on3p ? (macAgy?.kolmasOsapuoli ?? macAgy?.gemini) : (macAgy?.gemini ?? macAgy?.kolmasOsapuoli)
+        }
+        if r.contains("oneplus") || r.contains("linux") || (r.contains("agy") && !r.contains("mac")) {
+            return on3p ? (oneplusAgy?.kolmasOsapuoli ?? oneplusAgy?.gemini) : (oneplusAgy?.gemini ?? oneplusAgy?.kolmasOsapuoli)
+        }
+        if r.contains("claude") {
+            return claude
+        }
+        return nil
+    }
+
+    func raja(mallille malliNimi: String?) -> Kayttoraja? {
+        guard let m = malliNimi?.lowercased() else { return nil }
+        let on3p = m.contains("claude") || m.contains("gpt") || m.contains("3p") || m.contains("oss")
+        if m.contains("mac") {
+            return on3p ? (macAgy?.kolmasOsapuoli ?? macAgy?.gemini) : (macAgy?.gemini ?? macAgy?.kolmasOsapuoli)
+        }
+        if m.contains("oneplus") || m.contains("linux") || m.contains("agy") {
+            return on3p ? (oneplusAgy?.kolmasOsapuoli ?? oneplusAgy?.gemini) : (oneplusAgy?.gemini ?? oneplusAgy?.kolmasOsapuoli)
+        }
+        if m.contains("gemini") {
+            return macAgy?.gemini ?? oneplusAgy?.gemini
+        }
+        if m.contains("gpt") || m.contains("oss") {
+            return macAgy?.kolmasOsapuoli ?? oneplusAgy?.kolmasOsapuoli
+        }
+        if m.contains("claude") || m.contains("sonnet") || m.contains("opus") || m.contains("haiku") {
+            return claude
+        }
+        return nil
+    }
 }
 
 // Käyttörajan pysyväistallennus päätteelle (UserDefaults): lukemat eivät katoa tyhjäkäynnillä tai äpin uudelleenkäynnistyksessä.
