@@ -169,6 +169,8 @@ test('jasennaAgyRuutu: tunnistaa tilat (idle, waiting+kysely, waiting+lupa, busy
   assert.deepEqual(jasennaAgyRuutu('Run this command?\n$ git status\nesc to cancel\n'), { tila: 'waiting', kysely: false });
   assert.deepEqual(jasennaAgyRuutu('Allow access to this file?\n> 1. Yes\n'), { tila: 'waiting', kysely: false });
   assert.deepEqual(jasennaAgyRuutu('Thinking...\nesc to cancel\n'), { tila: 'busy', kysely: false });
+  // VI-3: agentin tulosteessa ylempänä oleva "1. Yes" ei ole lupakysely.
+  assert.deepEqual(jasennaAgyRuutu(['1. Yes, tehdään näin', ...Array.from({ length: 14 }, (_, n) => `rivi ${n}`), 'Thinking...'].join('\n')), { tila: 'busy', kysely: false });
 });
 
 test('lueAgyTranskripti: lukee tokenit ja aikaleiman transcript.jsonl-tiedostosta', () => {
