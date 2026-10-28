@@ -468,7 +468,8 @@ const keskenMacHaut = new Map();
 const MAC_AGY_TTL = 30_000;
 const MAC_AGY_MAKSIMI = 300_000;
 const MAC_AGY_AIKARAJA = 10_000;
-const MAC_AGY_MODUULI = '~/Documents/claude_project/scopes/palvelu/agy-istunto.mjs';
+// MAC_PROJ laajenee Macin kuoressa (PARAMETRISOINTI-3): yksöislainaus katkaistaan juuren kohdalla.
+const MAC_AGY_MODUULI = `'"\${MAC_PROJ:-$HOME/Projects}"'/claude/sessions-repo/scopes/palvelu/agy-istunto.mjs`;
 // Slug kulkee etäkuoren lainausmerkeissä, joten vain mallitonSlug-muoto kelpaa.
 const MAC_SLUG = /^[a-z0-9-]+$/;
 let macAgyEra = null;
