@@ -3,7 +3,9 @@
 // ECONOMY-CLAUDE-KULUTUS: kulutusanalyysi Claude Code -istunnoille (yläskoopin kuluttajat.mjs lukee vain AGY:n brain-lokeja).
 // Lähde: ~/.claude/projects/<projekti>/<sessio>.jsonl. Työkalunimet kartoitetaan yläskoopin luokkiin (luokitteleKulutusKutsu);
 // yksikkö on Clauden: API-pyynnöt ja tokenit (syöte, välimuistiin kirjoitus ja luku, ulostulo), ei AGY-kutsukiintiö.
-// Kytkentä palveluun (scopes/palvelu/economy.mjs) ja budjetin raja kuuluvat yläskoopille.
+// Skooppi tunnistetaan koko nimenä (yläskoopin tunnistaKulutusSkooppi niputtaa alaskoopit), ja hukka on Clauden
+// tehtäväodotussäännön rikkomukset (task-odotus.mjs), ei haku- ja git-kutsuja: Grep/Glob ja git-tarkistus ovat Claudella
+// tavallista työtä (TYOTAVAT 9). Kytkentä palveluun (scopes/palvelu/economy.mjs) ja budjetin raja kuuluvat yläskoopille.
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -41,6 +43,25 @@ export function luokitteleClaudeKutsu(kutsu) {
   return 'muu';
 }
 
+// Purkuraportin SKOOPPI-rivi: nimi on välilyönnein erotettuja sanoja (a-z, 0-9, &, _, -), joten selitys (` — annettu …`,
+// `(…`), JSON-rivinvaihto `\\n` ja ohjetekstin maininnat (SKOOPPI:`-rivi, ${skooppi}) jäävät pois. Toissijaisesti purkutiedoston nimi.
+const SKOOPPI_RIVI = /SKOOPPI:[ \t]*([a-z0-9&_-]+(?: [a-z0-9&_-]+)*)/g;
+const PURKUTIEDOSTO = /Malliton purku:\s*lue\s+\S*?([a-z0-9&_-]+)\.md/;
+
+/**
+ * Tunnistaa Claude-istunnon skoopin koko nimenä (esim. 'scopes siirto economy claude'); muuten yläskoopin tunnistus.
+ */
+export function tunnistaClaudeSkooppi(transcriptTeksti) {
+  if (!transcriptTeksti || typeof transcriptTeksti !== 'string') return 'tuntematon';
+  for (const m of transcriptTeksti.matchAll(SKOOPPI_RIVI)) {
+    const nimi = m[1].toLowerCase();
+    if (nimi !== 'tuntematon') return nimi;
+  }
+  const tiedosto = transcriptTeksti.match(PURKUTIEDOSTO);
+  if (tiedosto) return tiedosto[1].toLowerCase().replace(/-/g, ' ');
+  return tunnistaKulutusSkooppi(transcriptTeksti);
+}
+
 function onKayttajanSyote(rivi) {
   if (rivi?.type !== 'user' || rivi.isMeta || rivi.isSidechain) return false;
   const c = rivi.message?.content;
@@ -54,6 +75,7 @@ function onKayttajanSyote(rivi) {
  */
 export function analysoiClaudeIstunto(transcriptTeksti) {
   let userInputs = 0;
+  let hukkaKutsut = 0;
   const pyynnot = new Map();
   const mallit = {};
   const tyokalut = {
@@ -82,6 +104,7 @@ export function analysoiClaudeIstunto(transcriptTeksti) {
       if (o?.type !== 'tool_use') continue;
       const lk = luokitteleClaudeKutsu(o);
       tyokalut[lk in tyokalut ? lk : 'muu']++;
+      if (!luokitteleTaskToiminto(o, { moottori: 'claude' }).sallittu) hukkaKutsut++;
     }
   }
 
@@ -94,11 +117,10 @@ export function analysoiClaudeIstunto(transcriptTeksti) {
   }
 
   const tyokalujaYhteensa = Object.values(tyokalut).reduce((a, b) => a + b, 0);
-  const hukkaKutsut = tyokalut.tiedonhaku + tyokalut.git_local + tyokalut.odotus + tyokalut.odotus_status;
 
   return {
     moottori: 'claude',
-    skooppi: tunnistaKulutusSkooppi(transcriptTeksti),
+    skooppi: tunnistaClaudeSkooppi(transcriptTeksti),
     userInputs,
     apiPyynnot: pyynnot.size,
     mallit,

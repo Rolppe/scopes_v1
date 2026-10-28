@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { luokitteleClaudeKutsu, analysoiClaudeIstunto, kokoaClaudeKuluttajat } from './kulutus.mjs';
+import { luokitteleClaudeKutsu, analysoiClaudeIstunto, kokoaClaudeKuluttajat, tunnistaClaudeSkooppi } from './kulutus.mjs';
 
 const usage = (i, o) => ({ input_tokens: i, cache_creation_input_tokens: 100, cache_read_input_tokens: 1000, output_tokens: o });
 const tool = (name, input) => ({ type: 'tool_use', name, input });
@@ -62,8 +62,31 @@ test('analysoiClaudeIstunto: syötteet, pyynnöt, tokenit kerran per requestId j
   assert.equal(d.tyokalut.testit, 1);
   assert.equal(d.tyokalut.muu, 1);
   assert.equal(d.statusPollaus, 2);
-  assert.equal(d.hukkaKutsut, 5);
-  assert.equal(d.hukkaOsuus, 55.6);
+  // hukka = tehtäväodotussäännön rikkomukset (sleep, until-silmukka, TaskOutput); git status ja Grep eivät ole hukkaa
+  assert.equal(d.hukkaKutsut, 3);
+  assert.equal(d.hukkaOsuus, 33.3);
+});
+
+test('analysoiClaudeIstunto: Monitor ja taustakomento eivät ole hukkaa', () => {
+  const rivi = { type: 'assistant', requestId: 'r', message: { usage: usage(1, 1), content: [
+    tool('Monitor', { command: 'x' }),
+    tool('Bash', { command: 'npm test', run_in_background: true }),
+    tool('Glob', { pattern: '*' }),
+    tool('BashOutput', { bash_id: 'b' }),
+  ] } };
+  const d = analysoiClaudeIstunto(JSON.stringify(rivi));
+  assert.equal(d.tyokalujaYhteensa, 4);
+  assert.equal(d.hukkaKutsut, 1);
+});
+
+test('tunnistaClaudeSkooppi: koko nimi SKOOPPI-riviltä tai purkutiedostosta, ei niputusta yläskooppiin', () => {
+  const raportti = JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: '```\nSKOOPPI: scopes siirto economy claude (annettu argumentissa)\nLÄHDE: x' }] } });
+  assert.equal(tunnistaClaudeSkooppi(raportti), 'scopes siirto economy claude');
+  assert.equal(tunnistaClaudeSkooppi(JSON.stringify({ text: 'SKOOPPI: claude r&d2\nLÄHDE' })), 'claude r&d2');
+  assert.equal(tunnistaClaudeSkooppi('SKOOPPI:`-rivi sanoo x; SKOOPPI: ${skooppi}; SKOOPPI: tuntematon` — ei; SKOOPPI: claude siirto — annettu argumentti'), 'claude siirto');
+  assert.equal(tunnistaClaudeSkooppi('Malliton purku: lue /home/m/.local/state/pura/scopes-siirto-economy-claude.md ja noudata sitä.'), 'scopes siirto economy claude');
+  assert.equal(tunnistaClaudeSkooppi('polku scopes/siirto/economy/x.mjs'), 'scopes siirto economy');
+  assert.equal(tunnistaClaudeSkooppi(''), 'tuntematon');
 });
 
 test('analysoiClaudeIstunto: tyhjä transkripti', () => {
