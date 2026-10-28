@@ -1,6 +1,6 @@
 #!/bin/bash
 # Kääntää Tunneli.xcframeworkin Macissa (SCOPES-ETAYHTEYS 14.10.2026), vain kun Go-lähde on muuttunut:
-# tunneli/.lahde tallentaa edellisen käännöksen lähteiden tiivisteen. Ajetaan ~/Projects/scopes/scopes-ios/tunneli-hakemistossa.
+# tunneli/.lahde tallentaa edellisen käännöksen lähteiden tiivisteen. Ajetaan $MAC_PROJ/scopes/scopes-ios/tunneli-hakemistossa.
 set -euo pipefail
 export PATH=/opt/homebrew/bin:$HOME/go/bin:/usr/bin:/bin:/usr/sbin:/sbin
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
