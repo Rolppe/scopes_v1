@@ -1,6 +1,6 @@
 // Liquid Glass -pinnat kuvina lasin kanssa ja ilman (DESIGN-LASIPINNAT-LAITE 14.10.2026): lista suodatinnappeineen,
 // chat yläpalkkeineen ja infrapuu laajennusnappeineen. Ei lähetä viestejä. Kuvat:
-// `xcrun xcresulttool export attachments --path ~/scopes-ios/<SCOPES_TULOS>.xcresult --output-path <kansio>`.
+// `xcrun xcresulttool export attachments --path ~/Projects/scopes-ios/<SCOPES_TULOS>.xcresult --output-path <kansio>`.
 import XCTest
 
 final class LasiKuvatUITests: XCTestCase {

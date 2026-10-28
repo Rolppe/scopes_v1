@@ -1,5 +1,5 @@
 // Vaakanäkymä (DESIGN-VAAKATUKI 14.10.2026): lista, chat näppäimistöineen ja skoopin viestit vaakaan käännettynä.
-// Ei lähetä viestejä. Kuvat: `xcrun xcresulttool export attachments --path ~/scopes-ios/<SCOPES_TULOS>.xcresult …`.
+// Ei lähetä viestejä. Kuvat: `xcrun xcresulttool export attachments --path ~/Projects/scopes-ios/<SCOPES_TULOS>.xcresult …`.
 import XCTest
 
 final class VaakaUITests: XCTestCase {

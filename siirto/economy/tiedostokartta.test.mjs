@@ -132,12 +132,12 @@ test('muotoileTiedostokartta: tuottaa selkeän markdownin file://-linkkeineen', 
       {
         polku: 'scopes/siirto/economy/REKISTERI.md',
         koko: 2048,
-        fileUri: 'file://~/sessions-repo/scopes/siirto/economy/REKISTERI.md',
+        fileUri: 'file://~/Projects/sessions-repo/scopes/siirto/economy/REKISTERI.md',
       },
       {
         polku: 'scopes/siirto/economy/tiedostokartta.mjs',
         koko: 2048,
-        fileUri: 'file://~/sessions-repo/scopes/siirto/economy/tiedostokartta.mjs',
+        fileUri: 'file://~/Projects/sessions-repo/scopes/siirto/economy/tiedostokartta.mjs',
         symbolit: [{ nimi: 'haeTiedostokartta' }, { nimi: 'muotoileTiedostokartta' }],
       },
     ],
@@ -145,7 +145,7 @@ test('muotoileTiedostokartta: tuottaa selkeän markdownin file://-linkkeineen', 
 
   const md = muotoileTiedostokartta(kartta, { naytaSymbolit: true });
   assert.ok(md.includes('## Skoopin tiedostokartta (ECONOMY-TIEDOSTOKARTTA)'));
-  assert.ok(md.includes('- [scopes/siirto/economy/REKISTERI.md](file://~/sessions-repo/scopes/siirto/economy/REKISTERI.md) (2.0 KB)'));
+  assert.ok(md.includes('- [scopes/siirto/economy/REKISTERI.md](file://~/Projects/sessions-repo/scopes/siirto/economy/REKISTERI.md) (2.0 KB)'));
   assert.ok(md.includes('— symbolit: haeTiedostokartta, muotoileTiedostokartta'));
   assert.ok(md.includes('Älä käytä find-, grep- tai ls-komentoja tiedostojen etsimiseen'));
 

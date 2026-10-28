@@ -1,7 +1,7 @@
 // Tekstikoko ja viestien kirjasin (DESIGN-FONTTI 14.10.2026): Ulkoasu-valinta ja Peru, sekä kuvat listasta, chatista,
 // skoopin viesteistä ja kysymyskortista Pieni- ja Suuri-koossa. Ei lähetä viestejä eikä tallenna asetusta: kuvien koko ja
 // kirjasin tulevat käynnistysargumenteista (UserDefaultsin argumenttialue), joten simulaattorin asetus ei muutu.
-// Kuvat: `xcrun xcresulttool export attachments --path ~/scopes-ios/<SCOPES_TULOS>.xcresult …`.
+// Kuvat: `xcrun xcresulttool export attachments --path ~/Projects/scopes-ios/<SCOPES_TULOS>.xcresult …`.
 import XCTest
 
 final class FonttiUITests: XCTestCase {
