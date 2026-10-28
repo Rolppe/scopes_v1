@@ -85,6 +85,9 @@ test('istunnon skooppi: nimestä tai käyttäjän viimeisimmästä purusta', () 
   const sivu = kayttaja('Malliton purku: lue /h/b-c.md ja noudata sitä.', { isSidechain: true });
   assert.equal(istunnonSkooppi('kone-1', pura('a') + tulos + agentti + sivu, nimet), 'a');
   assert.equal(projektiNimi('/h/m_x/a.b'), '-h-m-x-a-b');
+  // Claude-äpin istunnot: välilyönti ja muut erikoismerkit ovat myös - (28.10.2026).
+  assert.equal(projektiNimi('/Users/m/Library/Application Support/Claude/scratch-workspaces/0c3b-a58b/scratch-2026-10-28-63ebe0'),
+    '-Users-m-Library-Application-Support-Claude-scratch-workspaces-0c3b-a58b-scratch-2026-10-28-63ebe0');
 });
 
 function ymparisto() {

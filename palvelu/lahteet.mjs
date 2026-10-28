@@ -65,8 +65,9 @@ export function taulukko(rekisteri, otsikko) {
 export const lueSkoopit = (juuri) =>
   JSON.parse(readFileSync(join(juuri, 'claude/siirto/state/skoopit.json'), 'utf8'));
 
-// Claude Coden projektihakemiston nimi: cwd, jossa / _ . ovat -.
-export const projektiNimi = (cwd) => cwd.replace(/[/_.]/g, '-');
+// Claude Coden projektihakemiston nimi: cwd, jossa kaikki muut kuin kirjaimet ja numerot ovat - (myös välilyönti:
+// Claude-äpin istunnot ajavat ~/Library/Application Support/Claude/scratch-workspaces/… -poluissa, V-ISTUNNOT 28.10.2026).
+export const projektiNimi = (cwd) => cwd.replace(/[^A-Za-z0-9]/g, '-');
 
 // Transkriptin viimeinen pääketjun usage-rivi → { tokenit, aika } tai null (ali-agenttien sidechain-rivit ohitetaan).
 export function konteksti(transkripti) {
