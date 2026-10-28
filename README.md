@@ -16,7 +16,7 @@ SwiftUI:lla ja testataan iOS-simulaattorissa.
 2. `cd ios && xcodegen` – generoi `Skoopit.xcodeproj`:n, Info.plistit ja entitlementit `project.yml`:stä.
    Vaihda `project.yml`:n `DEVELOPMENT_TEAM: YOUR_TEAM_ID` omaan Apple-tiimiisi (bundle-etuliite `com.example`).
 3. Avaa `Skoopit.xcodeproj` Xcodessa tai aja
-   `xcodebuild -project Skoopit.xcodeproj -scheme Skoopit -destination "platform=iOS Simulator,name=iPhone 17 Pro" build-for-testing`.
+   `xcodebuild -project Skoopit.xcodeproj -scheme Skoopit -destination "platform=iOS Simulator,id=<simctl list devices -tulosteen UDID>" CODE_SIGNING_ALLOWED=NO build-for-testing`.
 
 Palvelimen osoite ja Bearer-avain annetaan äpin asetuksissa; UI-testit lukevat ne ympäristömuuttujista
 `SCOPES_OSOITE` ja `SCOPES_AVAIN` (`ios/Sources/Asetukset.swift`).
