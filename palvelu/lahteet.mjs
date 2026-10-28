@@ -283,6 +283,29 @@ export async function istunnotAsync({ aja, ...asetukset }) {
   return [...istunnot({ ...asetukset, ohitaAgy: true }), ...agy];
 }
 
+// Listan vakautus (VI-2, VI-3, VI-5, käyttäjä 28.10.2026): istunnon tila välkkyy käsittelyn ja odotuksen välillä
+// (agy-ruudun työkalukutsujen väli, Clauden vuoron välit), ja äppi hakee listan 5 s välein: välähdys siirsi skoopin
+// tasolta toiselle, vaihtoi kansion värin ja lähetti puhelimeen "Istunto odottaa sinua". Siksi käsittelystä
+// odotukseen siirrytään vasta, kun käsittelyä ei ole nähty TILA_VAKAUS_MS:iin; kysely ja käsittely näkyvät heti.
+// Aktiivisen skoopin (käsittely tai kysely) aika pysyy siinä, mihin se jäi aktiiviseksi tullessa, jotta rekisterin
+// kirjoitukset työn aikana eivät nosta sitä tasonsa kärkeen ja vaihda paikkoja.
+export const TILA_VAKAUS_MS = 20_000;
+const AKTIIVINEN = new Set(['kasittely', 'kysely']);
+const tilaMuisti = new Map();
+export function vakautaTila(nimi, raaka, aika, nyt = Date.now(), muisti = tilaMuisti) {
+  const e = muisti.get(nimi);
+  let tila = raaka;
+  if (raaka === 'kasittely' || raaka === 'kysely') {
+    if (raaka === 'kasittely') muisti.set(nimi, { ...e, kasittelyNahty: nyt });
+  } else if (raaka === 'odottaa' && e?.kasittelyNahty != null && nyt - e.kasittelyNahty < TILA_VAKAUS_MS && AKTIIVINEN.has(e.tila)) {
+    tila = 'kasittely';
+  }
+  const pidaAika = AKTIIVINEN.has(tila) && e && AKTIIVINEN.has(e.tila) && e.aika !== undefined;
+  const tulosAika = pidaAika ? e.aika : aika;
+  muisti.set(nimi, { ...muisti.get(nimi), tila, aika: tulosAika });
+  return { tila, aika: tulosAika };
+}
+
 // Skooppilista tiivistettynä: nimi, seuraava paketti, avoimien ja vikojen määrä, istuntojen suurin konteksti, aika, tila.
 export function lista(asetukset, lisaIstunnot = []) {
   const skoopit = lueSkoopit(asetukset.juuri);
@@ -293,6 +316,7 @@ export function lista(asetukset, lisaIstunnot = []) {
   return Object.keys(skoopit).map((nimi) => {
     const s = skooppi(nimi, { juuri: asetukset.juuri, skoopit, kaikkiIstunnot });
     const tokenit = s.istunnot.map((i) => i.konteksti?.tokenit ?? 0);
+    const v = (asetukset.vakauta ?? vakautaTila)(nimi, skooppiTila(s.istunnot), viimeisinMuutos(asetukset.juuri, skoopit[nimi][0], s.istunnot));
     return {
       nimi,
       seuraava: s.seuraava?.id ?? null,
@@ -300,8 +324,8 @@ export function lista(asetukset, lisaIstunnot = []) {
       vikoja: s.viat.filter((r) => !/^(valmis|todennettu|korjattu)$/i.test(r.Tila ?? '')).length,
       istuntoja: s.istunnot.length,
       suurinKonteksti: tokenit.length ? Math.max(...tokenit) : null,
-      aika: viimeisinMuutos(asetukset.juuri, skoopit[nimi][0], s.istunnot),
-      tila: skooppiTila(s.istunnot),
+      aika: v.aika,
+      tila: v.tila,
     };
   });
 }

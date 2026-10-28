@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request } from 'node:http';
 import { createServer } from 'node:http';
-import { istunnonSkooppi, istunnot, jasennaSeuraava, katonTavut, konteksti, kontekstinOsat, kontekstiTiedostot, hereilla, istunnonLadatut, lista, osiin, pakattu, projektiNimi, pysahdys, rekisterinOsat, rekisterit, seuraavaRivi, skooppiTila, taulukko, tokeneiksi, yksi } from './lahteet.mjs';
+import { istunnonSkooppi, istunnot, jasennaSeuraava, katonTavut, konteksti, kontekstinOsat, kontekstiTiedostot, hereilla, istunnonLadatut, lista, osiin, pakattu, projektiNimi, pysahdys, rekisterinOsat, rekisterit, seuraavaRivi, skooppiTila, TILA_VAKAUS_MS, taulukko, vakautaTila, tokeneiksi, yksi } from './lahteet.mjs';
 import { avainKelpaa, kasittelija } from './palvelin.mjs';
 
 const REK = `# R
@@ -414,4 +414,27 @@ test('rekisterit: tiedosto kerran skooppeineen, raja 40 000 tai lähtötaso; osa
   assert.deepEqual(yksi('a', a).konteksti.ryhmat.map((x) => [x.laji, x.raja]), [['rekisteri', 50000]]);
   assert.deepEqual(rekisterinOsat('a/HISTORIA.md', a).osat.map((o) => o.otsikko), ['Alku', 'Luku']);
   assert.equal(rekisterinOsat('../etc/passwd', a), null);
+});
+
+test('vakautaTila: käsittelyn välähdys ei tee odottaa-tilaa ennen vakausaikaa; kysely ja pakattu heti (VI-2, VI-3)', () => {
+  const m = new Map();
+  assert.equal(vakautaTila('a', 'kasittely', 'A1', 0, m).tila, 'kasittely');
+  assert.equal(vakautaTila('a', 'odottaa', 'A2', 5_000, m).tila, 'kasittely');
+  assert.equal(vakautaTila('a', 'kasittely', 'A3', 10_000, m).tila, 'kasittely');
+  assert.equal(vakautaTila('a', 'odottaa', 'A4', 10_000 + TILA_VAKAUS_MS - 1, m).tila, 'kasittely');
+  assert.deepEqual(vakautaTila('a', 'odottaa', 'A5', 10_000 + TILA_VAKAUS_MS, m), { tila: 'odottaa', aika: 'A5' });
+  assert.equal(vakautaTila('b', 'odottaa', 'B1', 0, m).tila, 'odottaa', 'ilman käsittelyä odotus näkyy heti');
+  vakautaTila('c', 'kasittely', 'C1', 0, m);
+  assert.equal(vakautaTila('c', 'kysely', 'C2', 1_000, m).tila, 'kysely');
+  vakautaTila('d', 'kasittely', 'D1', 0, m);
+  assert.equal(vakautaTila('d', 'pakattu', 'D2', 1_000, m).tila, 'pakattu');
+});
+
+test('vakautaTila: aktiivisen skoopin aika pysyy aktivoitumisen hetkessä (VI-5)', () => {
+  const m = new Map();
+  assert.equal(vakautaTila('a', 'odottaa', 'T0', 0, m).aika, 'T0');
+  assert.equal(vakautaTila('a', 'kasittely', 'T1', 1_000, m).aika, 'T1');
+  assert.equal(vakautaTila('a', 'kasittely', 'T2', 2_000, m).aika, 'T1', 'rekisterin kirjoitus työn aikana ei nosta');
+  assert.equal(vakautaTila('a', 'kysely', 'T3', 3_000, m).aika, 'T1');
+  assert.equal(vakautaTila('a', 'odottaa', 'T4', 3_000 + TILA_VAKAUS_MS, m).aika, 'T4');
 });

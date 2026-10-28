@@ -247,7 +247,9 @@ export function jasennaAgyRuutu(stdout) {
   if (/Navigate\s*·\s*enter\s*Select|enter\s+Select|Question\s+\d+\/\d+|\bWrite-in\.\.\./.test(teksti)) {
     return { tila: 'waiting', kysely: true };
   }
-  if (/Run this command\?|Allow access to this file\?|Allow\s+.*?to\s+execute|Do you want to run\?|^\s*(?:>\s*)?1\.\s+(?:Yes|Kyllä|Always allow)\b/m.test(teksti)) {
+  // Numeroitu "1. Yes" on lupakysely vain ruudun alaosassa: ylempänä se on agentin omaa tulostetta (VI-3).
+  if (/Run this command\?|Allow access to this file\?|Allow\s+.*?to\s+execute|Do you want to run\?/.test(teksti)
+    || rivit.slice(-12).some((r) => /^(?:>\s*)?1\.\s+(?:Yes|Kyllä|Always allow)\b/.test(r))) {
     return { tila: 'waiting', kysely: false };
   }
   if (/Thinking|esc to cancel|Esc to cancel|Cancel\s*\(esc\)|[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/.test(teksti)) {
