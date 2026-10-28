@@ -76,6 +76,14 @@ export const AGY_MALLI = 'agy/';
 // ennen siirtoa, koska /automaattisiirto päättää istunnon.
 const JONO_RYHMA = { '/sa': 'herätys', '/sa pois': 'herätys', '/automaattisiirto': 'siirto' };
 
+// Claude Coden omat dialogit (AUTOMAATTISIIRTO-JONO-KYSELY 28.10.2026): istunto on `waiting`, mutta ei kyselykortti,
+// joten komento ei mene perille ennen kuin käyttäjä vastaa dialogiin tmux-ruudussa (22.10. auto mode -dialogi piti
+// istuntoa 5 päivää). Tunnistetaan ruudun tekstistä ja kerrotaan; dialogiin ei näppäillä mitään.
+const CLI_DIALOGIT = [
+  { nimi: 'auto mode -asetus', tunniste: /Claude Code reads this project/ },
+];
+const dialogiSyy = (dialogi) => `istunto odottaa Claude Coden dialogia (${dialogi}); vastaa siihen istunnon tmux-ruudussa`;
+
 // Jonotiedosto: oletuksena toimintolokin vieressä (palvelin.mjs: ~/.local/state/scopes-toiminnot-jono.json).
 export const oletusJonotiedosto = (asetukset) =>
   asetukset.toimintojono ?? (asetukset.toimintoloki ? join(dirname(asetukset.toimintoloki), 'scopes-toiminnot-jono.json') : null);
@@ -95,6 +103,7 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
   let kytkimetAsetus = kytkimet ?? null;
   const laukaistutAutomaattisiirrot = new Set();
   let vahdinSiirto = null; // { id, skooppi, aika }: vahdin viimeksi laukaisema siirto, kunnes istunto on pakattu tai päättyi
+  const vahdinOdotukset = new Set(); // istunnot, joiden waiting-ruutu on jo katsottu tällä odotusjaksolla
 
   // Tallennus kirjoittaa väliaikaiseen ja nimeää sen, ettei kesken katkennut kirjoitus jätä rikkinäistä tiedostoa.
   const tallennaJono = () => {
@@ -155,6 +164,12 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
     const viimeinen = keskustelu(transkripti, 1)[0];
     return viimeinen?.rooli === 'kysymys' && !viimeinen.vastattu;
   }
+  async function cliDialogi(i) {
+    if (i.tila !== 'waiting' || !i.ruutu) return null;
+    const r = await aja('tmux', ['capture-pane', '-p', '-t', i.ruutu]);
+    if (r.koodi !== 0) return null;
+    return CLI_DIALOGIT.find((d) => d.tunniste.test(r.stdout ?? ''))?.nimi ?? null;
+  }
 
   // Valmis komento skoopin ainoaan vapaaseen tmux-istuntoon, kun sen vuoro on valmis; jonotettava komento odottaa
   // varatun istunnon vapautumista.
@@ -189,6 +204,8 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
       await kirjoita(i, komento);
       return { istunto: i.id, komento, kysymysSuljettiin: true };
     }
+    const dialogi = await cliDialogi(i);
+    if (dialogi) throw new Hylatty(409, dialogiSyy(dialogi));
     if (i.tila !== 'idle') {
       if (!ryhma) throw new Hylatty(409, `istunto on varattu (${i.tila ?? 'tila tuntematon'}); yritä vuoron jälkeen`);
       jono.set(`${nimi}\n${ryhma}`, { nimi, istunto: i.id, komento, toiminto, aika: Date.now() });
@@ -215,7 +232,16 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
         continue;
       }
       const kysymys = (j.komento === '/pakkaa' || j.komento === '/automaattisiirto') && i.tila === 'waiting' && (i.kysely || kysymysAuki(i));
-      if (i.tila !== 'idle' && !kysymys) continue;
+      if (i.tila !== 'idle' && !kysymys) {
+        // Dialogi kirjataan kerran jonoriviä kohden; komento jää jonoon ja lähtee, kun käyttäjä on vastannut.
+        const dialogi = !j.dialogi && await cliDialogi(i);
+        if (dialogi) {
+          j.dialogi = dialogi;
+          tallennaJono();
+          kirjaa({ toiminto: j.toiminto, nimi: j.nimi, tulos: 'odottaa', syy: dialogiSyy(dialogi), istunto: j.istunto, jonossa: true });
+        }
+        continue;
+      }
       jono.delete(avain);
       tallennaJono();
       kaynnissa = j.toiminto;
@@ -278,7 +304,17 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
       const tokenit = i.konteksti?.tokenit ?? 0;
       if (tokenit < lim) continue;
       const kysymys = i.tila === 'waiting' && (i.kysely || kysymysAuki(i));
-      if (i.tila !== 'idle' && !kysymys) continue;
+      if (i.tila !== 'idle' && !kysymys) {
+        // Ruutu katsotaan kerran odotusjaksoa kohden, ja dialogi kirjataan lokiin.
+        if (i.tila !== 'waiting') vahdinOdotukset.delete(i.id);
+        else if (!vahdinOdotukset.has(i.id)) {
+          vahdinOdotukset.add(i.id);
+          const dialogi = await cliDialogi(i);
+          if (dialogi) kirjaa({ toiminto: 'automaattisiirto-vahti', nimi: i.skooppi, istunto: i.id, tokenit, tulos: 'odottaa', syy: dialogiSyy(dialogi) });
+        }
+        continue;
+      }
+      vahdinOdotukset.delete(i.id);
 
       laukaistutAutomaattisiirrot.add(i.id);
       // Varaus ennen awaitia, ettei päällekkäinen kierros (ajastin ja puraJono) laukaise toista istuntoa samaan aikaan.
@@ -495,7 +531,7 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
     }
   }
   // Skoopin jonossa odottavat komennot näkymää varten (palvelin.mjs: GET /api/skoopit/<nimi> → jonossa).
-  suorita.jono = (nimi) => [...jono.values()].filter((j) => j.nimi === nimi).map(({ komento, aika }) => ({ komento, aika }));
+  suorita.jono = (nimi) => [...jono.values()].filter((j) => j.nimi === nimi).map(({ komento, aika, dialogi }) => ({ komento, aika, ...(dialogi && { dialogi }) }));
   suorita.puraJono = puraJono;
   suorita.tarkistaAutomaattisiirto = tarkistaAutomaattisiirto;
   suorita.asetaKytkimet = (k) => { kytkimetAsetus = k; };

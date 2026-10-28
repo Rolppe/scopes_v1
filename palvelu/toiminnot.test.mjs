@@ -33,7 +33,8 @@ function vaarennos({ autovaihto = { koodi: 0, stdout: `UUSI: …\n${URL_OK}\n`, 
   const kutsut = [];
   const tapetut = new Set();
   const aja = async (komento, argumentit) => {
-    if (komento !== 'tmux' || argumentit[0] !== 'list-panes') kutsut.push([komento, ...argumentit]);
+    // Lukevat tmux-kutsut (ruutulista, dialogin tunnistuksen capture-pane) eivät ole toimintoja, joten niitä ei kirjata.
+    if (komento !== 'tmux' || !['list-panes', 'capture-pane'].includes(argumentit[0])) kutsut.push([komento, ...argumentit]);
     if (komento === 'tmux' && argumentit[0] === 'kill-pane' && tapa) tapetut.add(argumentit[2]);
     if (komento === 'tmux' && argumentit[0] === 'list-panes' && argumentit[3] === '#{session_name} #{pane_id}') return { koodi: 0, stdout: tapetut.has('%5') ? '' : 'siirto-a-1 %5\n', stderr: '' };
     if (komento === 'tmux' && argumentit[0] === 'display-message') return { koodi: 0, stdout: `${ruudunPid}\n`, stderr: '' };
@@ -580,6 +581,51 @@ test('automaattisiirto-vahti: odotusajan ylitys kirjataan aikakatkaisuna ja seur
   assert.equal(new Set(lahetetyt()).size, 2);
   const rivit = readFileSync(a.toimintoloki, 'utf8').trim().split('\n').map((r) => JSON.parse(r));
   assert.equal(rivit.filter((r) => r.tulos === 'aikakatkaisu').length, 1);
+});
+
+// AUTOMAATTISIIRTO-JONO-KYSELY: Claude Coden oma dialogi (22.10. auto mode) piti istuntoa waiting-tilassa ilman kyselykorttia.
+const AUTO_MODE_RUUTU = '   Claude Code reads this project, your recent Claude sessions, and\n   ❯ Also scan shell history     true\n     Continue\n   ←/→ to change · Enter to continue · Esc to cancel\n';
+function dialogiYmparisto() {
+  const a = ymparisto({ tila: 'waiting' });
+  const v = vaarennos();
+  const aja = async (k, arg) => (k === 'tmux' && arg[0] === 'capture-pane' ? { koodi: 0, stdout: AUTO_MODE_RUUTU, stderr: '' } : v.aja(k, arg));
+  const rivit = () => (() => { try { return readFileSync(a.toimintoloki, 'utf8').trim().split('\n').map((r) => JSON.parse(r)); } catch { return []; } })();
+  const lahetykset = () => v.kutsut.filter((k) => k[1] === 'send-keys');
+  return { a, v, aja, rivit, lahetykset };
+}
+
+test('dialogi: komento hylätään syyllä eikä dialogiin näppäillä mitään', async () => {
+  const { a, aja, lahetykset } = dialogiYmparisto();
+  const suorita = luoToiminnot(a, { aja, jonoVali: 0 });
+  await assert.rejects(suorita('automaattisiirto', 'a'), (e) => e instanceof Hylatty && e.koodi === 409 && /Claude Coden dialogia \(auto mode -asetus\)/.test(e.message));
+  assert.deepEqual(lahetykset(), []);
+  assert.deepEqual(suorita.jono('a'), []);
+});
+
+test('dialogi: jonossa oleva komento kirjaa dialogin kerran ja näyttää sen jonorivillä', async () => {
+  const a = ymparisto({ tila: 'busy' });
+  const { aja, lahetykset } = dialogiYmparisto();
+  const suorita = luoToiminnot(a, { aja, jonoVali: 0 });
+  assert.equal((await suorita('automaattisiirto', 'a')).jonossa, true);
+  writeFileSync(join(a.istunnotDir, `${process.pid}.json`),
+    JSON.stringify({ pid: process.pid, sessionId: 's1', cwd: '/x', name: 'a', status: 'waiting', tmux: 'siirto-a-1:@1.%5' }));
+  await suorita.puraJono();
+  await suorita.puraJono();
+  const loki = readFileSync(a.toimintoloki, 'utf8').trim().split('\n').map((r) => JSON.parse(r));
+  assert.equal(loki.filter((r) => r.tulos === 'odottaa').length, 1);
+  assert.deepEqual(suorita.jono('a').map((j) => j.dialogi), ['auto mode -asetus']);
+  assert.deepEqual(lahetykset(), []);
+});
+
+test('dialogi: vahti kirjaa rajan ylittäneen istunnon dialogin kerran odotusjaksoa kohden', async () => {
+  const { a, aja, rivit, lahetykset } = dialogiYmparisto();
+  writeFileSync(join(a.projektitDir, projektiNimi('/x'), 's1.jsonl'), JSON.stringify({ type: 'assistant', message: { usage: { input_tokens: 125_000 } } }) + '\n');
+  const paalla = { lue: () => ({ automaattisiirto: true }), lueIstunto: () => ({ automaattisiirto: true }) };
+  const suorita = luoToiminnot(a, { aja, jonoVali: 0, kytkimet: paalla });
+  assert.deepEqual(await suorita.tarkistaAutomaattisiirto(), []);
+  assert.deepEqual(await suorita.tarkistaAutomaattisiirto(), []);
+  assert.deepEqual(rivit().filter((r) => r.tulos === 'odottaa').map((r) => r.toiminto), ['automaattisiirto-vahti']);
+  assert.deepEqual(lahetykset(), []);
 });
 
 // AUTOMAATTISIIRTO-TOIMITUS-OK: lähetys ei ole onnistuminen; lopputulos kirjataan omana rivinään.

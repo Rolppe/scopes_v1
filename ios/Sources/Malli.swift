@@ -71,6 +71,8 @@ struct SkooppiNakyma: Decodable, Hashable {
 struct Jonorivi: Decodable, Hashable {
     let komento: String
     let aika: Double
+    // Claude Coden oma dialogi, joka pitää istuntoa (AUTOMAATTISIIRTO-JONO-KYSELY 28.10.2026, toiminnot.mjs CLI_DIALOGIT).
+    let dialogi: String?
 }
 
 // Skoopin konteksti (SCOPES-INFRA-KONTEKSTI 13.10.2026, lahteet.mjs skoopinKonteksti): tiedostot otsikoittain
