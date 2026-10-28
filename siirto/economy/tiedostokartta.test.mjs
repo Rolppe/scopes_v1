@@ -14,6 +14,9 @@ import {
   haeJaMuotoileTiedostokartta,
 } from './tiedostokartta.mjs';
 
+// Repon juuri tämän tiedoston sijainnista (scopes/siirto/economy/ -> ../../../), ei kovakoodattua ~/Projects-polkua.
+const REPO_JUURI = fileURLToPath(new URL('../../../', import.meta.url)).replace(/\/$/, '');
+
 test('luokitteleTiedostotyyppi: tunnistaa koodit, dokumentit ja konfiguraatiot', () => {
   assert.equal(luokitteleTiedostotyyppi('src/index.mjs'), 'koodi');
   assert.equal(luokitteleTiedostotyyppi('Sources/App.swift'), 'koodi');
@@ -132,12 +135,12 @@ test('muotoileTiedostokartta: tuottaa selkeän markdownin file://-linkkeineen', 
       {
         polku: 'scopes/siirto/economy/REKISTERI.md',
         koko: 2048,
-        fileUri: 'file://~/Projects/claude/sessions-repo/scopes/siirto/economy/REKISTERI.md',
+        fileUri: `file://${REPO_JUURI}/scopes/siirto/economy/REKISTERI.md`,
       },
       {
         polku: 'scopes/siirto/economy/tiedostokartta.mjs',
         koko: 2048,
-        fileUri: 'file://~/Projects/claude/sessions-repo/scopes/siirto/economy/tiedostokartta.mjs',
+        fileUri: `file://${REPO_JUURI}/scopes/siirto/economy/tiedostokartta.mjs`,
         symbolit: [{ nimi: 'haeTiedostokartta' }, { nimi: 'muotoileTiedostokartta' }],
       },
     ],
@@ -145,7 +148,7 @@ test('muotoileTiedostokartta: tuottaa selkeän markdownin file://-linkkeineen', 
 
   const md = muotoileTiedostokartta(kartta, { naytaSymbolit: true });
   assert.ok(md.includes('## Skoopin tiedostokartta (ECONOMY-TIEDOSTOKARTTA)'));
-  assert.ok(md.includes('- [scopes/siirto/economy/REKISTERI.md](file://~/Projects/claude/sessions-repo/scopes/siirto/economy/REKISTERI.md) (2.0 KB)'));
+  assert.ok(md.includes(`- [scopes/siirto/economy/REKISTERI.md](file://${REPO_JUURI}/scopes/siirto/economy/REKISTERI.md) (2.0 KB)`));
   assert.ok(md.includes('— symbolit: haeTiedostokartta, muotoileTiedostokartta'));
   assert.ok(md.includes('Älä käytä find-, grep- tai ls-komentoja tiedostojen etsimiseen'));
 
