@@ -121,7 +121,8 @@ struct SkooppiNakymaView: View {
                         .accessibilityIdentifier("toiminto-kytkimet-selite")
                 }
                 ForEach(nakyma?.jonossa ?? [], id: \.self) { j in
-                    Text("\(j.komento) odottaa vuoroa: lähtee, kun istunto vapautuu.")
+                    Text(j.dialogi.map { "\(j.komento) odottaa: istunto on Claude Coden dialogissa (\($0)); vastaa siihen istunnon tmux-ruudussa." }
+                         ?? "\(j.komento) odottaa vuoroa: lähtee, kun istunto vapautuu.")
                         .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("toiminto-jonossa")
                 }
                 if let k = kaynnissa { ProgressView(k == .pura ? "Avataan istuntoa…" : (k == .sulje ? "Suljetaan istuntoa…" : "Lähetetään \(komento(k))…")) }
