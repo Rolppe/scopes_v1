@@ -1,7 +1,7 @@
 // node --test scopes/palvelu/toiminnot.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, request } from 'node:http';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -533,4 +533,51 @@ test('automaattisiirto-vahti: laukeaa kun kytkin on päällä, kontekstiraja tä
   v.kutsut.length = 0;
   assert.deepEqual(await suorita.tarkistaAutomaattisiirto(), []);
   assert.equal(v.kutsut.length, 0);
+});
+
+// AUTOMAATTISIIRTO-RINNAKKAIN: kaksi rajan ylittänyttä istuntoa (a: s1 ruudussa %5, b: s2 ruudussa %6).
+function kaksiIsoaIstuntoa(asetukset = {}) {
+  const a = { ...ymparisto({ tila: 'idle' }), ...asetukset };
+  const projekti = join(a.projektitDir, projektiNimi('/x'));
+  const iso = JSON.stringify({ type: 'assistant', message: { usage: { input_tokens: 125_000 } } }) + '\n';
+  writeFileSync(join(projekti, 's1.jsonl'), iso);
+  writeFileSync(join(projekti, 's2.jsonl'), iso);
+  writeFileSync(join(a.istunnotDir, `${process.ppid}.json`),
+    JSON.stringify({ pid: process.ppid, sessionId: 's2', cwd: '/x', name: 'b', status: 'idle', tmux: 'siirto-b-1:@2.%6' }));
+  const v = vaarennos();
+  const aja = async (k, arg) => (k === 'tmux' && arg[0] === 'display-message' && arg[3].endsWith('%6')
+    ? { koodi: 0, stdout: `${process.ppid}\n`, stderr: '' } : v.aja(k, arg));
+  const paalla = { lue: () => ({ automaattisiirto: true }), lueIstunto: () => ({ automaattisiirto: true }) };
+  const suorita = luoToiminnot(a, { aja, jonoVali: 0, kytkimet: paalla });
+  const lahetetyt = () => v.kutsut.filter((k) => k[1] === 'send-keys' && k.at(-1) === '/automaattisiirto').map((k) => k[3]);
+  const pidTiedosto = (ruutu) => join(a.istunnotDir, `${ruutu.endsWith('%6') ? process.ppid : process.pid}.json`);
+  return { a, suorita, lahetetyt, pidTiedosto };
+}
+
+test('automaattisiirto-vahti: yksi siirto kerrallaan, seuraava vasta kun edellinen istunto päättyi', async () => {
+  const { suorita, lahetetyt, pidTiedosto } = kaksiIsoaIstuntoa();
+
+  // Päällekkäiset kierrokset (ajastin ja puraJono): vain yksi istunto saa komennon.
+  await Promise.all([suorita.tarkistaAutomaattisiirto(), suorita.tarkistaAutomaattisiirto()]);
+  assert.equal(lahetetyt().length, 1);
+  const [eka] = lahetetyt();
+
+  // Edellinen istunto yhä auki: toinen ei laukea.
+  assert.deepEqual(await suorita.tarkistaAutomaattisiirto(), []);
+  assert.equal(lahetetyt().length, 1);
+
+  // Edellinen istunto päättyi (autovaihto sulki sen): seuraava laukeaa.
+  rmSync(pidTiedosto(eka));
+  assert.equal((await suorita.tarkistaAutomaattisiirto()).length, 1);
+  assert.equal(lahetetyt().length, 2);
+  assert.notEqual(lahetetyt()[1], eka);
+});
+
+test('automaattisiirto-vahti: odotusajan ylitys kirjataan aikakatkaisuna ja seuraava laukeaa', async () => {
+  const { a, suorita, lahetetyt } = kaksiIsoaIstuntoa({ automaattisiirtoOdotus: 0 });
+  assert.equal((await suorita.tarkistaAutomaattisiirto()).length, 1);
+  assert.equal((await suorita.tarkistaAutomaattisiirto()).length, 1);
+  assert.equal(new Set(lahetetyt()).size, 2);
+  const rivit = readFileSync(a.toimintoloki, 'utf8').trim().split('\n').map((r) => JSON.parse(r));
+  assert.equal(rivit.filter((r) => r.tulos === 'aikakatkaisu').length, 1);
 });
