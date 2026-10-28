@@ -376,7 +376,9 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
     automaattisiirto: (nimi) => istuntoon(nimi, '/automaattisiirto', 'automaattisiirto'),
     herata: (nimi) => istuntoon(nimi, '/sa', 'herata'),
     'herata-pois': (nimi) => istuntoon(nimi, '/sa pois', 'herata-pois'),
-    // Sulje istunto ilman pakkausta (käyttäjä 26.10.2026): Escape avoimen kyselyn varalta, sitten /exit ruutuun.
+    // Sulje istunto ilman pakkausta (käyttäjä 26.10.2026): ruutu tapetaan tmuxilla, ei /exitiä ohjelmalle, jotta sulkeminen
+    // ei riipu mallista eikä siitä, onko ohjelma vapaana (VI-4, käyttäjä 28.10.2026). Mac-agy:n ssh katkeaa samalla.
+    // Lopuksi tarkistetaan, että ruutu on poissa; muuten 502 eikä hiljaista onnistumista.
     async sulje(nimi) {
       const skoopit = lueSkoopit(asetukset.juuri);
       if (!Object.hasOwn(skoopit, nimi)) throw new Hylatty(404, 'tuntematon skooppi');
@@ -394,8 +396,9 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
         if (i.pid || i.vanhempi) {
           try { await tarkistaRuutu(i); } catch { /* ruutu voi olla agy tai prosessi jo päättynyt */ }
         }
-        await aja('tmux', ['send-keys', '-t', i.ruutu, 'Escape']).catch(() => {});
-        await kirjoita(i, '/exit');
+        await aja('tmux', ['kill-pane', '-t', i.ruutu]).catch(() => {});
+        const jaljella = await aja('tmux', ['display-message', '-p', '-t', i.ruutu, '#{pane_id}']).catch(() => ({ koodi: 1 }));
+        if (jaljella.koodi === 0) throw new Hylatty(502, `istunnon tmux-ruutu ${i.ruutu} ei sulkeutunut`);
         suljettiin.push(i.id);
       }
       for (const avain of [...jono.keys()]) {
