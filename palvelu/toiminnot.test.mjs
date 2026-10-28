@@ -29,10 +29,13 @@ function ymparisto({ tila = 'idle', tmux = 'siirto-a-1:@1.%5', skoopit = { a: ['
 
 // Kirjaa kutsut; tmux display-message palauttaa oman pidin, autovaihto OK-rivin. perhe = `pura-malliton.mjs --perhe`:n
 // vastaus (true → exit 0, false → exit 1, tai valmis tulos).
-function vaarennos({ autovaihto = { koodi: 0, stdout: `UUSI: …\n${URL_OK}\n`, stderr: '' }, ruudunPid = process.pid, malliton = { koodi: 0, stdout: 'KIRJOITETTU: x\n', stderr: '' }, perhe = false } = {}) {
+function vaarennos({ autovaihto = { koodi: 0, stdout: `UUSI: …\n${URL_OK}\n`, stderr: '' }, ruudunPid = process.pid, malliton = { koodi: 0, stdout: 'KIRJOITETTU: x\n', stderr: '' }, perhe = false, tapa = true } = {}) {
   const kutsut = [];
+  const tapetut = new Set();
   const aja = async (komento, argumentit) => {
     if (komento !== 'tmux' || argumentit[0] !== 'list-panes') kutsut.push([komento, ...argumentit]);
+    if (komento === 'tmux' && argumentit[0] === 'kill-pane' && tapa) tapetut.add(argumentit[2]);
+    if (komento === 'tmux' && argumentit[0] === 'display-message' && tapetut.has(argumentit[3])) return { koodi: 1, stdout: '', stderr: "can't find pane" };
     if (komento === 'tmux' && argumentit[0] === 'display-message') return { koodi: 0, stdout: `${ruudunPid}\n`, stderr: '' };
     if (komento === 'tmux') return { koodi: 0, stdout: '', stderr: '' };
     if (komento === 'node' && argumentit[1] === '--perhe') return typeof perhe === 'object' ? perhe : { koodi: perhe ? 0 : 1, stdout: `PERHE: ${perhe ? 'kyllä' : 'ei'}\n`, stderr: '' };
@@ -117,18 +120,23 @@ test('automaattisiirto ja herätys: valmis komento samaan ruutuun kuin /pakkaa',
   }
 });
 
-test('sulje: avoin istunto suljetaan Escape ja /exitillä ilman pakkausta', async () => {
+test('sulje: avoin istunto tapetaan tmuxilla ilman pakkausta ja mallia, ja sulkeutuminen tarkistetaan (VI-4)', async () => {
   const v = vaarennos();
   const suorita = luoToiminnot(ymparisto(), { aja: v.aja });
   const r = await suorita('sulje', 'a');
   assert.deepEqual(r, { ok: true, toiminto: 'sulje', nimi: 'a', suljettiin: ['s1'], istunto: 's1' });
   assert.deepEqual(v.kutsut.slice(1), [
-    ['tmux', 'send-keys', '-t', '%5', 'Escape'],
-    ['tmux', 'send-keys', '-t', '%5', '-l', '/exit'],
-    ['tmux', 'send-keys', '-t', '%5', 'Enter'],
+    ['tmux', 'kill-pane', '-t', '%5'],
+    ['tmux', 'display-message', '-p', '-t', '%5', '#{pane_id}'],
   ]);
+  assert.ok(!v.kutsut.some((k) => k.includes('send-keys')), 'ruutuun ei kirjoiteta mitään');
   await hylkaa(suorita('sulje', 'b'), 409);
   await hylkaa(suorita('sulje', 'tuntematon'), 404);
+});
+
+test('sulje: ruutu, joka ei sulkeudu, on virhe eikä onnistuminen (VI-4)', async () => {
+  const v = vaarennos({ tapa: false });
+  await hylkaa(luoToiminnot(ymparisto(), { aja: v.aja })('sulje', 'a'), 502);
 });
 
 test('jono: varatulle istunnolle herätys ja siirto odottavat vapautumista, /pakkaa hylätään (V-294)', async () => {
