@@ -1,7 +1,7 @@
 // node --test scopes/palvelu/toiminnot.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, request } from 'node:http';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -580,4 +580,29 @@ test('automaattisiirto-vahti: odotusajan ylitys kirjataan aikakatkaisuna ja seur
   assert.equal(new Set(lahetetyt()).size, 2);
   const rivit = readFileSync(a.toimintoloki, 'utf8').trim().split('\n').map((r) => JSON.parse(r));
   assert.equal(rivit.filter((r) => r.tulos === 'aikakatkaisu').length, 1);
+});
+
+// AUTOMAATTISIIRTO-TOIMITUS-OK: lähetys ei ole onnistuminen; lopputulos kirjataan omana rivinään.
+test('automaattisiirto-vahti: lopputulos lokiin — pakattu tai pysähtyi pakkaamatta', async () => {
+  const { a, suorita, lahetetyt } = kaksiIsoaIstuntoa();
+  const transkripti = (ruutu) => join(a.projektitDir, projektiNimi('/x'), `${ruutu.endsWith('%6') ? 's2' : 's1'}.jsonl`);
+  const vahdinRivit = () => readFileSync(a.toimintoloki, 'utf8').trim().split('\n').map((r) => JSON.parse(r))
+    .filter((r) => r.toiminto === 'automaattisiirto-vahti').map((r) => r.tulos);
+
+  await suorita.tarkistaAutomaattisiirto();
+  const [eka] = lahetetyt();
+  assert.deepEqual(vahdinRivit(), ['lähetetty']);
+
+  // Vuoro päättyi lähetyksen jälkeen ilman pakkausriviä (esim. agy-kiintiö 429): kirjataan, ja seuraava saa vuoron.
+  appendFileSync(transkripti(eka), JSON.stringify({ type: 'assistant', timestamp: new Date(Date.now() + 1_000).toISOString(),
+    message: { stop_reason: 'end_turn', content: [{ type: 'text', text: 'RESOURCE_EXHAUSTED (code 429)' }] } }) + '\n');
+  assert.equal((await suorita.tarkistaAutomaattisiirto()).length, 1);
+  assert.deepEqual(vahdinRivit(), ['lähetetty', 'pysähtyi pakkaamatta', 'lähetetty']);
+
+  // Toinen istunto pakkaa: kirjataan pakattu.
+  const toka = lahetetyt()[1];
+  appendFileSync(transkripti(toka), JSON.stringify({ type: 'assistant', timestamp: new Date().toISOString(),
+    message: { content: [{ type: 'text', text: 'PAKATTU: commit abc1234' }] } }) + '\n');
+  assert.deepEqual(await suorita.tarkistaAutomaattisiirto(), []);
+  assert.deepEqual(vahdinRivit(), ['lähetetty', 'pysähtyi pakkaamatta', 'lähetetty', 'pakattu']);
 });

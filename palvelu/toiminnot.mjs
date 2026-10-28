@@ -244,15 +244,29 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
   // AUTOMAATTISIIRTO-RINNAKKAIN (28.10.2026): yksi siirto kerrallaan. Rinnakkaiset pakkaukset kirjoittavat samaa
   // last-scope.txt:tä ("PAKKAUS: epäselvä"), joten seuraava laukeaa vasta, kun edellinen istunto on pakattu tai
   // päättyi, tai odotusajan jälkeen (esim. agy-kiintiö esti pakkauksen), jolloin aikakatkaisu kirjataan lokiin.
+  // AUTOMAATTISIIRTO-TOIMITUS-OK (28.10.2026): lähetys kirjataan `lähetetty`, ja lopputulos omana rivinään:
+  // `pakattu`, `päättyi` (istunto sulkeutui ennen pakkausriviä), `pysähtyi pakkaamatta` (istunto vapaa ilman
+  // pakkausta: vuoro päättyi lähetyksen jälkeen, esim. agy-kiintiö 429, tai hiljaisuusaika kului) tai `aikakatkaisu`.
+  const aikaMs = (t) => (typeof t === 'number' ? t : t ? Date.parse(t) : NaN);
+  function siirronTulos(v, i) {
+    const kulunut = Date.now() - v.aika;
+    if (i?.pakattu) return { tulos: 'pakattu' };
+    if (!i || !i.ruutu) return { tulos: 'päättyi', syy: 'istunto sulkeutui ennen pakkausriviä' };
+    if (i.tila === 'idle' && (aikaMs(i.pysahdys) > v.aika || kulunut >= (asetukset.automaattisiirtoHiljaisuus ?? 5 * 60_000))) {
+      return { tulos: 'pysähtyi pakkaamatta', syy: aikaMs(i.pysahdys) > v.aika ? 'vuoro päättyi ilman pakkausriviä' : 'istunto vapaa, ei vuoroa lähetyksen jälkeen' };
+    }
+    if (kulunut >= (asetukset.automaattisiirtoOdotus ?? 30 * 60_000)) return { tulos: 'aikakatkaisu', syy: 'istuntoa ei pakattu odotusajassa' };
+    return null;
+  }
   async function tarkistaAutomaattisiirto({ raja = 120_000, kytkimet = kytkimetAsetus } = {}) {
     if (kaynnissa || !kytkimet) return [];
     const skoopit = lueSkoopit(asetukset.juuri);
     const kaikki = istunnot({ ...asetukset, skooppiNimet: Object.keys(skoopit) });
     if (vahdinSiirto) {
-      const edellinen = kaikki.find((i) => i.id === vahdinSiirto.id);
-      const valmis = !edellinen || edellinen.pakattu || !edellinen.ruutu;
-      if (!valmis && Date.now() - vahdinSiirto.aika < (asetukset.automaattisiirtoOdotus ?? 30 * 60_000)) return [];
-      if (!valmis) kirjaa({ toiminto: 'automaattisiirto-vahti', nimi: vahdinSiirto.skooppi, istunto: vahdinSiirto.id, tulos: 'aikakatkaisu', syy: 'istuntoa ei pakattu odotusajassa' });
+      const v = vahdinSiirto;
+      const lopputulos = siirronTulos(v, kaikki.find((i) => i.id === v.id));
+      if (!lopputulos) return [];
+      kirjaa({ toiminto: 'automaattisiirto-vahti', nimi: v.skooppi, istunto: v.id, ...lopputulos, kesto: Date.now() - v.aika });
       vahdinSiirto = null;
     }
     const tulokset = [];
@@ -271,7 +285,7 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
       vahdinSiirto = { id: i.id, skooppi: i.skooppi, aika: Date.now() };
       try {
         const tulos = await istuntoon(i.skooppi, '/automaattisiirto', 'automaattisiirto', i.id);
-        kirjaa({ toiminto: 'automaattisiirto-vahti', nimi: i.skooppi, istunto: i.id, tokenit, tulos: 'ok' });
+        kirjaa({ toiminto: 'automaattisiirto-vahti', nimi: i.skooppi, istunto: i.id, tokenit, tulos: 'lähetetty' });
         tulokset.push({ skooppi: i.skooppi, istunto: i.id, ...tulos });
         break;
       } catch (e) {
