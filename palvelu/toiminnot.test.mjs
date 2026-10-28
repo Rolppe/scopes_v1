@@ -103,7 +103,7 @@ test('pakkaa: /pakkaa vain skoopin vapaaseen, täsmäävään tmux-ruutuun', asy
   const v = vaarennos();
   const r = await luoToiminnot(ymparisto(), { aja: v.aja })('pakkaa', 'a');
   assert.equal(r.istunto, 's1');
-  assert.deepEqual(v.kutsut.slice(1), [['tmux', 'send-keys', '-t', '%5', '-l', '/pakkaa'], ['tmux', 'send-keys', '-t', '%5', 'Enter']]);
+  assert.deepEqual(v.kutsut.slice(1), [['tmux', 'send-keys', '-t', '%5', '-l', '/pakkaa a'], ['tmux', 'send-keys', '-t', '%5', 'Enter']]);
   await hylkaa(luoToiminnot(ymparisto(), { aja: v.aja })('pakkaa', 'b'), 409);
   await hylkaa(luoToiminnot(ymparisto({ tila: 'busy' }), { aja: v.aja })('pakkaa', 'a'), 409);
   await hylkaa(luoToiminnot(ymparisto({ tmux: null }), { aja: v.aja })('pakkaa', 'a'), 409);
@@ -117,7 +117,7 @@ test('automaattisiirto ja herätys: valmis komento samaan ruutuun kuin /pakkaa',
     const v = vaarennos();
     const r = await luoToiminnot(ymparisto(), { aja: v.aja })(toiminto, 'a');
     assert.deepEqual([r.istunto, r.komento], ['s1', komento]);
-    assert.deepEqual(v.kutsut.slice(1), [['tmux', 'send-keys', '-t', '%5', '-l', komento], ['tmux', 'send-keys', '-t', '%5', 'Enter']]);
+    assert.deepEqual(v.kutsut.slice(1), [['tmux', 'send-keys', '-t', '%5', '-l', komento === '/automaattisiirto' ? `${komento} a` : komento], ['tmux', 'send-keys', '-t', '%5', 'Enter']]);
   }
 });
 
@@ -176,7 +176,7 @@ test('jono: varatulle istunnolle herätys ja siirto odottavat vapautumista, /pak
   assert.deepEqual(v.kutsut.filter((k) => k[1] === 'send-keys').map((k) => k.at(-1)), ['/sa', 'Enter']);
   assert.deepEqual(suorita.jono('a').map((j) => j.komento), ['/automaattisiirto']);
   await suorita.puraJono();
-  assert.deepEqual(v.kutsut.filter((k) => k[1] === 'send-keys').map((k) => k.at(-1)), ['/sa', 'Enter', '/automaattisiirto', 'Enter']);
+  assert.deepEqual(v.kutsut.filter((k) => k[1] === 'send-keys').map((k) => k.at(-1)), ['/sa', 'Enter', '/automaattisiirto a', 'Enter']);
   assert.deepEqual(suorita.jono('a'), []);
   const rivit = readFileSync(a.toimintoloki, 'utf8').trim().split('\n').map((r) => JSON.parse(r));
   assert.deepEqual(rivit.filter((r) => r.jonosta).map((r) => [r.toiminto, r.tulos]), [['herata', 'ok'], ['automaattisiirto', 'ok']]);
@@ -190,7 +190,7 @@ test('pakkaa: auki oleva kysymys suljetaan Escapella ennen /pakkaa; vastattu kys
   const v = vaarennos();
   const r = await luoToiminnot(a, { aja: v.aja })('pakkaa', 'a');
   assert.deepEqual(r, { ok: true, toiminto: 'pakkaa', nimi: 'a', istunto: 's1', komento: '/pakkaa', kysymysSuljettiin: true });
-  assert.deepEqual(v.kutsut.slice(1), [['tmux', 'send-keys', '-t', '%5', 'Escape'], ['tmux', 'send-keys', '-t', '%5', '-l', '/pakkaa'], ['tmux', 'send-keys', '-t', '%5', 'Enter']]);
+  assert.deepEqual(v.kutsut.slice(1), [['tmux', 'send-keys', '-t', '%5', 'Escape'], ['tmux', 'send-keys', '-t', '%5', '-l', '/pakkaa a'], ['tmux', 'send-keys', '-t', '%5', 'Enter']]);
   // Vastattu kysymys: waiting ilman auki olevaa kysymystä hylätään kuten ennen.
   writeFileSync(transkripti, kysymys + '\n' + JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'k1', content: 'x' }] } }) + '\n');
   const v2 = vaarennos();
@@ -238,7 +238,7 @@ test('jono: säilyy palvelun uudelleenkäynnistyksen yli; levyn kelvoton rivi oh
   writeFileSync(join(a.istunnotDir, `${process.pid}.json`), JSON.stringify({ pid: process.pid, sessionId: 's1', cwd: '/x', name: 'a', status: 'idle', tmux: 'siirto-a-1:@1.%5' }));
   await toinen.puraJono();
   await toinen.puraJono();
-  assert.deepEqual(v.kutsut.filter((k) => k[1] === 'send-keys').map((k) => k.at(-1)), ['/sa', 'Enter', '/automaattisiirto', 'Enter']);
+  assert.deepEqual(v.kutsut.filter((k) => k[1] === 'send-keys').map((k) => k.at(-1)), ['/sa', 'Enter', '/automaattisiirto a', 'Enter']);
   assert.deepEqual(JSON.parse(readFileSync(tiedosto, 'utf8')), []);
   // Levyltä ei oteta komentoa, jota puhelin ei voisi jonottaa, eikä rikkinäinen tiedosto estä käynnistystä.
   writeFileSync(tiedosto, JSON.stringify([{ nimi: 'a', istunto: 's1', komento: 'rm -rf /', toiminto: 'herata', aika: 1 }, { nimi: 'a', istunto: 's1', komento: '/sa', toiminto: 'herata', aika: 2 }]));
@@ -528,7 +528,7 @@ test('automaattisiirto-vahti: laukeaa kun kytkin on päällä, kontekstiraja tä
   assert.equal(tulokset.length, 1);
   assert.equal(tulokset[0].skooppi, 'a');
   assert.equal(tulokset[0].komento, '/automaattisiirto');
-  assert.deepEqual(v.kutsut.filter((k) => k[1] === 'send-keys').map((k) => k.at(-1)), ['/automaattisiirto', 'Enter']);
+  assert.deepEqual(v.kutsut.filter((k) => k[1] === 'send-keys').map((k) => k.at(-1)), ['/automaattisiirto a', 'Enter']);
 
   // 5. Seuraava tarkistuskierros: ei laukaise uudelleen samalle istunnolle
   v.kutsut.length = 0;
@@ -550,7 +550,7 @@ function kaksiIsoaIstuntoa(asetukset = {}) {
     ? { koodi: 0, stdout: `${process.ppid}\n`, stderr: '' } : v.aja(k, arg));
   const paalla = { lue: () => ({ automaattisiirto: true }), lueIstunto: () => ({ automaattisiirto: true }) };
   const suorita = luoToiminnot(a, { aja, jonoVali: 0, kytkimet: paalla });
-  const lahetetyt = () => v.kutsut.filter((k) => k[1] === 'send-keys' && k.at(-1) === '/automaattisiirto').map((k) => k[3]);
+  const lahetetyt = () => v.kutsut.filter((k) => k[1] === 'send-keys' && String(k.at(-1)).startsWith('/automaattisiirto ')).map((k) => k[3]);
   const pidTiedosto = (ruutu) => join(a.istunnotDir, `${ruutu.endsWith('%6') ? process.ppid : process.pid}.json`);
   return { a, suorita, lahetetyt, pidTiedosto };
 }
