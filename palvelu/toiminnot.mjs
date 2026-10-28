@@ -94,6 +94,7 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
   let ajastin = null;
   let kytkimetAsetus = kytkimet ?? null;
   const laukaistutAutomaattisiirrot = new Set();
+  let vahdinSiirto = null; // { id, skooppi, aika }: vahdin viimeksi laukaisema siirto, kunnes istunto on pakattu tai päättyi
 
   // Tallennus kirjoittaa väliaikaiseen ja nimeää sen, ettei kesken katkennut kirjoitus jätä rikkinäistä tiedostoa.
   const tallennaJono = () => {
@@ -240,10 +241,20 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
 
   // Automaattisiirto-vahti (scopes siirto automaattisiirto 19.10.2026): kun kytkin on päällä, istunto pysähtynyt
   // ja kontekstiraja täyttynyt, automaattisiirto toteutetaan ilman kyselyitä.
+  // AUTOMAATTISIIRTO-RINNAKKAIN (28.10.2026): yksi siirto kerrallaan. Rinnakkaiset pakkaukset kirjoittavat samaa
+  // last-scope.txt:tä ("PAKKAUS: epäselvä"), joten seuraava laukeaa vasta, kun edellinen istunto on pakattu tai
+  // päättyi, tai odotusajan jälkeen (esim. agy-kiintiö esti pakkauksen), jolloin aikakatkaisu kirjataan lokiin.
   async function tarkistaAutomaattisiirto({ raja = 120_000, kytkimet = kytkimetAsetus } = {}) {
     if (kaynnissa || !kytkimet) return [];
     const skoopit = lueSkoopit(asetukset.juuri);
     const kaikki = istunnot({ ...asetukset, skooppiNimet: Object.keys(skoopit) });
+    if (vahdinSiirto) {
+      const edellinen = kaikki.find((i) => i.id === vahdinSiirto.id);
+      const valmis = !edellinen || edellinen.pakattu || !edellinen.ruutu;
+      if (!valmis && Date.now() - vahdinSiirto.aika < (asetukset.automaattisiirtoOdotus ?? 30 * 60_000)) return [];
+      if (!valmis) kirjaa({ toiminto: 'automaattisiirto-vahti', nimi: vahdinSiirto.skooppi, istunto: vahdinSiirto.id, tulos: 'aikakatkaisu', syy: 'istuntoa ei pakattu odotusajassa' });
+      vahdinSiirto = null;
+    }
     const tulokset = [];
     for (const i of kaikki) {
       if (i.pakattu || !i.ruutu || laukaistutAutomaattisiirrot.has(i.id)) continue;
@@ -256,11 +267,15 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
       if (i.tila !== 'idle' && !kysymys) continue;
 
       laukaistutAutomaattisiirrot.add(i.id);
+      // Varaus ennen awaitia, ettei päällekkäinen kierros (ajastin ja puraJono) laukaise toista istuntoa samaan aikaan.
+      vahdinSiirto = { id: i.id, skooppi: i.skooppi, aika: Date.now() };
       try {
         const tulos = await istuntoon(i.skooppi, '/automaattisiirto', 'automaattisiirto', i.id);
         kirjaa({ toiminto: 'automaattisiirto-vahti', nimi: i.skooppi, istunto: i.id, tokenit, tulos: 'ok' });
         tulokset.push({ skooppi: i.skooppi, istunto: i.id, ...tulos });
+        break;
       } catch (e) {
+        vahdinSiirto = null;
         kirjaa({ toiminto: 'automaattisiirto-vahti', nimi: i.skooppi, istunto: i.id, tulos: 'hylätty', syy: e.message });
       }
     }
