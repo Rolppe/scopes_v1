@@ -173,6 +173,15 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
 
   // Valmis komento skoopin ainoaan vapaaseen tmux-istuntoon, kun sen vuoro on valmis; jonotettava komento odottaa
   // varatun istunnon vapautumista.
+  // Pakkauskomennot saavat skoopin argumentiksi (scopes siirto 28.10.2026): mallittoman purun istunto ei ala /pura-komennolla,
+  // ja pelkkä /pakkaa putosi taidon pwd-varasääntöön ja pakkasi väärän skoopin (claude siirto). Jono ja ryhmät käyttävät yhä paljasta komentoa.
+  const lahetettava = (komento, skooppi) => ((komento === '/pakkaa' || komento === '/automaattisiirto') ? `${komento} ${skooppi}` : komento);
+  // Autojatko purussa: suljettavan istunnon oma Automaattijatko-arvo, muuten koneen yhteinen (kytkin on keskustelukohtainen).
+  const autojatko = (suljettavat) => {
+    const oma = suljettavat[0]?.id ? kytkimetAsetus?.lueIstunto?.(suljettavat[0].id)?.automaattijatko : undefined;
+    return Boolean(oma ?? kytkimetAsetus?.lue?.()?.automaattijatko);
+  };
+
   async function istuntoon(nimi, komento, toiminto, haluttuIstunto = null) {
     const skoopit = lueSkoopit(asetukset.juuri);
     if (!skoopit[nimi]) throw new Hylatty(404, 'tuntematon skooppi');
@@ -183,7 +192,7 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
         const agy = await agyRuudut(aja, nimi);
         if (agy.length === 1) {
           const [r] = agy;
-          for (const a of [['-l', komento], ['Enter']]) {
+          for (const a of [['-l', lahetettava(komento, nimi)], ['Enter']]) {
             const t = await aja('tmux', ['send-keys', '-t', r.ruutu, ...a]);
             if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
           }
@@ -201,7 +210,7 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
       const t = await aja('tmux', ['send-keys', '-t', i.ruutu, 'Escape']);
       if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
       await new Promise((r) => setTimeout(r, asetukset.escapeTauko ?? 800));
-      await kirjoita(i, komento);
+      await kirjoita(i, lahetettava(komento, nimi));
       return { istunto: i.id, komento, kysymysSuljettiin: true };
     }
     const dialogi = await cliDialogi(i);
@@ -214,7 +223,7 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
       return { istunto: i.id, komento, jonossa: true };
     }
     await tarkistaRuutu(i);
-    await kirjoita(i, komento);
+    await kirjoita(i, lahetettava(komento, nimi));
     return { istunto: i.id, komento };
   }
 
@@ -252,7 +261,7 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
           if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
           await new Promise((r) => setTimeout(r, asetukset.escapeTauko ?? 800));
         }
-        await kirjoita(i, j.komento);
+        await kirjoita(i, lahetettava(j.komento, j.nimi));
         kirjaa({ toiminto: j.toiminto, nimi: j.nimi, tulos: 'ok', istunto: i.id, komento: j.komento, jonosta: true });
       } catch (e) {
         kirjaa({ toiminto: j.toiminto, nimi: j.nimi, tulos: 'hylätty', syy: e.message, jonosta: true });
@@ -348,7 +357,7 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
   // Mallivapaa purku (PURA-MALLITON T6b): purkutiedosto kirjoitetaan ennen kuin mitään suljetaan, joten skriptin virhe ei
   // jätä skooppia ilman istuntoa eikä vaihdu mallireittiin. Suljettavat pois tiedoston ISTUNNOT-riviltä (PURASCRIPT-ISTUNNOT).
   async function puraMallitta(nimi, suljettavat, malli) {
-    const auto = Boolean(kytkimetAsetus?.lue?.()?.automaattijatko);
+    const auto = autojatko(suljettavat);
     const r = await aja('node', [malliton, nimi, '--kohde', (malli?.startsWith(AGY_MALLI) || malli?.startsWith(MAC_AGY_MALLI)) ? 'neutraali' : 'claude', ...(auto ? ['--autojatko'] : []), ...(suljettavat.length ? ['--suljettavat', suljettavat.map((i) => i.id).join(',')] : [])]);
     if (r.koodi !== 0 && r.koodi !== 4) {
       throw new Hylatty(500, (r.stderr.trim().split('\n').filter(Boolean).pop() ?? `pura-malliton exit ${r.koodi}`).slice(0, 300));
@@ -433,7 +442,7 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
         await kirjoita(i, '/exit');
       }
     }
-      const auto = Boolean(kytkimetAsetus?.lue?.()?.automaattijatko);
+      const auto = autojatko(suljettavat);
       const tulos = await avaaIstunto(nimi, `/pura ${nimi}${ajaja ? ` --ajaja=${ajaja}` : ''}${auto ? ' --autojatko' : ''}`, malli);
       return { ...tulos, suljettiin: suljettavat.map((i) => i.id), ...(ajaja ? { purkaja: ajaja } : {}), ...(malli ? { malli } : {}) };
     },
