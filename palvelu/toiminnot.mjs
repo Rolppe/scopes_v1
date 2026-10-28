@@ -85,7 +85,7 @@ export const oletusJonotiedosto = (asetukset) =>
 const kelpaaJonoon = (j) => j && typeof j.nimi === 'string' && typeof j.istunto === 'string' &&
   typeof j.toiminto === 'string' && Object.hasOwn(JONO_RYHMA, j.komento) && Number.isFinite(j.aika);
 
-export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toimintoloki, jonoVali = 5_000, jonoTiedosto = oletusJonotiedosto(asetukset), kytkimet = asetukset.kytkimet } = {}) {
+export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toimintoloki, jonoVali = 5_000, jonoTiedosto = oletusJonotiedosto(asetukset), kytkimet = asetukset.kytkimet, sulkuVali = 250 } = {}) {
   const autovaihto = join(asetukset.juuri, 'claude/siirto/tools/autovaihto.sh');
   const malliton = join(asetukset.juuri, 'claude/siirto/tools/pura-malliton.mjs');
   const arkistoija = join(asetukset.juuri, 'claude/siirto/tools/arkistoi-skooppi.mjs');
@@ -397,8 +397,16 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
           try { await tarkistaRuutu(i); } catch { /* ruutu voi olla agy tai prosessi jo päättynyt */ }
         }
         await aja('tmux', ['kill-pane', '-t', i.ruutu]).catch(() => {});
-        const jaljella = await aja('tmux', ['display-message', '-p', '-t', i.ruutu, '#{pane_id}']).catch(() => ({ koodi: 1 }));
-        if (jaljella.koodi === 0) throw new Hylatty(502, `istunnon tmux-ruutu ${i.ruutu} ei sulkeutunut`);
+        // Ruutu on auki, jos se on tmuxin listauksessa istunnon nimenä tai ruudun tunnuksena. display-message ei kelpaa:
+        // se palauttaa 0:n myös puuttuvalle kohteelle (502 28.10.2026, vaikka ruutu oli poissa). Prosessi voi päättyä
+        // viiveellä, joten odotetaan enintään 20 väliä.
+        let auki = true;
+        for (let n = 0; n < 20 && auki; n++) {
+          if (n) await new Promise((r) => setTimeout(r, sulkuVali));
+          const l = await aja('tmux', ['list-panes', '-a', '-F', '#{session_name} #{pane_id}']).catch(() => ({ koodi: 1, stdout: '' }));
+          auki = l.koodi === 0 && l.stdout.split('\n').some((r) => r.trim().split(' ').includes(i.ruutu));
+        }
+        if (auki) throw new Hylatty(502, `istunnon tmux-ruutu ${i.ruutu} ei sulkeutunut`);
         suljettiin.push(i.id);
       }
       for (const avain of [...jono.keys()]) {

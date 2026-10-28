@@ -35,7 +35,7 @@ function vaarennos({ autovaihto = { koodi: 0, stdout: `UUSI: …\n${URL_OK}\n`, 
   const aja = async (komento, argumentit) => {
     if (komento !== 'tmux' || argumentit[0] !== 'list-panes') kutsut.push([komento, ...argumentit]);
     if (komento === 'tmux' && argumentit[0] === 'kill-pane' && tapa) tapetut.add(argumentit[2]);
-    if (komento === 'tmux' && argumentit[0] === 'display-message' && tapetut.has(argumentit[3])) return { koodi: 1, stdout: '', stderr: "can't find pane" };
+    if (komento === 'tmux' && argumentit[0] === 'list-panes' && argumentit[3] === '#{session_name} #{pane_id}') return { koodi: 0, stdout: tapetut.has('%5') ? '' : 'siirto-a-1 %5\n', stderr: '' };
     if (komento === 'tmux' && argumentit[0] === 'display-message') return { koodi: 0, stdout: `${ruudunPid}\n`, stderr: '' };
     if (komento === 'tmux') return { koodi: 0, stdout: '', stderr: '' };
     if (komento === 'node' && argumentit[1] === '--perhe') return typeof perhe === 'object' ? perhe : { koodi: perhe ? 0 : 1, stdout: `PERHE: ${perhe ? 'kyllä' : 'ei'}\n`, stderr: '' };
@@ -125,10 +125,7 @@ test('sulje: avoin istunto tapetaan tmuxilla ilman pakkausta ja mallia, ja sulke
   const suorita = luoToiminnot(ymparisto(), { aja: v.aja });
   const r = await suorita('sulje', 'a');
   assert.deepEqual(r, { ok: true, toiminto: 'sulje', nimi: 'a', suljettiin: ['s1'], istunto: 's1' });
-  assert.deepEqual(v.kutsut.slice(1), [
-    ['tmux', 'kill-pane', '-t', '%5'],
-    ['tmux', 'display-message', '-p', '-t', '%5', '#{pane_id}'],
-  ]);
+  assert.deepEqual(v.kutsut.slice(1), [['tmux', 'kill-pane', '-t', '%5']]);
   assert.ok(!v.kutsut.some((k) => k.includes('send-keys')), 'ruutuun ei kirjoiteta mitään');
   await hylkaa(suorita('sulje', 'b'), 409);
   await hylkaa(suorita('sulje', 'tuntematon'), 404);
@@ -136,7 +133,24 @@ test('sulje: avoin istunto tapetaan tmuxilla ilman pakkausta ja mallia, ja sulke
 
 test('sulje: ruutu, joka ei sulkeudu, on virhe eikä onnistuminen (VI-4)', async () => {
   const v = vaarennos({ tapa: false });
-  await hylkaa(luoToiminnot(ymparisto(), { aja: v.aja })('sulje', 'a'), 502);
+  let listauksia = 0;
+  const aja = async (komento, argumentit) => {
+    if (argumentit[3] === '#{session_name} #{pane_id}') listauksia++;
+    return v.aja(komento, argumentit);
+  };
+  await hylkaa(luoToiminnot(ymparisto(), { aja, sulkuVali: 1 })('sulje', 'a'), 502);
+  assert.equal(listauksia, 20, 'odottaa ennen virhettä');
+});
+
+test('sulje: hitaasti katoava ruutu on onnistuminen, ei 502 (VI-4, 28.10.2026)', async () => {
+  const v = vaarennos({ tapa: false });
+  let tarkistuksia = 0;
+  const aja = async (komento, argumentit) => {
+    if (argumentit[3] === '#{session_name} #{pane_id}' && ++tarkistuksia >= 3) return { koodi: 0, stdout: 'muu-1 %9\n', stderr: '' };
+    return v.aja(komento, argumentit);
+  };
+  const r = await luoToiminnot(ymparisto(), { aja, sulkuVali: 1 })('sulje', 'a');
+  assert.deepEqual(r.suljettiin, ['s1']);
 });
 
 test('jono: varatulle istunnolle herätys ja siirto odottavat vapautumista, /pakkaa hylätään (V-294)', async () => {
