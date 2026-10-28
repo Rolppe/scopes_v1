@@ -33,3 +33,46 @@ test('luoMacClaude: välimuisti TTL:n ajan, epäonnistunut ssh ei kaada listaa',
   assert.deepEqual(await rikki(NIMET), []);
   assert.deepEqual(await luoMacClaude({ aja, paalla: false })(NIMET), []);
 });
+
+// MAC_SKRIPTI löytää transkriptin, kun cwd:ssä on välilyönti (Claude-äpin scratch-workspaces, 28.10.2026).
+test('MAC_SKRIPTI: projektihakemiston nimi muuntaa välilyönnin ja pisteen viivaksi', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const { execFileSync } = await import('node:child_process');
+  const { MAC_SKRIPTI } = await import('./mac-claude.mjs');
+  const koti = mkdtempSync(join(tmpdir(), 'mac-claude-'));
+  const cwd = join(koti, 'Application Support', 'scratch.2026-10-28');
+  mkdirSync(join(koti, '.claude', 'sessions'), { recursive: true });
+  const projekti = cwd.replace(/[^A-Za-z0-9]/g, '-');
+  mkdirSync(join(koti, '.claude', 'projects', projekti), { recursive: true });
+  writeFileSync(join(koti, '.claude', 'projects', projekti, 's1.jsonl'), '{"type":"user"}\n');
+  writeFileSync(join(koti, '.claude', 'sessions', '1.json'), JSON.stringify({ pid: process.pid, sessionId: 's1', cwd, name: 'x' }));
+  const ulos = JSON.parse(execFileSync('python3', ['-'], { input: MAC_SKRIPTI, encoding: 'utf8', env: { ...process.env, HOME: koti } }));
+  assert.equal(ulos.length, 1);
+  assert.equal(ulos[0].t, '{"type":"user"}\n');
+});
+
+// Iso transkripti: alun /pura-rivi säilyy, keskiosa jää pois, loppu on kokonaisia rivejä (28.10.2026).
+test('MAC_SKRIPTI: yli 464 kt:n transkriptista luetaan alku ja loppu', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const { execFileSync } = await import('node:child_process');
+  const { MAC_SKRIPTI } = await import('./mac-claude.mjs');
+  const koti = mkdtempSync(join(tmpdir(), 'mac-claude-'));
+  const cwd = join(koti, 'p');
+  mkdirSync(join(koti, '.claude', 'sessions'), { recursive: true });
+  mkdirSync(join(koti, '.claude', 'projects', cwd.replace(/[^A-Za-z0-9]/g, '-')), { recursive: true });
+  const eka = '{"type":"user","message":{"role":"user","content":"<command-name>/pura</command-name><command-args>x y</command-args>"}}\n';
+  const taytto = ('{"type":"assistant","message":{"content":"' + 'a'.repeat(1000) + '"}}\n').repeat(600);
+  const vika = '{"type":"assistant","message":{"usage":{"input_tokens":1}}}\n';
+  writeFileSync(join(koti, '.claude', 'projects', cwd.replace(/[^A-Za-z0-9]/g, '-'), 's1.jsonl'), eka + taytto + vika);
+  writeFileSync(join(koti, '.claude', 'sessions', '1.json'), JSON.stringify({ pid: process.pid, sessionId: 's1', cwd, name: 'x' }));
+  const ulos = JSON.parse(execFileSync('python3', ['-'], { input: MAC_SKRIPTI, encoding: 'utf8', env: { ...process.env, HOME: koti } }));
+  const t = ulos[0].t;
+  assert.ok(t.startsWith(eka), 'alku säilyy');
+  assert.ok(t.endsWith(vika), 'loppu säilyy');
+  assert.ok(t.length < 500_000 && t.length > 400_000, 'keskiosa jää pois: ' + t.length);
+  for (const rivi of t.split('\n')) if (rivi) JSON.parse(rivi);
+});

@@ -9,8 +9,11 @@ import { ajaKomento } from './toiminnot.mjs';
 
 export const MAC_CLAUDE_TTL = 15_000;
 const HANTA = 400_000;
+// Transkriptin alku: skoopin /pura-rivi on ensimmäinen käyttäjäviesti, ja Claude-äpin istunnot kasvavat yli HANTA:n
+// (1–1,8 Mt 28.10.2026), jolloin pelkkä häntä ei kerro skooppia. Alusta otetaan ALKU tavua kokonaisina riveinä.
+const ALKU = 64_000;
 
-// Macilla ajettava haku: elävät istunnot (kill -0) ja transkriptin viimeiset HANTA tavua.
+// Macilla ajettava haku: elävät istunnot (kill -0) ja transkriptin ensimmäiset ALKU ja viimeiset HANTA tavua.
 export const MAC_SKRIPTI = `
 import json, os, glob
 koti = os.path.expanduser('~')
@@ -23,14 +26,18 @@ for f in glob.glob(os.path.join(koti, '.claude/sessions/*.json')):
         continue
     if not s.get('sessionId'):
         continue
-    projekti = ''.join('-' if c in '/_.' else c for c in (s.get('cwd') or ''))
+    projekti = ''.join(c if c.isascii() and c.isalnum() else '-' for c in (s.get('cwd') or ''))
     polku = os.path.join(koti, '.claude/projects', projekti, s['sessionId'] + '.jsonl')
     t = ''
     try:
         with open(polku, 'rb') as h:
-            h.seek(0, 2); koko = h.tell(); h.seek(max(0, koko - ${HANTA}))
-            t = h.read().decode('utf-8', 'replace')
-            if koko > ${HANTA}: t = t.split('\\n', 1)[-1]
+            h.seek(0, 2); koko = h.tell()
+            if koko <= ${ALKU} + ${HANTA}:
+                h.seek(0); t = h.read().decode('utf-8', 'replace')
+            else:
+                h.seek(0); alku = h.read(${ALKU}).decode('utf-8', 'replace').rsplit('\\n', 1)[0]
+                h.seek(koko - ${HANTA}); loppu = h.read().decode('utf-8', 'replace').split('\\n', 1)[-1]
+                t = alku + '\\n' + loppu
     except Exception:
         pass
     ulos.append({'s': s, 't': t})
