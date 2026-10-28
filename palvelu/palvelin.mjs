@@ -92,6 +92,7 @@ import { luoAgyLuvat } from './agy-luvat.mjs';
 import { luoPurkajat } from './purkajat.mjs';
 import { ajaKomento, Hylatty, luoToiminnot } from './toiminnot.mjs';
 import { agyIstunnot } from './agy-istunto.mjs';
+import { luoMacClaude } from './mac-claude.mjs';
 import { luoViestit } from './viestit.mjs';
 import { LrVirhe, luoLr } from '../localregister/palvelu.mjs';
 import { luoKordinaattori } from './kordinaattori.mjs';
@@ -105,6 +106,8 @@ export function asetuksetYmparistosta(env = process.env) {
     juuri: resolve(env.SCOPES_JUURI ?? join(tama, '../..')),
     istunnotDir: env.CLAUDE_ISTUNNOT_DIR ?? join(homedir(), '.claude/sessions'),
     projektitDir: env.CLAUDE_PROJEKTIT_DIR ?? join(homedir(), '.claude/projects'),
+    // Macin Claude-istunnot ssh:lla (VI-1); vain ympäristöstä luodulle palvelulle, ei testien asetuksille.
+    macClaude: env.SCOPES_MAC_CLAUDE !== '0',
     avainTiedosto: env.SCOPES_AVAIN_TIEDOSTO ?? join(homedir(), '.config/scopes/avain'),
     wgTiedosto: env.SCOPES_WG_TIEDOSTO ?? join(homedir(), '.config/scopes/wg.conf'),
     nebiusTiedosto: env.SCOPES_NEBIUS_TIEDOSTO ?? join(homedir(), '.config/scopes/nebius-avain'),
@@ -147,6 +150,7 @@ function runko(req, raja = 1024) {
 
 export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset, { android: () => android }), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), purkajat = luoPurkajat({ juuri: asetukset.juuri, paikalliset: () => viestit.agentit() }), linux = luoLinuxServer({ loki: asetukset.toimintoloki, kuiva: asetukset.linuxKuiva === true }), android = luoAndroid({ loki: asetukset.toimintoloki, kuiva: asetukset.androidKuiva === true, ...(asetukset.androidLaite && { laite: asetukset.androidLaite }), ...(asetukset.androidDir && { tuotoksetDir: asetukset.androidDir }) }), agyKayttoraja = luoAgyKayttoraja(), kordinaattori = luoKordinaattori(asetukset.juuri), macAgyKayttoraja = luoMacAgyKayttoraja({ aja: ajaKomento }), terminal = luoTerminaali(asetukset), economy = luoEconomyPalvelu({ juuri: asetukset.juuri, brainDir: asetukset.brainHakemisto, aja: asetukset.aja ?? ajaKomento })) {
   suorita?.asetaKytkimet?.(kytkimet);
+  const macClaude = asetukset.macClaude === true ? luoMacClaude({ aja: asetukset.aja ?? ajaKomento }) : async () => [];
   const istuntoValinta = luoIstuntoValinta(asetukset);
   const nebius = luoNebiusAvain({ tiedosto: asetukset.nebiusTiedosto ?? join(homedir(), '.config/scopes/nebius-avain') });
   // Chat suoratoistona (DEMO-SCOPES-SUORATOISTO): NDJSON-rivit {tyyppi: 'pala', teksti} …, lopuksi
@@ -308,7 +312,7 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
       if (polku === '/api/skoopit') {
         const skoopit = lueSkoopit(asetukset.juuri);
         const agy = await agyIstunnot({ skooppiNimet: Object.keys(skoopit), aja: asetukset.aja ?? ajaKomento, agyHakemisto: asetukset.agyHakemisto });
-        return vastaa(200, lista({ ...asetukset, ohitaAgy: true }, agy));
+        return vastaa(200, lista({ ...asetukset, ohitaAgy: true }, [...agy, ...await macClaude(Object.keys(skoopit))]));
       }
       if (polku === '/api/asetukset') return vastaa(200, kytkimet.lue());
       const ig = polku.match(/^\/api\/skoopit\/([^/]+)\/asetukset$/);
@@ -465,7 +469,7 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
       if (m) {
         const nimi = decodeURIComponent(m[1]);
         const agy = await agyIstunnot({ skooppiNimet: [nimi], aja: asetukset.aja ?? ajaKomento, agyHakemisto: asetukset.agyHakemisto });
-        const s = yksi(nimi, { ...asetukset, ohitaAgy: true }, agy);
+        const s = yksi(nimi, { ...asetukset, ohitaAgy: true }, [...agy, ...await macClaude([nimi])]);
         return s ? vastaa(200, { ...s, jonossa: suorita.jono?.(nimi) ?? [] }) : vastaa(404, { virhe: 'tuntematon skooppi' });
       }
       return vastaa(404, { virhe: 'tuntematon polku' });
