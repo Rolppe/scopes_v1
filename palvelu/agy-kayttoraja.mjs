@@ -204,7 +204,8 @@ export function luoMacAgyKayttoraja({
 
     const suorita = aja ?? ajaKomento;
     if (!suorita) return { tila: null, pyynnot: null, haettu: nyt(), lahde: 'virhe' };
-    const koodi = `export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"; node -e 'import { lueAgyTila, laskePyyntomaara } from "~/Projects/claude/sessions-repo/scopes/palvelu/agy-kayttoraja.mjs"; const tila = lueAgyTila("${tilaTiedosto}"); const pyynnot = laskePyyntomaara({ brainDir: "${brainDir}" }); console.log(JSON.stringify({ tila, pyynnot }));'`;
+    // MAC_PROJ laajenee Macin kuoressa (PARAMETRISOINTI-3): yksöislainaus katkaistaan juuren kohdalla.
+    const koodi = `export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"; node -e 'import { lueAgyTila, laskePyyntomaara } from "'"\${MAC_PROJ:-$HOME/Projects}"'/claude/sessions-repo/scopes/palvelu/agy-kayttoraja.mjs"; const tila = lueAgyTila("${tilaTiedosto}"); const pyynnot = laskePyyntomaara({ brainDir: "${brainDir}" }); console.log(JSON.stringify({ tila, pyynnot }));'`;
     try {
       const res = await suorita('ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=3', 'mac', koodi], { aikaraja: 8000 });
       if (res?.koodi === 0 && res.stdout) {
