@@ -179,6 +179,7 @@ final class SkoopitUITests: XCTestCase {
         kuva("suodatin-scope")
         // Pakattu skooppi valuu aktiivisten alle (SCOPES-LISTA-TILAVARIT): ensimmäinen skooppi on auki, koska testiä ajava istunto on.
         XCTAssertFalse(skooppiRivit.firstMatch.label.contains("pakattu"), "pakattu skooppi ylimpänä: \(skooppiRivit.firstMatch.label)")
+        let ylin = String(skooppiRivit.firstMatch.identifier.dropFirst("skooppi-".count))
         // Valmiit (vihreä "odottaa sinua") käsittelyssä olevien ja kyselykorttien alle, pakatut alimmaksi (SCOPES-LISTA-JARJESTYS).
         let tasot = skooppiRivit.allElementsBoundByIndex.map(\.label).map { $0.contains("pakattu") ? 2 : $0.contains("odottaa sinua") ? 1 : 0 }
         XCTAssertEqual(tasot, tasot.sorted(), "skooppien järjestys ei ole käsittely/kysely → valmis → pakattu: \(tasot)")
@@ -190,9 +191,9 @@ final class SkoopitUITests: XCTestCase {
         let haku = app.searchFields.firstMatch
         XCTAssertTrue(haku.waitForExistence(timeout: 5))
         haku.tap()
-        // Auki oleva skooppi: testiä ajavan istunnon skooppi. Juuriskooppi "scopes" pakattiin, kun työ jaettiin
-        // alaskooppeihin (13.10.2026), joten oletus on alaskooppi; muu skooppi: SCOPES_KOE_AUKI="<skooppi>" bash …/testi.sh
-        let auki = ProcessInfo.processInfo.environment["SCOPES_KOE_AUKI"] ?? "scopes lista"
+        // Auki oleva skooppi: oletus on listan ylin skooppi, joka on auki (yllä). Kiinteä oletus "scopes lista" kaatui,
+        // kun se pakattiin (V-331, V-427); muu skooppi: SCOPES_KOE_AUKI="<skooppi>" bash …/testi.sh
+        let auki = ProcessInfo.processInfo.environment["SCOPES_KOE_AUKI"] ?? ylin
         haku.typeText(auki)
         let rivi = app.buttons["skooppi-\(auki)"]
         XCTAssertTrue(rivi.waitForExistence(timeout: 15), "haku ei löytänyt skooppia \(auki)")
