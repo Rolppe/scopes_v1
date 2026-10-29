@@ -57,7 +57,7 @@ SEURAAVA PAKETTI: ei mitään — jäljellä vain käyttäjää tai tulevaa tila
 
 | Asia | Tila | Seuraava askel |
 |---|---|---|
-| cron-rivi `/srv/work/workspace/scopes/palvelu/kaynnista.sh` ei ole olemassa (lokirivi) | valmis 13.10.2026: kertaluonteinen siirtymärivi (scopes-palvelu.loki rivi 14/18, siirto workspace/scopes → scopes); asennettu /etc/cron.d/palvelin:39 ajaa /srv/work/scopes/palvelu/kaynnista.sh, ja sen jälkeiset rivit näyttävät palvelun käynnistyvän | ei toimia. |
+| cron-rivi `/srv/work/scopes/palvelu/kaynnista.sh` ei ole olemassa (lokirivi) | valmis 13.10.2026: kertaluonteinen siirtymärivi (scopes-palvelu.loki rivi 14/18, siirto workspace/scopes → scopes); asennettu /etc/cron.d/palvelin:39 ajaa /srv/work/scopes/palvelu/kaynnista.sh, ja sen jälkeiset rivit näyttävät palvelun käynnistyvän | ei toimia. |
 
 ### Viat — poistettu tai muutettu
 

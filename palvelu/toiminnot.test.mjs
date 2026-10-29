@@ -10,7 +10,7 @@ import { kasittelija } from './palvelin.mjs';
 import { slug } from '../../claude/siirto/tools/pura-malliton.mjs';
 import { Hylatty, istuntoOsoite, luoToiminnot, mallitonSlug, oletusJonotiedosto, paikallinenTmux, UUSI_NIMI } from './toiminnot.mjs';
 
-const URL_OK = 'OK: https://claude.ai/code/session_abc123';
+const URL_OK = 'OK: https://claude.ai/code/session_REDACTED';
 
 // Skooppi a: elävä tmux-istunto (oma prosessi, ruutu %5). Skooppi b: ei istuntoja.
 function ymparisto({ tila = 'idle', tmux = 'siirto-a-1:@1.%5', skoopit = { a: ['R.md'], b: ['R.md'] } } = {}) {
@@ -52,7 +52,7 @@ test('pura: uusi istunto vain tunnetulle skoopille ilman käynnissä olevaa istu
   const a = ymparisto();
   const v = vaarennos();
   const suorita = luoToiminnot(a, { aja: v.aja });
-  assert.deepEqual(await suorita('pura', 'b'), { ok: true, toiminto: 'pura', nimi: 'b', osoite: 'https://claude.ai/code/session_abc123', suljettiin: [] });
+  assert.deepEqual(await suorita('pura', 'b'), { ok: true, toiminto: 'pura', nimi: 'b', osoite: 'https://claude.ai/code/session_REDACTED', suljettiin: [] });
   assert.deepEqual(v.kutsut, [['node', join(a.juuri, 'claude/siirto/tools/pura-malliton.mjs'), '--perhe', 'b'],
     ['bash', join(a.juuri, 'claude/siirto/tools/autovaihto.sh'), 'vaihda', 'b', '--ei-sulje', '--viesti', '/pura b']]);
   await hylkaa(suorita('pura', 'a'), 409);
@@ -251,7 +251,7 @@ test('uusi: tiukka nimi, ei olemassa olevaa', async () => {
   const a = ymparisto();
   const v = vaarennos();
   const suorita = luoToiminnot(a, { aja: v.aja });
-  assert.equal((await suorita('uusi', 'claude koe')).osoite, 'https://claude.ai/code/session_abc123');
+  assert.equal((await suorita('uusi', 'claude koe')).osoite, 'https://claude.ai/code/session_REDACTED');
   assert.equal(v.kutsut[0].at(-1), '/pura uusi claude koe');
   for (const huono of ['', 'Iso', 'a  b', 'a\nb', 'a --rd', 'a — b', '../x', 'a;b', 'a b c d e f g h i j k l m', 'x'.repeat(25), 42, undefined])
     await hylkaa(suorita('uusi', huono), 400);
@@ -329,7 +329,7 @@ test('pura: scopes-perhe → purkutiedosto ja tiedostoviesti, malli säilyy, pur
   const a = ymparisto({ skoopit: SCOPES });
   const v = vaarennos({ perhe: true });
   const r = await luoToiminnot(a, { aja: v.aja })('pura', 'b c', { ajaja: 'claude-cli:claude-haiku-5-5', malli: 'claude-sonnet-5-5' });
-  assert.deepEqual(r, { ok: true, toiminto: 'pura', nimi: 'b c', osoite: 'https://claude.ai/code/session_abc123', suljettiin: [], tiedosto: MALLITON_TIEDOSTO('b-c'), malli: 'claude-sonnet-5-5' });
+  assert.deepEqual(r, { ok: true, toiminto: 'pura', nimi: 'b c', osoite: 'https://claude.ai/code/session_REDACTED', suljettiin: [], tiedosto: MALLITON_TIEDOSTO('b-c'), malli: 'claude-sonnet-5-5' });
   const malliton = join(a.juuri, 'claude/siirto/tools/pura-malliton.mjs');
   assert.deepEqual(v.kutsut, [
     ['node', malliton, '--perhe', 'b c'],
@@ -401,7 +401,7 @@ test('pura-testi: poistunut toiminto on tuntematon (404) eikä kutsu mitään', 
 });
 
 test('istuntoOsoite: vain OK-rivin claude.ai-osoite', () => {
-  assert.equal(istuntoOsoite(`x\n${URL_OK}\nSULKU`), 'https://claude.ai/code/session_abc123');
+  assert.equal(istuntoOsoite(`x\n${URL_OK}\nSULKU`), 'https://claude.ai/code/session_REDACTED');
   assert.equal(istuntoOsoite('OK: https://example.com/x'), null);
   assert.equal(paikallinenTmux('UUSI: …\nOK: paikallinen tmux siirto-b-120000\n'), 'siirto-b-120000');
   assert.equal(paikallinenTmux('OK: paikallinen tmux x;y'), null);
