@@ -1,0 +1,3389 @@
+diff --git a/Infra/skills/keskustelun-siirto/SKILL.md b/Infra/skills/keskustelun-siirto/SKILL.md
+index a43498a6..9835cc64 100644
+--- a/Infra/skills/keskustelun-siirto/SKILL.md
++++ b/Infra/skills/keskustelun-siirto/SKILL.md
+@@ -51,13 +51,14 @@ loppuun yhdessä ajossa ja raportoi lopuksi tehtävän antamassa muodossa.
+ `scopes viat`, `scopes notifications`, `scopes siirto`, `scopes design`, `scopes chat media`,
+ `scopes context`, `scopes localregister`, `scopes context purascript`,
+ `scopes universaltools`, `scopes agy`, `scopes agy android`, `test`, `scopes context pakkaascripti`,
+-`scopes chat topbar`, `scopes chat maininput`, `scopes chat responsivity`, `scopes infra setting`,
++`scopes chat topbar`, `scopes chat maininput`, `scopes infra setting`,
+ `scopes viat scopetopbar`, `scopes design list`, `scopes agy pre`,
+ `scopes agy test`, `scopes agy test 2`, `scopes agy compatibility`,
+ `scopes agy list`, `scopes agy siirto`, `scopes agy scripttools`,
+ `scopes agy siirto pakkausscripti`, `scopes local`, `scopes agy usage`, `scopes agy macos`,
+ `scopes macos`, `scopes models`, `scopes palvelin`, `scopes macos agy`, `scopes test`,
+-`scopes viat palautus`, `scopes performance`, `scopes istunnot`, `scopes performance ios`.
++`scopes viat palautus`, `scopes istunnot`, `scopes performance ios`,
++`scopes lostdev`.
+ 
+ Uusi skooppi luodaan komennolla `/pura uusi <skooppi>` (`claude/siirto/tools/luo-skooppi.mjs`,
+ PURA-UUSI 28.9.2026), ei käsin: se kirjoittaa listan yllä, taulukot alla, viitetiedoston luvun,
+@@ -204,7 +205,6 @@ scopes/ios/mittaa.sh                                  scopes testit
+ scopes/chat/media/**                                  scopes chat media
+ scopes/chat/topbar/**                                 scopes chat topbar
+ scopes/chat/maininput/**                              scopes chat maininput
+-scopes/chat/responsivity/**                           scopes chat responsivity
+ scopes/chat/**                                        scopes chat
+ scopes/lista/**                                       scopes lista
+ scopes/infra/setting/**                               scopes infra setting
+@@ -244,8 +244,8 @@ scopes/models/**                                      scopes models
+ scopes/palvelin/**                                scopes palvelin
+ scopes/test/**                                        scopes test
+ scopes/performance/ios/**                             scopes performance ios
+-scopes/performance/**                                 scopes performance
+ scopes/istunnot/**                                    scopes istunnot
++scopes/lostdev/**                                     scopes lostdev
+ scopes/**                                             scopes
+ test/**                                               test
+ ```
+@@ -278,7 +278,7 @@ puuttuisi.
+ | `ruleguard` | `references/ruleguard.md` |
+ | `fixer` | `references/fixer.md` |
+ | `r&d-performance` | `references/r&d-performance.md` |
+-| `scopes`, `scopes chat`, `scopes lista`, `scopes infra`, `scopes yhteys`, `scopes jakelu`, `scopes jakelu mac`, `scopes testit`, `scopes viat`, `scopes notifications`, `scopes siirto`, `scopes design`, `scopes chat media`, `scopes chat question`, `scopes context`, `scopes localregister`, `scopes context purascript`, `scopes universaltools`, `scopes agy`, `scopes agy android`, `scopes context pakkaascripti`, `scopes chat topbar`, `scopes chat maininput`, `scopes chat responsivity`, `scopes infra setting`, `scopes viat scopetopbar`, `scopes design list`, `scopes agy pre`, `scopes agy test1`, `scopes agy test`, `scopes agy test 1`, `scopes agy test 2`, `scopes agy compatibility`, `scopes agy list`, `scopes agy siirto`, `scopes agy scripttools`, `scopes agy siirto pakkausscripti`, `scopes local`, `scopes agy usage`, `scopes agy macos`, `scopes macos`, `scopes models`, `scopes palvelin`, `scopes macos agy`, `scopes test`, `scopes viat palautus`, `scopes performance`, `scopes istunnot`, `scopes performance ios` | `references/scopes.md` |
++| `scopes`, `scopes chat`, `scopes lista`, `scopes infra`, `scopes yhteys`, `scopes jakelu`, `scopes jakelu mac`, `scopes testit`, `scopes viat`, `scopes notifications`, `scopes siirto`, `scopes design`, `scopes chat media`, `scopes chat question`, `scopes context`, `scopes localregister`, `scopes context purascript`, `scopes universaltools`, `scopes agy`, `scopes agy android`, `scopes context pakkaascripti`, `scopes chat topbar`, `scopes chat maininput`, `scopes infra setting`, `scopes viat scopetopbar`, `scopes design list`, `scopes agy pre`, `scopes agy test1`, `scopes agy test`, `scopes agy test 1`, `scopes agy test 2`, `scopes agy compatibility`, `scopes agy list`, `scopes agy siirto`, `scopes agy scripttools`, `scopes agy siirto pakkausscripti`, `scopes local`, `scopes agy usage`, `scopes agy macos`, `scopes macos`, `scopes models`, `scopes palvelin`, `scopes macos agy`, `scopes test`, `scopes viat palautus`, `scopes istunnot`, `scopes performance ios`, `scopes lostdev` | `references/scopes.md` |
+ | `test` | `references/test.md` |
+ 
+ Kaikki skoopit noudattavat lisäksi aina `references/yhteiset.md`.
+diff --git a/Infra/skills/keskustelun-siirto/references/scopes.md b/Infra/skills/keskustelun-siirto/references/scopes.md
+index 47d3c290..6b7c3202 100644
+--- a/Infra/skills/keskustelun-siirto/references/scopes.md
++++ b/Infra/skills/keskustelun-siirto/references/scopes.md
+@@ -30,7 +30,6 @@ Yläskooppi `scopes`: Scopes-äppi (iOS) ja sen palvelu :8787: keskustelulista,
+ | `scopes context pakkaascripti` | `scopes/context/pakkaascripti/REKISTERI.md` kokonaan |
+ | `scopes chat topbar` | `scopes/chat/topbar/REKISTERI.md` kokonaan |
+ | `scopes chat maininput` | `scopes/chat/maininput/REKISTERI.md` kokonaan |
+-| `scopes chat responsivity` | `scopes/chat/responsivity/REKISTERI.md` kokonaan |
+ | `scopes infra setting` | `scopes/infra/setting/REKISTERI.md` kokonaan |
+ | `scopes viat scopetopbar` | `scopes/viat/scopetopbar/REKISTERI.md` kokonaan |
+ | `scopes design list` | `scopes/design/list/REKISTERI.md` kokonaan |
+@@ -51,9 +50,9 @@ Yläskooppi `scopes`: Scopes-äppi (iOS) ja sen palvelu :8787: keskustelulista,
+ | `scopes macos agy` | `scopes/macos/agy/REKISTERI.md` kokonaan |
+ | `scopes test` | `scopes/test/REKISTERI.md` kokonaan |
+ | `scopes viat palautus` | `scopes/viat/palautus/REKISTERI.md` kokonaan |
+-| `scopes performance` | `scopes/performance/REKISTERI.md` kokonaan |
+ | `scopes istunnot` | `scopes/istunnot/REKISTERI.md` kokonaan |
+ | `scopes performance ios` | `scopes/performance/ios/REKISTERI.md` kokonaan |
++| `scopes lostdev` | `scopes/lostdev/REKISTERI.md` kokonaan |
+ 
+ Lähdetarkistus: `git log --oneline -3 -- scopes/` ja `git status --short scopes/` polut omistavassa repossa.
+ 
+diff --git a/claude/siirto/mittaukset/vaihevirheet.jsonl b/claude/siirto/mittaukset/vaihevirheet.jsonl
+index 261b10d1..5a0361e2 100644
+--- a/claude/siirto/mittaukset/vaihevirheet.jsonl
++++ b/claude/siirto/mittaukset/vaihevirheet.jsonl
+@@ -389,3 +389,31 @@
+ {"aika":"2026-10-12T22:17:21.868Z","tyokalu":"pakkaa","skooppi":"infra oneplus","malli":"claude-haiku-5-5","vaihe":"C","kierros":2,"yritys":3,"tulos":"korjattu"}
+ {"aika":"2026-10-12T22:32:33.238Z","tyokalu":"pakkaa","skooppi":"infra linux","malli":"claude-haiku-5-5","vaihe":"C","kierros":1,"yritys":1,"tulos":"hylätty","virheet":["kohta 1: Avoimet asiat -rivin Tila-soluun ei liitetä (tilasana: liitos rikkoisi sanan) — liitä Seuraava askel -soluun tai valitse ei","kohta 2: Avoimet asiat -rivin Tila-soluun ei liitetä (tilasana: liitos rikkoisi sanan) — liitä Seuraava askel -soluun tai valitse ei","kohta 3: Avoimet asiat -rivin Tila-soluun ei liitetä (tilasana: liitos rikkoisi sanan) — liitä Seuraava askel -soluun tai valitse ei","kohta 4: Avoimet asiat -rivin Tila-soluun ei liitetä (tilasana: liitos rikkoisi sanan) — liitä Seuraava askel -soluun tai valitse ei","kohta 5: Avoimet asiat -rivin Tila-soluun ei liitetä (tilasana: liitos rikkoisi sanan) — liitä Seuraava askel -soluun tai valitse ei"]}
+ {"aika":"2026-10-12T22:32:41.767Z","tyokalu":"pakkaa","skooppi":"infra linux","malli":"claude-haiku-5-5","vaihe":"C","kierros":1,"yritys":2,"tulos":"korjattu"}
++{"aika":"2026-10-17T13:54:29.871Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":1,"yritys":1,"tulos":"hylätty","virheet":["kohta 1: rivi \"macOS AGY -toimintojen ja valintojen testaus ja verifiointi\" ei ole kohdan aihe — rivin avaimen sanoista mikään ei esiinny kohdassa; liitä riviin, jonka avainsana kohta nimeää, tai käytä uusi tai ei","kohta 2: rivi \"macOS AGY -toimintojen ja valintojen testaus ja verifiointi\" ei ole kohdan aihe — rivin avaimen sanoista mikään ei esiinny kohdassa; liitä riviin, jonka avainsana kohta nimeää, tai käytä uusi tai ei"]}
++{"aika":"2026-10-17T13:54:37.607Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":1,"yritys":2,"tulos":"korjattu"}
++{"aika":"2026-10-17T18:30:12.095Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":1,"yritys":1,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T18:30:13.127Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":1,"yritys":2,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T18:30:14.154Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":1,"yritys":3,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T18:30:15.141Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":2,"yritys":1,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T18:30:16.140Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":2,"yritys":2,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T18:30:17.156Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":2,"yritys":3,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T18:30:18.123Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":3,"yritys":1,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T18:30:19.130Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":3,"yritys":2,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T18:30:20.122Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":3,"yritys":3,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T18:30:21.099Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":4,"yritys":1,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T18:30:22.097Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":4,"yritys":2,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T18:30:23.117Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":4,"yritys":3,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T18:30:23.118Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","tulos":"epäonnistui","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T19:20:33.024Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":1,"yritys":1,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T19:20:34.039Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":1,"yritys":2,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T19:20:35.048Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":1,"yritys":3,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T19:20:36.057Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":2,"yritys":1,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T19:20:37.096Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":2,"yritys":2,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T19:20:38.100Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":2,"yritys":3,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T19:20:39.074Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":3,"yritys":1,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T19:20:40.100Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":3,"yritys":2,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T19:20:41.106Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":3,"yritys":3,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T19:20:42.097Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":4,"yritys":1,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T19:20:43.099Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":4,"yritys":2,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T19:20:44.094Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","kierros":4,"yritys":3,"tulos":"hylätty","virheet":["Not logged in · Please run /login"]}
++{"aika":"2026-10-17T19:20:44.094Z","tyokalu":"pakkaa","skooppi":"scopes macos agy","malli":"claude-sonnet-5-5","vaihe":"C","tulos":"epäonnistui","virheet":["Not logged in · Please run /login"]}
+diff --git a/claude/siirto/state/arkistoidut-skoopit.json b/claude/siirto/state/arkistoidut-skoopit.json
+index 63415967..58266b52 100644
+--- a/claude/siirto/state/arkistoidut-skoopit.json
++++ b/claude/siirto/state/arkistoidut-skoopit.json
+@@ -59,5 +59,15 @@
+     "aika": "2026-10-16T13:26:30.606Z",
+     "rekisteri": "scopes/agy/siirto/REKISTERI.md",
+     "arkistoitu": "scopes/agy/siirto/REKISTERI.arkistoitu.md"
++  },
++  "scopes chat responsivity": {
++    "aika": "2026-10-18T06:20:28.670Z",
++    "rekisteri": "scopes/chat/responsivity/REKISTERI.md",
++    "arkistoitu": "scopes/chat/responsivity/REKISTERI.arkistoitu.md"
++  },
++  "scopes performance": {
++    "aika": "2026-10-18T06:21:17.834Z",
++    "rekisteri": "scopes/performance/REKISTERI.md",
++    "arkistoitu": "scopes/performance/REKISTERI.arkistoitu.md"
+   }
+ }
+diff --git a/claude/siirto/state/skoopit.json b/claude/siirto/state/skoopit.json
+index 20da3748..cd82d030 100644
+--- a/claude/siirto/state/skoopit.json
++++ b/claude/siirto/state/skoopit.json
+@@ -199,9 +199,6 @@
+   "scopes chat maininput": [
+     "scopes/chat/maininput/REKISTERI.md"
+   ],
+-  "scopes chat responsivity": [
+-    "scopes/chat/responsivity/REKISTERI.md"
+-  ],
+   "scopes infra setting": [
+     "scopes/infra/setting/REKISTERI.md"
+   ],
+@@ -217,13 +214,16 @@
+   "scopes viat palautus": [
+     "scopes/viat/palautus/REKISTERI.md"
+   ],
+-  "scopes performance": [
+-    "scopes/performance/REKISTERI.md"
+-  ],
+   "scopes istunnot": [
+     "scopes/istunnot/REKISTERI.md"
+   ],
+   "scopes performance ios": [
+     "scopes/performance/ios/REKISTERI.md"
++  ],
++  "scopes lostdev": [
++    "scopes/lostdev/REKISTERI.md"
++  ],
++  "scopes kordinaattori": [
++    "scopes/kordinaattori/REKISTERI.md"
+   ]
+ }
+diff --git a/claude/siirto/tools/aja-siirtaja.sh b/claude/siirto/tools/aja-siirtaja.sh
+index 3d8f58be..9fe9aaa1 100644
+--- a/claude/siirto/tools/aja-siirtaja.sh
++++ b/claude/siirto/tools/aja-siirtaja.sh
+@@ -249,7 +249,12 @@ fi
+ # Kirjautumaton agy odottaa jokaisella -p-kutsulla 60 s kirjautumista, ja vaihesilmukka ehtisi
+ # yrittää monta kertaa ennen varareittiä (SIIRTO-AGY-ONEPLUS 25.9.2026). `agy models` vastaa alle
+ # 2 sekunnissa ja epäonnistuu ilman kirjautumista; kirjautuminen: aja `agy` ilman argumentteja.
+-if [ "$MOOTTORI" = "agy" ] && ! timeout 20 agy models </dev/null >/dev/null 2>&1; then
++TIMEOUT_BIN=""
++if command -v timeout >/dev/null 2>&1; then TIMEOUT_BIN="timeout 20"
++elif command -v gtimeout >/dev/null 2>&1; then TIMEOUT_BIN="gtimeout 20"
++elif [ -x "/opt/homebrew/opt/coreutils/libexec/gnubin/timeout" ]; then TIMEOUT_BIN="/opt/homebrew/opt/coreutils/libexec/gnubin/timeout 20"
++fi
++if [ "$MOOTTORI" = "agy" ] && ! $TIMEOUT_BIN agy models </dev/null >/dev/null 2>&1; then
+   echo "AJAJA: agy ei kirjautunut tai ei vastaa — varareitti (kirjaudu: aja agy ilman argumentteja)"
+   [ "$MODE" = "pura" ] && exit 10
+   exit 3
+diff --git a/claude/siirto/tools/autovaihto.sh b/claude/siirto/tools/autovaihto.sh
+index 183e5871..35efb835 100755
+--- a/claude/siirto/tools/autovaihto.sh
++++ b/claude/siirto/tools/autovaihto.sh
+@@ -35,6 +35,18 @@ case "$SKOOPPI" in
+   *[!a-zA-Z0-9\ \&._-]*) echo "VIRHE: skoopin nimessä on sallimaton merkki: $SKOOPPI" >&2; exit 1 ;;
+ esac
+ 
++# Jos ajetaan Macilla SSH-yhteyden yli OnePlus-palvelimelta, delegoidaan autovaihto OnePlus-palvelimelle,
++# missä Scopes-taustapalvelu (palvelin.mjs) ja istunnon tmux-ikkunat sijaitsevat (V-555, 18.10.2026).
++if [ "$(uname -s)" = "Darwin" ] && [ -n "${SSH_CLIENT-}" ] && [ "${AUTOVAIHTO_DELEGOITU-}" != "1" ]; then
++  case "$SSH_CLIENT" in
++    192.0.2.11*)
++      if ssh -o BatchMode=yes -o ConnectTimeout=3 palvelin true 2>/dev/null; then
++        exec ssh palvelin "cd ~/palvelin && AUTOVAIHTO_DELEGOITU=1 bash claude/siirto/tools/autovaihto.sh vaihda \"$SKOOPPI\" $(printf ' %q' "$@")"
++      fi
++      ;;
++  esac
++fi
++
+ # Paikallinen istunto (käyttäjä 15.10.2026: "Paikalliset mallit pitää saada myös keskustelun ajoon"): --model
+ # palvelin/<id> ajaa Claude Coden palvelimen LM Studiota vasten (Anthropic-yhteensopiva /v1/messages). LM Studio
+ # kuuntelee vain palvelimen 127.0.0.1:1234:ää, joten väliin tulee ssh-tunneli LM_URL:iin. Remote Control ei toimi
+@@ -46,6 +58,7 @@ LM_ETULIITE="palvelin/"
+ # (vain scopes-perhe). Ei Remote Controlia, ja agy tallentaa keskustelun ~/.gemini/antigravity-cli/conversations-hakemistoon,
+ # joten istunto ei näy Scopes-äpin istuntolistassa; se löytyy tmuxista (`tmux attach -t siirto-…`). Effort on mallin tunnuksessa.
+ AGY_ETULIITE="agy/"
++MAC_AGY_ETULIITE="mac-agy/"
+ LM_URL="http://127.0.0.1:${AUTOVAIHTO_LM_PORTTI:-11234}"
+ LM_KONTEKSTI="${AUTOVAIHTO_LM_KONTEKSTI:-98304}"
+ MALLI=""; EFFORT=""; VIIVE=20; SULJE=1; KUIVA=0; VIESTI=""; RD=""
+@@ -103,17 +116,36 @@ if [ -z "$EFFORT" ] || [ -z "$MALLI" ]; then
+     # Agy-istunnon autopack jatkaa agy-mallilla: luetaan agy-esivanhemman komentoriviltä --model.
+     if [ "$MALLI_LAHDE" = oletus ] && [ -z "${SIIRTO_TRANSKRIPTI-}" ]; then
+       pid=$$
+-      while [ "$pid" -gt 1 ]; do
+-        komento=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)
++      while [ -n "$pid" ] && [ "$pid" -gt 1 ]; do
++        if [ -d /proc ]; then
++          komento=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)
++        else
++          komento=$(ps -p "$pid" -o args= 2>/dev/null)
++        fi
+         case "$komento" in
+           */claude\ *|claude\ *|*/claude/versions/*) break ;;
+           */agy\ *|agy\ *)
+-            m=$(tr '\0' '\n' < "/proc/$pid/cmdline" 2>/dev/null | grep -A1 -- '^--model$' | tail -n1)
++            if [ -d /proc ]; then
++              m=$(tr '\0' '\n' < "/proc/$pid/cmdline" 2>/dev/null | grep -A1 -- '^--model$' | tail -n1)
++            else
++              m=$(printf '%s\n' "$komento" | grep -oE -- '--model[ =]+[^ ]+' | sed -E 's/--model[ =]+//')
++            fi
+             case "$m" in ''|[!a-z0-9]*|*[!a-z0-9.-]*) ;;
+-              *) MALLI="$AGY_ETULIITE$m"; MALLI_LAHDE="kutsuva sessio (agy)" ;; esac
++              *)
++                if [ "$(uname -s)" = "Darwin" ]; then
++                  MALLI="$MAC_AGY_ETULIITE$m"; MALLI_LAHDE="kutsuva sessio (mac-agy)"
++                else
++                  MALLI="$AGY_ETULIITE$m"; MALLI_LAHDE="kutsuva sessio (agy)"
++                fi
++                ;;
++            esac
+             break ;;
+         esac
+-        pid=$(cut -d')' -f2 "/proc/$pid/stat" 2>/dev/null | awk '{print $2}') || break
++        if [ -d /proc ]; then
++          pid=$(cut -d')' -f2 "/proc/$pid/stat" 2>/dev/null | awk '{print $2}') || break
++        else
++          pid=$(ps -p "$pid" -o ppid= 2>/dev/null | tr -d ' ') || break
++        fi
+       done
+     fi
+   fi
+@@ -145,8 +177,10 @@ rd_tila() {
+ if [ -z "$RD" ]; then RD=$(rd_tila); RD_LAHDE="kutsuva sessio"; fi
+ case "$EFFORT" in low|medium|high|xhigh|max) ;; *) echo "VIRHE: effort $EFFORT" >&2; exit 1 ;; esac
+ case "$VIIVE" in ''|*[!0-9]*) echo "VIRHE: viive $VIIVE" >&2; exit 1 ;; esac
+-LM_ID=""; AGY_ID=""
++LM_ID=""; AGY_ID=""; MAC_AGY_ID=""
+ case "$MALLI" in
++  "$MAC_AGY_ETULIITE"*) MAC_AGY_ID="${MALLI#"$MAC_AGY_ETULIITE"}"
++    case "$MAC_AGY_ID" in ''|[!a-z0-9]*|*[!a-z0-9.-]*) echo "VIRHE: malli $MALLI" >&2; exit 1 ;; esac ;;
+   "$AGY_ETULIITE"*) AGY_ID="${MALLI#"$AGY_ETULIITE"}"
+     case "$AGY_ID" in ''|[!a-z0-9]*|*[!a-z0-9.-]*) echo "VIRHE: malli $MALLI" >&2; exit 1 ;; esac ;;
+   "$LM_ETULIITE"*) LM_ID="${MALLI#"$LM_ETULIITE"}"
+@@ -162,16 +196,28 @@ oma_ikkuna() {
+   [ -n "$ikkuna" ] || return 0
+   ikkuna_pid=$(tmux display-message -p -t "$ikkuna" '#{pane_pid}' 2>/dev/null) || return 0
+   pid=$$
+-  while [ "$pid" -gt 1 ]; do
+-    komento=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)
++  while [ -n "$pid" ] && [ "$pid" -gt 1 ]; do
++    if [ -d /proc ]; then
++      komento=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)
++    else
++      komento=$(ps -p "$pid" -o args= 2>/dev/null)
++    fi
+     case "$komento" in
+       *--sdk-url*|*claude\ remote-control*) return 0 ;;
+       */claude\ *|claude\ *|*/claude/versions/*|*/agy\ *|agy\ *)
+-        vanhempi=$(cut -d')' -f2 "/proc/$pid/stat" 2>/dev/null | awk '{print $2}')
++        if [ -d /proc ]; then
++          vanhempi=$(cut -d')' -f2 "/proc/$pid/stat" 2>/dev/null | awk '{print $2}')
++        else
++          vanhempi=$(ps -p "$pid" -o ppid= 2>/dev/null | tr -d ' ')
++        fi
+         if [ "$pid" = "$ikkuna_pid" ] || [ "$vanhempi" = "$ikkuna_pid" ]; then echo "$ikkuna"; fi
+         return 0 ;;
+     esac
+-    pid=$(cut -d')' -f2 "/proc/$pid/stat" 2>/dev/null | awk '{print $2}') || return 0
++    if [ -d /proc ]; then
++      pid=$(cut -d')' -f2 "/proc/$pid/stat" 2>/dev/null | awk '{print $2}') || return 0
++    else
++      pid=$(ps -p "$pid" -o ppid= 2>/dev/null | tr -d ' ') || return 0
++    fi
+   done
+ }
+ 
+@@ -192,10 +238,14 @@ PERHE_RC=1
+ if [ -z "$VIESTI" ] && [ -f "$MALLITON" ]; then node "$MALLITON" --perhe "$SKOOPPI" >/dev/null 2>&1; PERHE_RC=$?; fi
+ malliton_virhe() {
+   local syy; syy=$(printf '%s' "$1" | tr -d '\000-\010\013-\037' | tr '\n' ' ' | sed 's/[[:space:]]*$//' | cut -c1-300)
+-  VIESTI="Malliton purku epäonnistui ($SKOOPPI): $syy — kysy käyttäjältä AskUserQuestionilla, miten jatketaan; älä pura mallilla."
++  if [ -n "$AGY_ID" ] || [ -n "$MAC_AGY_ID" ]; then
++    VIESTI="Malliton purku epäonnistui ($SKOOPPI): $syy — kysy käyttäjältä, miten jatketaan; älä pura mallilla."
++  else
++    VIESTI="Malliton purku epäonnistui ($SKOOPPI): $syy — kysy käyttäjältä AskUserQuestionilla, miten jatketaan; älä pura mallilla."
++  fi
+ }
+ if [ "$PERHE_RC" = 0 ]; then
+-  M_KOHDE=claude; [ -n "$AGY_ID" ] && M_KOHDE=neutraali
++  M_KOHDE=claude; { [ -n "$AGY_ID" ] || [ -n "$MAC_AGY_ID" ]; } && M_KOHDE=neutraali
+   M_ARGS=("$SKOOPPI" --kohde "$M_KOHDE" --autojatko)
+   [ "$RD" = 1 ] && M_ARGS+=(--rd)
+   if [ "$SULJE" = 1 ] && [ -n "$VANHA" ]; then
+@@ -221,14 +271,48 @@ if [ "$PERHE_RC" = 0 ]; then
+ elif [ "$PERHE_RC" != 1 ]; then
+   malliton_virhe "perhetarkistus (pura-malliton.mjs --perhe) exit $PERHE_RC"
+ fi
+-if [ -n "$AGY_ID" ] && [ "$PERHE_RC" != 0 ] && [ -z "$VIESTI" ]; then
++if { [ -n "$AGY_ID" ] || [ -n "$MAC_AGY_ID" ]; } && [ "$PERHE_RC" != 0 ] && [ -z "$VIESTI" ]; then
+   echo "VIRHE: agy-istunto vaatii scopes-perheen skoopin (neutraali purku); $SKOOPPI ei ole perheessä (--perhe exit $PERHE_RC)" >&2; exit 1
+ fi
+ [ -n "$VIESTI" ] || VIESTI="/pura $SKOOPPI$RD_LIPPU --autojatko"
+ SLUG=$(printf '%s' "$SKOOPPI" | tr -c 'a-zA-Z0-9\n' '-' | tr 'A-Z' 'a-z')
+ NIMI="siirto-${SLUG}-$(date +%H%M%S)"
+ 
+-if [ -n "$AGY_ID" ]; then
++if [ -n "$MAC_AGY_ID" ]; then
++  if [ -z "${M_TIEDOSTO-}" ] && [ -n "$VIESTI" ]; then
++    case "$VIESTI" in
++      *"Malliton purku: lue "*".md ja noudata sitä."*)
++        _pura_tiedosto=$(printf '%s\n' "$VIESTI" | sed -n 's/.*Malliton purku: lue \(.*\.md\) ja noudata sitä.*/\1/p')
++        _pura_nimi=$(basename "$_pura_tiedosto")
++        if [ -f "$_pura_tiedosto" ]; then
++          M_TIEDOSTO="$_pura_tiedosto"
++        elif [ -f "$HOME/.local/state/pura/$_pura_nimi" ]; then
++          M_TIEDOSTO="$HOME/.local/state/pura/$_pura_nimi"
++        elif [ -f "~/.local/state/pura/$_pura_nimi" ]; then
++          M_TIEDOSTO="~/.local/state/pura/$_pura_nimi"
++        fi
++        ;;
++    esac
++  fi
++
++  if [ -n "${M_TIEDOSTO-}" ] && [ -f "$M_TIEDOSTO" ]; then
++    if [ "$(uname -s)" != "Darwin" ]; then
++      ssh -o BatchMode=yes -o ConnectTimeout=5 mac "mkdir -p ~/.local/state/pura" 2>/dev/null || true
++      scp -o BatchMode=yes -o ConnectTimeout=5 "$M_TIEDOSTO" "${M_TIEDOSTO%.md}.json" mac:~/.local/state/pura/ 2>/dev/null || true
++    else
++      mkdir -p "$HOME/.local/state/pura" ~/.local/state/pura 2>/dev/null || true
++      if [ "$M_TIEDOSTO" != "~/.local/state/pura/$(basename "$M_TIEDOSTO")" ]; then
++        cp "$M_TIEDOSTO" "~/.local/state/pura/$(basename "$M_TIEDOSTO")" 2>/dev/null || true
++        [ -f "${M_TIEDOSTO%.md}.json" ] && cp "${M_TIEDOSTO%.md}.json" "~/.local/state/pura/$(basename "$M_TIEDOSTO" .md).json" 2>/dev/null || true
++      fi
++    fi
++    VIESTI="Malliton purku: lue ~/.local/state/pura/$(basename "$M_TIEDOSTO") ja noudata sitä."
++  fi
++fi
++
++if [ -n "$MAC_AGY_ID" ]; then
++  echo "UUSI: tmux $NIMI — mac agy --dangerously-skip-permissions --model $MAC_AGY_ID --add-dir ~/.claude --add-dir ~/.local/state/pura -i \"$VIESTI\" (malli: $MALLI_LAHDE, mac-agy, ei Remote Controlia — ei Scopes-äpin istuntolistassa; r&d-tila: $([ "$RD" = 1 ] && echo päällä || echo ei) — $RD_LAHDE)"
++elif [ -n "$AGY_ID" ]; then
+   echo "UUSI: tmux $NIMI — agy --dangerously-skip-permissions --model $AGY_ID --add-dir $HOME/.claude --add-dir $HOME/.local/state/pura -i \"$VIESTI\" (malli: $MALLI_LAHDE, agy, ei Remote Controlia — ei Scopes-äpin istuntolistassa; r&d-tila: $([ "$RD" = 1 ] && echo päällä || echo ei) — $RD_LAHDE)"
+ elif [ -n "$LM_ID" ]; then
+   echo "UUSI: tmux $NIMI — ANTHROPIC_BASE_URL=$LM_URL claude --model $LM_ID --add-dir $HOME/.claude -n \"$SKOOPPI\" \"$VIESTI\" (malli: $MALLI_LAHDE, paikallinen: palvelin LM Studio, konteksti $LM_KONTEKSTI, ei Remote Controlia — näkyy Scopes-äpin skoopin viesteissä; r&d-tila: $([ "$RD" = 1 ] && echo päällä || echo ei) — $RD_LAHDE)"
+@@ -250,8 +334,37 @@ CLAUDE_CODE_SESSION_ID= node "$JUURI/$S/tools/kesken.mjs" "$SKOOPPI" 2>/dev/null
+ bash "$JUURI/$S/tools/istunto.sh" --skooppi "$SKOOPPI" 2>/dev/null
+ [ "$KUIVA" = 1 ] && { echo "KUIVA: mitään ei käynnistetty"; exit 0; }
+ 
+-if [ -n "$AGY_ID" ]; then
+-  AGY_BIN=$(command -v agy) || { echo "VIRHE: agy puuttuu PATH:sta" >&2; exit 2; }
++if [ -n "$MAC_AGY_ID" ]; then
++  if [ "$(uname -s)" = "Darwin" ]; then
++    AGY_BIN="~/.local/bin/agy"
++    [ -x "$AGY_BIN" ] || AGY_BIN=$(command -v agy) || { echo "VIRHE: agy puuttuu PATH:sta" >&2; exit 2; }
++    if command -v tmux >/dev/null 2>&1; then
++      tmux new-session -d -s "$NIMI" -c "~/Documents/claude_project" \
++        "$AGY_BIN" --dangerously-skip-permissions --model "$MAC_AGY_ID" --add-dir ~/.claude --add-dir ~/.local/state/pura -i "$VIESTI" || {
++        echo "VIRHE: tmux new-session epäonnistui" >&2; exit 2; }
++    else
++      echo "VIRHE: tmux puuttuu Macilta" >&2; exit 2
++    fi
++  else
++    tmux new-session -d -s "$NIMI" -c "$JUURI" \
++      ssh -t mac "cd ~/Documents/claude_project && ~/.local/bin/agy --dangerously-skip-permissions --model \"$MAC_AGY_ID\" --add-dir ~/.claude --add-dir ~/.local/state/pura -i \"$VIESTI\"" || {
++      echo "VIRHE: tmux new-session epäonnistui" >&2; exit 2; }
++  fi
++  KAYNNISSA=""
++  for _ in $(seq 1 30); do
++    sleep 2
++    ruutu=$(tmux capture-pane -p -t "$NIMI" 2>/dev/null) || { echo "VIRHE: uusi sessio $NIMI päättyi heti" >&2; exit 2; }
++    printf '%s\n' "$ruutu" | grep -qiE 'gemini|flash|antigravity|Google|claude|sonnet|opus|gpt' && { KAYNNISSA=1; break; }
++  done
++  if [ -z "$KAYNNISSA" ]; then
++    echo "VIRHE: mac-agy-istunto ei käynnistynyt 60 s:ssa; vanhaa ei suljeta. Ruudun loppu:" >&2
++    tmux capture-pane -p -t "$NIMI" 2>/dev/null | grep -v '^[[:space:]]*$' | tail -n 8 >&2
++    exit 2
++  fi
++  echo "OK: mac-agy tmux $NIMI"
++elif [ -n "$AGY_ID" ]; then
++  AGY_BIN=$(command -v agy || echo "~/.local/bin/agy")
++  [ -x "$AGY_BIN" ] || { echo "VIRHE: agy puuttuu PATH:sta" >&2; exit 2; }
+   tmux new-session -d -s "$NIMI" -c "$JUURI" \
+     "$AGY_BIN" --dangerously-skip-permissions --model "$AGY_ID" --add-dir "$HOME/.claude" --add-dir "$HOME/.local/state/pura" -i "$VIESTI" || {
+     echo "VIRHE: tmux new-session epäonnistui" >&2; exit 2; }
+@@ -343,7 +456,11 @@ if [ "$SULJE" = 1 ] && [ -n "$VANHA" ]; then
+     *) SULKU_KIRJAUS="${SIIRTO_STATE_DIR:-$HOME/.claude/skills/keskustelun-siirto/state}/autovaihto-sulkee/$CLAUDE_CODE_SESSION_ID"
+        { mkdir -p "$(dirname "$SULKU_KIRJAUS")" && echo $(( $(date +%s) + VIIVE + 700 )) > "$SULKU_KIRJAUS"; } 2>/dev/null || SULKU_KIRJAUS="" ;;
+   esac
+-  SULKU_KIRJAUS="$SULKU_KIRJAUS" setsid nohup bash "$JUURI/$S/tools/sulje-ikkuna.sh" "$VANHA" --viive "$VIIVE" >/dev/null 2>&1 &
++  if command -v setsid >/dev/null 2>&1; then
++    SULKU_KIRJAUS="$SULKU_KIRJAUS" setsid nohup bash "$JUURI/$S/tools/sulje-ikkuna.sh" "$VANHA" --viive "$VIIVE" >/dev/null 2>&1 &
++  else
++    SULKU_KIRJAUS="$SULKU_KIRJAUS" nohup bash "$JUURI/$S/tools/sulje-ikkuna.sh" "$VANHA" --viive "$VIIVE" >/dev/null 2>&1 &
++  fi
+   echo "SULKU: ajastettu ($VANHA, $VIIVE s)"
+ fi
+ exit 0
+diff --git a/claude/siirto/tools/autovaihto.test.mjs b/claude/siirto/tools/autovaihto.test.mjs
+index 2ce2e0a0..552d9407 100644
+--- a/claude/siirto/tools/autovaihto.test.mjs
++++ b/claude/siirto/tools/autovaihto.test.mjs
+@@ -54,10 +54,16 @@ case "$1" in
+       *pane_pid*)
+         # Ylin yhtenäinen claude-niminen esivanhempi: komentokorvauksen alaprosessi perii argv0:n, ikkunan prosessi on sen ylin.
+         p=$PPID; ylin=
+-        while [ "$p" -gt 1 ]; do
+-          a=$(tr '\\000' '\\n' < "/proc/$p/cmdline" 2>/dev/null | head -n1)
+-          if [ "$a" = claude ]; then ylin=$p; elif [ -n "$ylin" ]; then break; fi
+-          p=$(awk '{print $4}' "/proc/$p/stat" 2>/dev/null) || break
++        while [ -n "$p" ] && [ "$p" -gt 1 ]; do
++          if [ -d /proc ]; then
++            a=$(tr '\\000' '\\n' < "/proc/$p/cmdline" 2>/dev/null | head -n1)
++            if [ "$a" = claude ]; then ylin=$p; elif [ -n "$ylin" ]; then break; fi
++            p=$(awk '{print $4}' "/proc/$p/stat" 2>/dev/null) || break
++          else
++            a=$(ps -p "$p" -o comm= 2>/dev/null)
++            if [ "$a" = claude ] || [ "$(basename "$a" 2>/dev/null)" = claude ]; then ylin=$p; elif [ -n "$ylin" ]; then break; fi
++            p=$(ps -p "$p" -o ppid= 2>/dev/null | tr -d ' ') || break
++          fi
+         done
+         [ -z "$ylin" ] || echo "$ylin" ;;
+     esac ;;
+@@ -300,3 +306,18 @@ test('T6c: muu skooppi, --viesti tai perhetarkistuksen virhe ei aja skriptiä; v
+   assert.ok(uusiRivi(rikki.out).includes('"Malliton purku epäonnistui (claude testi): perhetarkistus (pura-malliton.mjs --perhe) exit 3'), rikki.out);
+   assert.deepEqual(mallitonLoki(f), []);
+ });
++
++test('mac-agy: ulkoa annettu --viesti Linux-polulla muuntuu Mac-poluksi ~/', async () => {
++  const f = fikstuuri();
++  const puraDir = join(f.hak, 'koti/.local/state/pura');
++  mkdirSync(puraDir, { recursive: true });
++  writeFileSync(join(puraDir, 'scopes-test.md'), '# Purku: scopes test');
++  writeFileSync(join(puraDir, 'scopes-test.json'), '{}');
++  const r = await autovaihto(f, [
++    '--model', 'mac-agy/gemini-3.8-flash-high',
++    '--viesti', `Malliton purku: lue ${puraDir}/scopes-test.md ja noudata sitä.`,
++    '--kuiva',
++  ]);
++  assert.equal(r.code, 0, r.out + r.err);
++  assert.ok(r.out.includes('Malliton purku: lue ~/.local/state/pura/scopes-test.md ja noudata sitä.'), r.out);
++});
+diff --git a/claude/siirto/tools/istunto.sh b/claude/siirto/tools/istunto.sh
+index f12c31a2..3e4abc7f 100755
+--- a/claude/siirto/tools/istunto.sh
++++ b/claude/siirto/tools/istunto.sh
+@@ -32,13 +32,17 @@ elavat() {
+   for f in "$ISTUNNOT"/*.json; do
+     [ -f "$f" ] || continue
+     pid=$(jq -r '.pid // empty' "$f" 2>/dev/null) || continue
+-    [ -n "$pid" ] && [ -r "/proc/$pid/stat" ] || continue
+-    alku=$(jq -r '.procStart // empty' "$f")
+-    [ -z "$alku" ] || [ "$(awk '{print $22}' "/proc/$pid/stat")" = "$alku" ] || continue
+-    # V-125/V-130/V-131: kierrätetty pid ei ole istunto — argv[0]:n pitää olla claude
+-    # (suora "claude" tai versiobinääri …/claude/versions/<v>, siksi osuma riittää).
+-    argv0=""; IFS= read -r -d '' argv0 < "/proc/$pid/cmdline" || true
+-    case "$argv0" in *claude*) ;; *) continue ;; esac
++    if [ -d /proc ]; then
++      [ -n "$pid" ] && [ -r "/proc/$pid/stat" ] || continue
++      alku=$(jq -r '.procStart // empty' "$f")
++      [ -z "$alku" ] || [ "$(awk '{print $22}' "/proc/$pid/stat")" = "$alku" ] || continue
++      argv0=""; IFS= read -r -d '' argv0 < "/proc/$pid/cmdline" || true
++      case "$argv0" in *claude*) ;; *) continue ;; esac
++    else
++      kill -0 "$pid" 2>/dev/null || continue
++      argv0=$(ps -p "$pid" -o comm= 2>/dev/null)
++      case "$argv0" in *claude*) ;; *) continue ;; esac
++    fi
+     echo "$f"
+   done
+ }
+@@ -48,10 +52,15 @@ elavat() {
+ omistaa_ikkunan() {
+   local pid="$1" ikkuna="$2" ikkuna_pid
+   ikkuna_pid=$(tmux display-message -p -t "$ikkuna" '#{pane_pid}' 2>/dev/null) || return 1
+-  [ "$pid" = "$ikkuna_pid" ] || [ "$(awk '{print $4}' "/proc/$pid/stat" 2>/dev/null)" = "$ikkuna_pid" ]
++  if [ -d /proc ]; then
++    vanhempi=$(awk '{print $4}' "/proc/$pid/stat" 2>/dev/null)
++  else
++    vanhempi=$(ps -p "$pid" -o ppid= 2>/dev/null | tr -d " ")
++  fi
++  [ "$pid" = "$ikkuna_pid" ] || [ "$vanhempi" = "$ikkuna_pid" ]
+ }
+ 
+-kello() { date -d "@$1" '+%-d.%-m. klo %H.%M' 2>/dev/null; }
++kello() { date -r "$1" '+%-d.%-m. klo %H.%M' 2>/dev/null || date -d "@$1" '+%-d.%-m. klo %H.%M' 2>/dev/null; }
+ 
+ # Tosi, jos istunto (id tai sen alku) on elossa tällä koneella.
+ elossa() {
+@@ -76,12 +85,14 @@ suljetaan() {
+ kuvaa() {
+   local id="$1" f nimi tila tmux pid silta istunto ikkuna naky sulje tr
+   f=$(elavat | while read -r g; do
+-        case "$(jq -r '.sessionId' "$g")" in "$id"*) echo "$g"; break ;; esac
++        sess=$(jq -r '.sessionId' "$g")
++        if [[ "$sess" == "$id"* ]]; then echo "$g"; break; fi
+       done)
+   if [ -z "$f" ]; then
+     tr=$(ls -t "$PROJEKTIT"/*/"$id"*.jsonl 2>/dev/null | head -n1)
+     if [ -n "$tr" ]; then
+-      echo "${id:0:8} ei käynnissä tällä koneella (transkripti muokattu viimeksi $(kello "$(stat -c %Y "$tr")")) — prosessia ei ole, joten sulkemista ei tarvita; rekisteröinti on vanha"
++      mtime=$(stat -f %m "$tr" 2>/dev/null || stat -c %Y "$tr" 2>/dev/null)
++      echo "${id:0:8} ei käynnissä tällä koneella (transkripti muokattu viimeksi $(kello "$mtime")) — prosessia ei ole, joten sulkemista ei tarvita; rekisteröinti on vanha"
+     else
+       echo "${id:0:8} ei käynnissä tällä koneella eikä sen transkriptiä löydy — ajuri on toisella koneella tai poistettu"
+     fi
+@@ -145,7 +156,8 @@ case "$SKOOPPI" in
+       # sen toisena ajavana istuntona (r&d2 "65855c70 ei käynnissä"; SIIRTO-OHJERISTIRIIDAT, löydös 13).
+       if [ -n "$AJURI_ID" ] && elossa "$AJURI_ID" && { [ -z "$OMA" ] || [ "${AJURI_ID#"$OMA"}" = "$AJURI_ID" ]; }; then
+         syke=$(jq -r '.heartbeat // empty' "$TILA")
+-        echo "ISTUNNOT: autorun-ajuri (step \"$(jq -r '.step // ""' "$TILA")\", heartbeat $(kello "$(date -d "$syke" +%s 2>/dev/null)")) $(kuvaa "$AJURI_ID")"
++        syke_s=$(date -d "$syke" +%s 2>/dev/null || node -e 'console.log(Math.floor(new Date(process.argv[1]).getTime()/1000))' "$syke" 2>/dev/null)
++        echo "ISTUNNOT: autorun-ajuri (step \"$(jq -r '.step // ""' "$TILA")\", heartbeat $(kello "$syke_s")) $(kuvaa "$AJURI_ID")"
+         n=$((n + 1))
+       fi
+     fi
+diff --git a/claude/siirto/tools/istunto.test.mjs b/claude/siirto/tools/istunto.test.mjs
+index 79f5e262..d02eaf42 100644
+--- a/claude/siirto/tools/istunto.test.mjs
++++ b/claude/siirto/tools/istunto.test.mjs
+@@ -3,7 +3,7 @@
+ // Ajo: node --test claude/siirto/tools/istunto.test.mjs
+ import { test } from 'node:test';
+ import assert from 'node:assert/strict';
+-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
++import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+ import { spawn, spawnSync } from 'node:child_process';
+ import { tmpdir } from 'node:os';
+ import { dirname, join } from 'node:path';
+@@ -12,12 +12,20 @@ import { fileURLToPath } from 'node:url';
+ const TOOLS = dirname(fileURLToPath(import.meta.url));
+ const SH = join(TOOLS, 'istunto.sh');
+ 
+-const procStart = (pid) => readFileSync(`/proc/${pid}/stat`, 'utf8').split(' ')[21];
++const procStart = (pid) => {
++  try { return readFileSync(`/proc/${pid}/stat`, 'utf8').split(' ')[21]; }
++  catch { return '1'; }
++};
+ const odotaArgv0 = async (pid, odote) => {
+   for (let i = 0; i < 50; i++) {
+     try {
+-      const a = readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0')[0];
+-      if (a === odote) return;
++      if (existsSync('/proc')) {
++        const a = readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0')[0];
++        if (a === odote) return;
++      } else {
++        const comm = spawnSync('ps', ['-p', String(pid), '-o', 'comm='], { encoding: 'utf8' }).stdout.trim();
++        if (comm.includes(odote)) return;
++      }
+     } catch {}
+     await new Promise((r) => setTimeout(r, 20));
+   }
+diff --git a/claude/siirto/tools/juuri.sh b/claude/siirto/tools/juuri.sh
+index f34c5063..ad56914f 100644
+--- a/claude/siirto/tools/juuri.sh
++++ b/claude/siirto/tools/juuri.sh
+@@ -1,4 +1,11 @@
+ #!/usr/bin/env bash
++for _p in /opt/homebrew/bin /usr/local/bin "$HOME/.local/bin"; do
++  case ":$PATH:" in
++    *":$_p:"*) ;;
++    *) [ -d "$_p" ] && PATH="$PATH:$_p" ;;
++  esac
++done
++export PATH
+ # Työtilan juuri bash-työkaluille (SIIRTO-SKOOPPIREPOT-0, 3.10.2026). Lähde: `source` tästä tiedostosta
+ # ja kutsu `siirto_juuri`; tulostaa juuren absoluuttisena. Jako päätellään siirtohakemiston nimestä
+ # kuten skooppirajaus.mjs: `claude-siirto/tools` (uusi jako, juuri yksi ylös) tai `claude/siirto/tools` (vaihda-polut: pysyy)
+diff --git a/claude/siirto/tools/kesken.mjs b/claude/siirto/tools/kesken.mjs
+index 756b6f18..441a5757 100644
+--- a/claude/siirto/tools/kesken.mjs
++++ b/claude/siirto/tools/kesken.mjs
+@@ -67,19 +67,29 @@ function skooppiOtsikosta(rivi) {
+ 
+ // Uusin muistio skoopille: `.packed-<ISO>`-pääte on pakkausaika, muuten mtime.
+ export function uusin(stateDir, skooppi, ohita = '') {
+-  const dir = join(stateDir, 'pakkaus-muistio');
+-  if (!existsSync(dir)) return null;
+   let paras = null;
+-  for (const f of readdirSync(dir)) {
++  const kasittele = (dir, f) => {
+     const m = /^([^.]+)\.md(?:\.packed-(.+))?$/.exec(f);
+-    if (!m || m[1] === ohita) continue;
++    if (!m || m[1] === ohita) return;
+     const polku = join(dir, f);
+     let teksti;
+-    try { teksti = readFileSync(polku, 'utf8'); } catch { continue; }
+-    if (skooppiOtsikosta(teksti.split('\n')[0]) !== skooppi) continue;
++    try { teksti = readFileSync(polku, 'utf8'); } catch { return; }
++    if (skooppiOtsikosta(teksti.split('\n')[0]) !== skooppi) return;
+     const aika = m[2] && !Number.isNaN(Date.parse(m[2])) ? Date.parse(m[2]) : statSync(polku).mtimeMs;
+     if (!paras || aika > paras.aika) paras = { id: m[1], polku, aika, teksti };
++  };
++
++  const dir = join(stateDir, 'pakkaus-muistio');
++  if (existsSync(dir)) {
++    for (const f of readdirSync(dir)) kasittele(dir, f);
+   }
++
++  if (existsSync(stateDir)) {
++    for (const f of readdirSync(stateDir)) {
++      if (f.startsWith('pakkaus-muistio')) kasittele(stateDir, f);
++    }
++  }
++
+   return paras;
+ }
+ 
+diff --git a/claude/siirto/tools/pakkaamatta.mjs b/claude/siirto/tools/pakkaamatta.mjs
+index 70c4066e..146ddf56 100644
+--- a/claude/siirto/tools/pakkaamatta.mjs
++++ b/claude/siirto/tools/pakkaamatta.mjs
+@@ -71,6 +71,10 @@ export function istunto(teksti) {
+ 
+ // Elävät istunnot: ~/.claude/sessions/<pid>.json, pid olemassa (istunto.sh tarkistaa tarkemmin; tässä riittää,
+ // ettei elävää istuntoa sanota päättyneeksi — ISTUNNOT-rivi kertoo sen).
++const pidElossa = (pid) => {
++  try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; }
++};
++
+ export function elavat(dir) {
+   const out = new Set();
+   if (!existsSync(dir)) return out;
+@@ -78,7 +82,7 @@ export function elavat(dir) {
+     if (!f.endsWith('.json')) continue;
+     try {
+       const j = JSON.parse(readFileSync(join(dir, f), 'utf8'));
+-      if (j.sessionId && j.pid && existsSync(`/proc/${j.pid}`)) out.add(j.sessionId);
++      if (j.sessionId && j.pid && pidElossa(j.pid)) out.add(j.sessionId);
+     } catch { /* rikkinäinen rekisteritiedosto ei ole elossa */ }
+   }
+   return out;
+diff --git a/claude/siirto/tools/pura-malliton.mjs b/claude/siirto/tools/pura-malliton.mjs
+index df219002..9c4f912c 100644
+--- a/claude/siirto/tools/pura-malliton.mjs
++++ b/claude/siirto/tools/pura-malliton.mjs
+@@ -73,7 +73,7 @@ const loppuTyhjatPois = (t) => { const r = t.split('\n'); while (r.length && !r[
+ export function suodataIstunnot(faktat, suljettavat = []) {
+   if (!suljettavat.length) return faktat;
+   const suljetaan = (r) => {
+-    const id = /^ISTUNNOT:\s*([0-9a-f-]{6,})\s/i.exec(r)?.[1];
++    const id = /^ISTUNNOT:\s*([0-9a-zA-Z._-]+)\s/i.exec(r)?.[1];
+     return Boolean(id) && suljettavat.some((s) => s.startsWith(id));
+   };
+   const ulos = faktat.filter((r) => !suljetaan(r));
+@@ -546,6 +546,10 @@ function pysyvaLohko(data) {
+ const CLAUDE_RIVI = /^NIMI: \/rename/;
+ export const CLAUDE_TYOKALUT = /AskUserQuestion|CronCreate|CronList|CronDelete|PushNotification|ToolSearch|\bSkill\b|\bAgent\b|\/rename|\/sa\b/;
+ 
++// konteksti-nyt.mjs lukee Clauden istunnon transkriptin; agy- ja paikallinen istunto ei sitä kirjoita, joten sen ajo olisi turha ja
++// kysyisi lupaa (agy, 16.10.2026: purku jäi odottamaan komennon hyväksyntää). Neutraali purku ei pyydä sitä.
++const KONTEKSTI_NYT = /konteksti-nyt\.mjs/;
++
+ export function renderoi(data, kohde = 'claude') {
+   if (!KOHTEET.includes(kohde)) throw new Error(`tuntematon kohde: ${kohde}`);
+   const neutraali = kohde === 'neutraali';
+@@ -560,7 +564,7 @@ export function renderoi(data, kohde = 'claude') {
+   const ohje = neutraali
+     ? `Tämä on valmis purkutiedosto (ei mallin päättelyä). Tee tässä järjestyksessä:\n\n1. Kirjoita ensin vastaukseesi tekstinä: esitä alla oleva raportti sellaisenaan (älä tiivistä äläkä muotoile uudelleen)${sano}.\n2. Vasta sitten ${loppu}.\n\nÄlä lue rekisteri- tai viitetiedostoja ennen vastausta.`
+     : `Tämä on valmis purkutiedosto (ei siirtäjämallia). Tee tässä järjestyksessä:\n\n1. Kirjoita ensin tekstinä, ennen ensimmäistä työkalukutsua: esitä alla oleva raportti sellaisenaan koodilohkossa (älä tiivistä äläkä muotoile uudelleen)${sano}.\n2. Tee sitten Claude-lohkon toimet ja kirjoita niiden rivit (esim. \`sa päällä — …\`) tekstinä ennen seuraavaa kohtaa.\n3. Lopuksi ${loppu}${data.ilmoitus ? ' (PushNotification juuri ennen kysymystä)' : ''}.\n\nÄlä lue rekisteri- tai viitetiedostoja ennen vastausta.`;
+-  const ulos = [`# Purku: ${data.skooppi}`, '', ohje, '', '## Raportti', '', aita(raportti.join('\n')), '', ...sanoLohko(data), ...pysyvaLohko(data)];
++  const ulos = [`# Purku: ${data.skooppi}`, '', ohje, '', '## Raportti', '', aita(raportti.join('\n')), '', ...sanoLohko(data), ...pysyvaLohko(neutraali ? { ...data, pysyva: data.pysyva.filter((s) => !KONTEKSTI_NYT.test(s)) } : data)];
+ 
+   if (data.kysy) {
+     const k = data.kysy;
+diff --git a/claude/siirto/tools/sulje-ikkuna.sh b/claude/siirto/tools/sulje-ikkuna.sh
+index 4ffca9da..462fc3de 100755
+--- a/claude/siirto/tools/sulje-ikkuna.sh
++++ b/claude/siirto/tools/sulje-ikkuna.sh
+@@ -41,8 +41,19 @@ elossa || { echo "SULJETTU: $RUUTU (ei enää olemassa)"; exit 0; }
+ 
+ # Käynnissä olevaa vuoroa ei keskeytetä: Esc sen aikana katkaisisi vanhan session loppuviestin.
+ for _ in $(seq 1 $((ODOTA / 5))); do
+-  tmux capture-pane -p -t "$RUUTU" 2>/dev/null | grep -q 'esc to interrupt' || break
+-  sleep 5
++  ruutu_teksti=$(tmux capture-pane -p -t "$RUUTU" 2>/dev/null)
++  if printf '%s\n' "$ruutu_teksti" | grep -q 'esc to interrupt'; then
++    sleep 5
++    continue
++  fi
++  cmd=$(tmux display-message -p -t "$RUUTU" '#{pane_current_command}' 2>/dev/null)
++  if [ "$cmd" = "agy" ] || [ "$cmd" = "ssh" ] || printf '%s\n' "$ruutu_teksti" | grep -qiE 'gemini|flash|antigravity'; then
++    if printf '%s\n' "$ruutu_teksti" | grep -qE 'Running command|Running \(|Thinking\.\.\.|Thought for [0-9.]+s|[⣷⣯⣟⡿⢿⣻⣽]'; then
++      sleep 5
++      continue
++    fi
++  fi
++  break
+ done
+ 
+ for yritys in 1 2 3; do
+diff --git a/scopes/chat/responsivity/REKISTERI.md b/scopes/chat/responsivity/REKISTERI.md
+deleted file mode 100644
+index 958358c0..00000000
+--- a/scopes/chat/responsivity/REKISTERI.md
++++ /dev/null
+@@ -1,38 +0,0 @@
+-# scopes/chat/responsivity/REKISTERI.md
+-
+-Tilanne: 16.10.2026
+-
+-SEURAAVA PAKETTI: ei mitään — kysytty 16.10.2026: käyttäjä valitsi "Ei seuraavaa pakettia, pakkaa vain" (avoin asia Todennus odottaa käyttäjää: puhelimella haptiikka ja tuntuma, äppi asennettava ensin)
+-
+-## Tarkoitus ja raja
+-
+-Tarkoitus: scopes-chatin reagointinopeus (chatin tuntuma: viiveet, UI:n sulavuus, striimaus). Ei kata responsiivista asettelua eri näyttökokoihin. Raja: chat-koodin muutokset tehdään vain nopeuden syyksi; mallinappi, maininput ja topbar ovat omia skooppejaan.
+-
+-## Päätökset
+-
+-- **Käyttäjä 16.10.2026:** skooppi `scopes chat responsivity` luotiin komennolla `/pura uusi scopes chat responsivity`.
+-- **16.10.2026:** Toteutus `Viestit.swift`: `Viestilista(himmeat:)` + `OdottavaViesti` (avain/pohja-sovitus, 90 s vanhenemisraja), `oletettuTyo` ja `pysaytetty` asetetaan napautuksessa ja palvelun luku korjaa, `Syottorivi.tuntuma` (UIImpactFeedbackGenerator: lähetys/jatka medium, stop rigid). ChatView: pysäytys vaihtaa napin heti. Viestit.swiftin topbar-skoopin hunkit jätettiin committaamatta.
+-- **Käyttäjä 16.10.2026:** tarkoitus on reagointinopeus (ei asettelu). Ensimmäinen työ: korjataan tunnettu vika (vika nimetään paketin alussa).
+-
+-- **16.10.2026:** Käyttäjä 16.10.2026: tarkoitus reagointinopeus, ensin tunnettu vika.
+-
+-- **16.10.2026:** Optimistinen näkymä paikallisena tilana (himmeät viestit + oletettu tila), palvelun luku vahvistaa; ei palvelinmuutosta.
+-
+-- **16.10.2026:** Hylätty: viestin lisääminen suoraan `tila.viestit`-listaan (poll korvaisi sen; sovitus vaikeampi).
+-
+-- **16.10.2026:** Tekstin palautuminen 504:ssä säilyy (suunniteltu); palvelinpuolen effort-ikkunan sulku kuuluu skoopille scopes chat (V-526), ei tehdä responsivityssä (raja: chat-koodi vain nopeuden syyksi).
+-
+-## Avoimet asiat
+-
+-| Asia | Tila | Seuraava askel |
+-|---|---|---|
+-| Skoopin viestinäkymä: lähetetty viesti näkyi vasta palvelun palautteen jälkeen; lähetys/stop/jatka-nappi vaihtui viiveellä; napeissa ei haptiikkaa (käyttäjä 16.10.2026) | korjattu 2fd38223 16.10.2026 (koodissa, käännös ok (xcodebuild Macilla); äppi asennettu puhelimeen 16.10.2026 klo 09.52, käyttäjä ei ole vielä todentanut; todentamatta oikeassa istunnossa ja puhelimen haptiikka; puhelin: haptiikka ja tuntuma, käyttäjä valitsi 16.10.2026 pakkaa vain); odottaa käyttäjää (todenna viim. 30.10.2026) | todenna: käyttäjä kokeilee puhelimella istunnossa, jossa ei ole effort-ikkunaa auki: lähetä viesti oikeassa istunnossa → himmeä kupla heti, täyttyy palvelun listasta; stop → play heti; haptiikka puhelimella; mittaa viive napautuksesta näkymään (tavoite: välitön); sitten rivi todennetuksi tai viaksi; äppi asennettu (asenna.sh, 16.10.2026 klo 09.52); simulaattoriin kirjoittava UI-testi vaatii vapaan istunnon **16.10.2026:** Macilla ajettu `SCOPES_VAIN="MalliUITests/testMallinappiNakyyJaVaihtuu" SCOPES_TULOS=responsivity bash scopes/ios/testi.sh` (xcodebuild, ~15 min taustalla; 590 s aikaraja ei riittänyt ensimmäisellä yrityksellä): käännös ja ajo onnistuivat, koodivirheitä ei. Testi itse epäonnistui (valikossa ei mallia/efforttia, 9 XCTAssertTrue); syy todentamatta — todennäköisesti mallinappi on pois käytöstä, kun istunto on työssä (rekisteri: nappi pois käytöstä työn aikana), mutta testiä ei ajettu uudelleen ilman muutosta vertailuksi. Tulospaketti Macilla ~/scopes-ios/responsivity.xcresult; Himmeän viestin ja nappien vaihdon nopeus sekä haptiikka todentamatta: haptiikka ei toimi simulaattorissa, ja oikeaan istuntoon kirjoittava UI-testi tarvitsee vapaan istunnon. Äppi on asennettu puhelimeen tämän muutoksen kanssa (16.10.2026 klo 09.52). **16.10.2026:** asenna.sh exit 0 (build 3 s = välimuistissa), äppi puhelimessa 16.10.2026; todenna puhelimella himmeä kupla, stop→play-vaihto ja haptiikka (tekemättä); viestinäkymän rajaus: replikointi ei kuulu responsivityyn, 504 ei johdu tämän skoopin koodista (Viestit.swift catch-haara toimii kuten suunniteltu). |
+-
+-## Viat
+-
+-| Vika | Tila |
+-|---|---|
+-
+-## Historia
+-
+-Historia: `scopes/chat/responsivity/HISTORIA.md` (syntyy ensimmäisessä pakkauksessa), ei lueta purussa.
+diff --git a/scopes/ios/Sources/Asiakas.swift b/scopes/ios/Sources/Asiakas.swift
+index 9296984d..0f1be23c 100644
+--- a/scopes/ios/Sources/Asiakas.swift
++++ b/scopes/ios/Sources/Asiakas.swift
+@@ -40,6 +40,17 @@ struct Asiakas {
+         return viesti.prefix(1).uppercased() + viesti.dropFirst()
+     }
+ 
++    
++    func viat() async throws -> [VikaKohta] {
++        struct Vastaus: Decodable { let viat: [VikaKohta] }
++        let v: Vastaus = try await hae("/api/viat")
++        return v.viat
++    }
++
++    func diagnostiikkaTila() async throws -> DiagnostiikkaTila {
++        try await hae("/api/diagnostiikka")
++    }
++
+     func skoopit() async throws -> [SkooppiYhteenveto] { try await hae("/api/skoopit") }
+ 
+     func skooppi(_ nimi: String) async throws -> SkooppiNakyma { try await hae("/api/skoopit/\(koodattu(nimi))") }
+diff --git a/scopes/ios/Sources/Juuri.swift b/scopes/ios/Sources/Juuri.swift
+index 24b0c560..20206370 100644
+--- a/scopes/ios/Sources/Juuri.swift
++++ b/scopes/ios/Sources/Juuri.swift
+@@ -45,7 +45,7 @@ struct SkoopitApp: App {
+ }
+ 
+ enum Paanakyma: Hashable {
+-    case chat, infra, android
++    case kordinaattori, chat, infra, android, viat
+     case skooppi(String)
+ }
+ 
+@@ -84,6 +84,35 @@ final class Navigaatio: ObservableObject {
+     }
+ }
+ 
++// Päänäkymät erotettu Equatable-näkymäksi (PERFORMANCE-IOS-VEDON-OPTIMOINTI): sivupalkin veto päivittää
++// vain siirto- ja veto-arvoja, joten päänäkymien (Chat, Infra jne.) koko puuta ei lasketa uudelleen joka ruudulla.
++struct PaanakymaSisalto: View, Equatable {
++    let nakyma: Paanakyma
++    let skooppiAvaus: Int
++
++    static func == (a: PaanakymaSisalto, b: PaanakymaSisalto) -> Bool {
++        a.nakyma == b.nakyma && a.skooppiAvaus == b.skooppiAvaus
++    }
++
++    var body: some View {
++                    ZStack {
++                        KordinaattoriView(nakyvissa: nakyma == .kordinaattori).nakyvissa(nakyma == .kordinaattori)
++                        ChatView().nakyvissa(nakyma == .chat)
++                        InfraView(nakyvissa: nakyma == .infra).nakyvissa(nakyma == .infra)
++                        AndroidView(nakyvissa: nakyma == .android).nakyvissa(nakyma == .android)
++                        ViatView(nakyvissa: nakyma == .viat).nakyvissa(nakyma == .viat)
++                        if case let .skooppi(nimi) = nakyma {
++                            NavigationStack {
++                                SkooppiViestitView(nimi: nimi)
++                                    .toolbar { Sivupalkkipainike() }
++                                    .navigationDestination(for: SkooppiReitti.self) { $0.nakyma }
++                            }
++                            .id("\(nimi)#\(skooppiAvaus)")
++                        }
++                    }
++    }
++}
++
+ struct JuuriView: View {
+     @EnvironmentObject private var navigaatio: Navigaatio
+     @State private var veto: CGFloat = 0
+@@ -98,19 +127,8 @@ struct JuuriView: View {
+             let leveys = min(g.size.width * 0.85, 340)
+             let siirto = navigaatio.sivupalkkiAuki ? max(0, leveys + min(0, veto)) : min(leveys, max(0, veto))
+             ZStack(alignment: .leading) {
+-                ZStack {
+-                    ChatView().nakyvissa(navigaatio.nakyma == .chat)
+-                    InfraView(nakyvissa: navigaatio.nakyma == .infra).nakyvissa(navigaatio.nakyma == .infra)
+-                    AndroidView(nakyvissa: navigaatio.nakyma == .android).nakyvissa(navigaatio.nakyma == .android)
+-                    if case let .skooppi(nimi) = navigaatio.nakyma {
+-                        NavigationStack {
+-                            SkooppiViestitView(nimi: nimi)
+-                                .toolbar { Sivupalkkipainike() }
+-                                .navigationDestination(for: SkooppiReitti.self) { $0.nakyma }
+-                        }
+-                        .id("\(nimi)#\(navigaatio.skooppiAvaus)")
+-                    }
+-                }
++                PaanakymaSisalto(nakyma: navigaatio.nakyma, skooppiAvaus: navigaatio.skooppiAvaus)
++                    .equatable()
+                 // Käännön jälkeen kuvaa ei ole (alla): sumeus lasketaan elävänä, kunnes seuraava avaus ottaa uuden kuvan.
+                 // Raskas vain tämän palkin sulkuliukuman ajan (käyttäjä 14.10.2026: "sumennus katoaa käännön yhteydessä").
+                 .blur(radius: sumeaElava && Mittari.sumeus ? 5 * max(0, siirto / leveys - 0.7) / 0.3 : 0, opaque: true)
+diff --git a/scopes/ios/Sources/Malli.swift b/scopes/ios/Sources/Malli.swift
+index 13f8a9ca..1055380b 100644
+--- a/scopes/ios/Sources/Malli.swift
++++ b/scopes/ios/Sources/Malli.swift
+@@ -16,19 +16,19 @@ struct SkooppiYhteenveto: Codable, Identifiable, Hashable {
+     var tilaNyt: String { tila ?? (istuntoja > 0 ? "kasittely" : "pakattu") }
+ }
+ 
+-struct Seuraava: Decodable, Hashable {
++struct Seuraava: Codable, Hashable {
+     let id: String?
+     let kuvaus: String
+     let polut: [String]
+     let aloitus: String?
+ }
+ 
+-struct Konteksti: Decodable, Hashable {
++struct Konteksti: Codable, Hashable {
+     let tokenit: Int
+     let aika: String?
+ }
+ 
+-struct Istunto: Decodable, Identifiable, Hashable {
++struct Istunto: Codable, Identifiable, Hashable {
+     let id: String
+     let nimi: String?
+     let tila: String?
+@@ -39,21 +39,26 @@ struct Istunto: Decodable, Identifiable, Hashable {
+     // Claude-istunnon malli ja effort viimeisestä vastauksesta (MALLINAPPI); vanha palvelu ja istunto ilman vastausta → nil.
+     let malli: String?
+     let effort: String?
++    let tyyppi: String?
+ }
+ 
+ // Rekisterin taulukkorivi: otsikkosolu → arvo. Otsikot vaihtelevat skoopeittain ("Asia", "Vika", "Tila", …).
+-struct Taulukkorivi: Decodable, Hashable {
++struct Taulukkorivi: Codable, Hashable {
+     let solut: [String: String]
+     init(from decoder: Decoder) throws {
+         solut = try decoder.singleValueContainer().decode([String: String].self)
+     }
++    func encode(to encoder: Encoder) throws {
++        var container = encoder.singleValueContainer()
++        try container.encode(solut)
++    }
+     var otsikko: String { solut["Asia"] ?? solut["Vika"] ?? solut.values.first ?? "" }
+     var tila: String? { solut["Tila"] }
+     var seuraavaAskel: String? { solut["Seuraava askel"] }
+     var avoin: Bool { !["valmis", "todennettu", "korjattu"].contains((tila ?? "").lowercased()) }
+ }
+ 
+-struct SkooppiNakyma: Decodable, Hashable {
++struct SkooppiNakyma: Codable, Hashable {
+     let nimi: String
+     let rekisterit: [String]
+     let seuraava: Seuraava?
+@@ -66,7 +71,7 @@ struct SkooppiNakyma: Decodable, Hashable {
+     let jonossa: [Jonorivi]?
+ }
+ 
+-struct Jonorivi: Decodable, Hashable {
++struct Jonorivi: Codable, Hashable {
+     let komento: String
+     let aika: Double
+ }
+@@ -75,13 +80,13 @@ struct Jonorivi: Decodable, Hashable {
+ // tokeniarvioineen ja elävien istuntojen konteksti osa-alueittain. Ryhmiin kuuluvat myös uusimman istunnon ladatut
+ // osat tekstinä (V-400: kehote, ohjeet, listat, muistutukset, purun runko); niiden polku on "istunto <nimi>/<laji>". Tiedostojen tokenit ovat arvioita merkkimäärästä;
+ // istunnon `mitattu` on viimeisimmän vastauksen todellinen kontekstikoko.
+-struct KontekstiOsa: Decodable, Hashable {
++struct KontekstiOsa: Codable, Hashable {
+     let otsikko: String
+     let teksti: String
+     let tokenit: Int
+ }
+ 
+-struct KontekstiRyhma: Decodable, Hashable, Identifiable {
++struct KontekstiRyhma: Codable, Hashable, Identifiable {
+     let laji: String
+     let polku: String
+     let tokenit: Int
+@@ -135,19 +140,19 @@ struct RekisterinOsat: Decodable {
+     let osat: [KontekstiOsa]
+ }
+ 
+-struct IstunnonOsa: Decodable, Hashable {
++struct IstunnonOsa: Codable, Hashable {
+     let nimi: String
+     let tokenit: Int
+ }
+ 
+-struct IstunnonKonteksti: Decodable, Hashable, Identifiable {
++struct IstunnonKonteksti: Codable, Hashable, Identifiable {
+     let id: String
+     let nimi: String?
+     let mitattu: Int?
+     let osat: [IstunnonOsa]
+ }
+ 
+-struct SkoopinKonteksti: Decodable, Hashable {
++struct SkoopinKonteksti: Codable, Hashable {
+     let tokenit: Int
+     let ryhmat: [KontekstiRyhma]
+     let istunnot: [IstunnonKonteksti]
+@@ -215,7 +220,7 @@ struct ArkistointiVastaus: Decodable {
+ }
+ 
+ // Chat ja skoopin viestit (viestit.mjs, DEMO-SCOPES-VALILEHDET).
+-struct Agentti: Decodable, Identifiable, Hashable {
++struct Agentti: Codable, Identifiable, Hashable {
+     let nimi: String
+     let kuvaus: String
+     let tyyppi: String
+@@ -233,12 +238,12 @@ struct ChatTapahtuma: Decodable {
+ }
+ 
+ // Agentin monivalinta (AskUserQuestion, DEMO-SCOPES-LISTA 13.10.2026): kysymys ja vaihtoehdot.
+-struct Vaihtoehto: Decodable, Hashable {
++struct Vaihtoehto: Codable, Hashable {
+     let nimi: String
+     let kuvaus: String?
+ }
+ 
+-struct Kysymys: Decodable, Hashable {
++struct Kysymys: Codable, Hashable {
+     let kysymys: String
+     let otsikko: String?
+     let monivalinta: Bool
+@@ -247,7 +252,7 @@ struct Kysymys: Decodable, Hashable {
+ 
+ // rooli: kayttaja, agentti, tyokalu (agentin työkalukutsu yhtenä rivinä, DEMO-SCOPES-PARANNUKSET) tai kysymys
+ // (monivalinta; vastaus tulee perässä käyttäjän viestinä).
+-struct Viesti: Decodable, Hashable {
++struct Viesti: Codable, Hashable {
+     let rooli: String
+     var teksti: String
+     let aika: String?
+@@ -258,7 +263,7 @@ struct Viesti: Decodable, Hashable {
+ }
+ 
+ // Chatin keskusteluhistoria (DEMO-SCOPES-PARANNUKSET): agentti puuttuu, jos palvelu ei tunne sitä.
+-struct ChatKeskustelu: Decodable, Identifiable, Hashable {
++struct ChatKeskustelu: Codable, Identifiable, Hashable {
+     let id: String
+     let otsikko: String
+     let agentti: String?
+@@ -266,13 +271,13 @@ struct ChatKeskustelu: Decodable, Identifiable, Hashable {
+     let aika: String
+ }
+ 
+-struct ChatKeskustelunViestit: Decodable {
++struct ChatKeskustelunViestit: Codable {
+     let id: String
+     let agentti: String?
+     let viestit: [Viesti]
+ }
+ 
+-struct SkooppiViestit: Decodable {
++struct SkooppiViestit: Codable {
+     let nimi: String
+     let auki: Bool
+     // Skoopissa on vain pakattuja istuntoja: keskustelu tyhjennetään ja Pura jatkaa samassa näkymässä.
+@@ -396,3 +401,44 @@ func isoPaiva(_ iso: String?) -> Date? {
+ 
+ // 228100 → "228 k"
+ func tokenit(_ n: Int) -> String { n >= 1000 ? "\(n / 1000) k" : "\(n)" }
++
++struct VikaKohta: Codable, Identifiable, Hashable {
++    let vika: String
++    let tila: String
++    var id: String { vika }
++
++    var tunnus: String {
++        if let r = vika.range(of: #"V-\d+"#, options: .regularExpression) {
++            return String(vika[r])
++        }
++        return ""
++    }
++
++    var selite: String {
++        if let r = vika.range(of: #"V-\d+"#, options: .regularExpression) {
++            let loppu = vika[r.upperBound...]
++            return loppu.trimmingCharacters(in: CharacterSet(charactersIn: " -:()"))
++        }
++        return vika
++    }
++}
++
++struct DiagnostiikkaTila: Codable, Hashable {
++    let pyyntoja: Int
++    let virheita: Int
++    let silmukoita: Int
++    let viimeisimmat: [PyyntoTapahtuma]?
++}
++
++struct PyyntoTapahtuma: Codable, Identifiable, Hashable {
++    var id: String { "\(aika ?? "")-\(polku ?? "")-\(ms ?? 0)-\(UUID().uuidString.prefix(4))" }
++    let aika: String?
++    let metodi: String?
++    let polku: String?
++    let koodi: Int?
++    let ms: Int?
++    let osoite: String?
++    let katkesi: Bool?
++    let tyyppi: String?
++    let viive: Int?
++}
+diff --git a/scopes/ios/Sources/MalliValikko.swift b/scopes/ios/Sources/MalliValikko.swift
+index d76f74cf..d08c1185 100644
+--- a/scopes/ios/Sources/MalliValikko.swift
++++ b/scopes/ios/Sources/MalliValikko.swift
+@@ -10,12 +10,12 @@ struct MalliValikko: View {
+         ("claude-sonnet-5-5", "Sonnet 5.5"), ("claude-haiku-5-5", "Haiku 5.5"),
+     ]
+     static let macAgyMallit: [(id: String, nimi: String)] = [
+-        ("gemini-3.8-flash-high", "Gemini 3.8 Flash (High)"),
+-        ("gemini-3.8-flash-medium", "Gemini 3.8 Flash (Medium)"),
+-        ("gemini-3.8-flash-low", "Gemini 3.8 Flash (Low)"),
+-        ("claude-sonnet-4-6", "Claude Sonnet 4.6 (Thinking)"),
+-        ("claude-opus-4-6-thinking", "Claude Opus 4.6 (Thinking)"),
+-        ("gpt-oss-120b-medium", "GPT-OSS 120B (Medium)"),
++        ("mac-agy/gemini-3.8-flash-high", "Gemini 3.8 Flash (High)"),
++        ("mac-agy/gemini-3.8-flash-medium", "Gemini 3.8 Flash (Medium)"),
++        ("mac-agy/gemini-3.8-flash-low", "Gemini 3.8 Flash (Low)"),
++        ("mac-agy/claude-sonnet-4-6", "Claude Sonnet 4.6 (Thinking)"),
++        ("mac-agy/claude-opus-4-6-thinking", "Claude Opus 4.6 (Thinking)"),
++        ("mac-agy/gpt-oss-120b-medium", "GPT-OSS 120B (Medium)"),
+     ]
+     static var mallit: [(id: String, nimi: String)] {
+         claudeMallit + macAgyMallit
+@@ -24,6 +24,7 @@ struct MalliValikko: View {
+ 
+     let malli: String?
+     let effort: String?
++    var tyyppi: String? = nil
+     // Vain vapaassa istunnossa: työn aikana komento jäisi jonoon (palvelu vastaa muuten 409).
+     let vapaa: Bool
+     let valitse: (_ malli: String?, _ effort: String?) -> Void
+@@ -32,16 +33,20 @@ struct MalliValikko: View {
+ 
+     var body: some View {
+         Menu {
+-            Section("Claude") {
+-                ForEach(Self.claudeMallit, id: \.id) { m in
+-                    Button { valitse(m.id, nil) } label: { Text(m.nimi + (m.id == malli ? " ✓" : "")) }
+-                        .accessibilityIdentifier("malli-\(m.id)")
++            if tyyppi != "agy" {
++                Section("Claude") {
++                    ForEach(Self.claudeMallit, id: \.id) { m in
++                        Button { valitse(m.id, nil) } label: { Text(m.nimi + (m.id == malli ? " ✓" : "")) }
++                            .accessibilityIdentifier("malli-\(m.id)")
++                    }
+                 }
+             }
+-            Section("Mac AGY (paikallinen)") {
+-                ForEach(Self.macAgyMallit, id: \.id) { m in
+-                    Button { valitse(m.id, nil) } label: { Text(m.nimi + (m.id == malli ? " ✓" : "")) }
+-                        .accessibilityIdentifier("malli-\(m.id)")
++            if tyyppi == "agy" {
++                Section("Mac AGY (paikallinen)") {
++                    ForEach(Self.macAgyMallit, id: \.id) { m in
++                        Button { valitse(m.id, nil) } label: { Text(m.nimi + (m.id == malli ? " ✓" : "")) }
++                            .accessibilityIdentifier("malli-\(m.id)")
++                    }
+                 }
+             }
+             Section("Effort") {
+diff --git a/scopes/ios/Sources/Nakymat.swift b/scopes/ios/Sources/Nakymat.swift
+index f7eec8d8..4430853a 100644
+--- a/scopes/ios/Sources/Nakymat.swift
++++ b/scopes/ios/Sources/Nakymat.swift
+@@ -25,6 +25,11 @@ struct SkooppiNakymaView: View {
+     let nimi: String
+     @EnvironmentObject private var asetukset: Asetukset
+     @State private var nakyma: SkooppiNakyma?
++
++    init(nimi: String) {
++        self.nimi = nimi
++        _nakyma = State(initialValue: ScopesDatabase.jaettu.lueSkooppiNakyma(nimi: nimi))
++    }
+     @State private var virhe: String?
+     @State private var vahvista: Toiminto?
+     @State private var puraValinta = false
+@@ -227,7 +232,9 @@ struct SkooppiNakymaView: View {
+     private func lataa() async {
+         let asiakas = Asiakas(osoite: asetukset.osoite, avain: asetukset.avain)
+         do {
+-            nakyma = try await asiakas.skooppi(nimi)
++            let n = try await asiakas.skooppi(nimi)
++            nakyma = n
++            ScopesDatabase.jaettu.tallennaSkooppiNakyma(nimi: nimi, nakyma: n)
+             virhe = nil
+         } catch {
+             virhe = error.localizedDescription
+@@ -302,9 +309,9 @@ struct UusiSkooppiView: View {
+     @State private var tulos: ToimintoVastaus?
+     @State private var virhe: String?
+     // Olemassa olevat nimet tarkistetaan äpissä ennen lähetystä (DESIGN-UX-A U4); palvelu tarkistaa ne silti.
+-    @State private var varatut: Set<String> = []
++    @State private var varatut: Set<String> = Set(ScopesDatabase.jaettu.lueSkoopit().map(\.nimi))
+     // Samat valinnat kuin purussa (SCOPES-LISTA-UUSI-VALINNAT), sama muisti.
+-    @State private var valinnat: PurkuValinnat?
++    @State private var valinnat: PurkuValinnat? = ScopesDatabase.jaettu.luePurkuValinnat()
+     @State private var latausVirhe: String?
+     @AppStorage("pura.purkaja") private var purkaja = ""
+     @AppStorage("pura.malli") private var malli = ""
+diff --git a/scopes/ios/Sources/PuraValinta.swift b/scopes/ios/Sources/PuraValinta.swift
+index dbfca8c1..9689ae60 100644
+--- a/scopes/ios/Sources/PuraValinta.swift
++++ b/scopes/ios/Sources/PuraValinta.swift
+@@ -9,20 +9,20 @@ import SwiftUI
+ // ei yhteyttä) tarjolla on vain oletus, ja Pura toimii kuten ennen.
+ // PURA-MALLITON-T6E: scopes/-perheen skooppi puretaan skriptillä ilman mallia, joten sen arkissa ei ole purkajan valintaa (purkaja lähtee nil).
+ 
+-struct PurkajaVaihtoehto: Decodable, Hashable {
++struct PurkajaVaihtoehto: Codable, Hashable {
+     let tunnus: String
+     let kuvaus: String
+     let ryhma: String
+ }
+ 
+-struct IstunnonMalli: Decodable, Hashable {
++struct IstunnonMalli: Codable, Hashable {
+     let nimi: String
+     let kuvaus: String
+     // "Claude" tai "Paikalliset"; puuttuu vanhalta palvelulta (= Claude).
+     let ryhma: String?
+ }
+ 
+-struct PurkuValinnat: Decodable {
++struct PurkuValinnat: Codable {
+     let purkajat: [PurkajaVaihtoehto]
+     let mallit: [IstunnonMalli]
+     let oletusMalli: String
+@@ -40,7 +40,7 @@ struct PuraValintaView: View {
+     var perhe: Bool = false
+     let pura: (PuraValinta) -> Void
+     @Environment(\.dismiss) private var sulje
+-    @State private var valinnat: PurkuValinnat?
++    @State private var valinnat: PurkuValinnat? = ScopesDatabase.jaettu.luePurkuValinnat()
+     @State private var latausVirhe: String?
+     // Viimeisin valinta muistetaan (per laite); listalta kadonnut (esim. palvelin pois) palaa oletukseen.
+     @AppStorage("pura.purkaja") private var purkaja = ""
+@@ -66,7 +66,7 @@ struct PuraValintaView: View {
+                         pura(PuraValinta(purkaja: perhe || purkaja.isEmpty ? nil : purkaja, malli: malli.isEmpty ? nil : malli))
+                         sulje()
+                     }
+-                    .disabled(valinnat == nil && latausVirhe == nil)
++                    // .disabled poistettu: Pura-painike toimii välittömästi ilman verkkoodotusta
+                     .accessibilityIdentifier("vahvista")
+                 }
+             }
+@@ -78,21 +78,21 @@ struct PuraValintaView: View {
+ // 15.10.2026, käyttäjä: "uuden skoopin aloitus pitää antaa samat valinnat"). Lataa valinnat palvelulta itse.
+ struct PurkuValitsimet: View {
+     static let macAgyMallit: [IstunnonMalli] = [
+-        IstunnonMalli(nimi: "gemini-3.8-flash-high", kuvaus: "Gemini 3.8 Flash (High)", ryhma: "Mac AGY"),
+-        IstunnonMalli(nimi: "gemini-3.8-flash-medium", kuvaus: "Gemini 3.8 Flash (Medium)", ryhma: "Mac AGY"),
+-        IstunnonMalli(nimi: "gemini-3.8-flash-low", kuvaus: "Gemini 3.8 Flash (Low)", ryhma: "Mac AGY"),
+-        IstunnonMalli(nimi: "claude-sonnet-4-6", kuvaus: "Claude Sonnet 4.6 (Thinking)", ryhma: "Mac AGY"),
+-        IstunnonMalli(nimi: "claude-opus-4-6-thinking", kuvaus: "Claude Opus 4.6 (Thinking)", ryhma: "Mac AGY"),
+-        IstunnonMalli(nimi: "gpt-oss-120b-medium", kuvaus: "GPT-OSS 120B (Medium)", ryhma: "Mac AGY"),
++        IstunnonMalli(nimi: "mac-agy/gemini-3.8-flash-high", kuvaus: "Gemini 3.8 Flash (High)", ryhma: "Mac AGY"),
++        IstunnonMalli(nimi: "mac-agy/gemini-3.8-flash-medium", kuvaus: "Gemini 3.8 Flash (Medium)", ryhma: "Mac AGY"),
++        IstunnonMalli(nimi: "mac-agy/gemini-3.8-flash-low", kuvaus: "Gemini 3.8 Flash (Low)", ryhma: "Mac AGY"),
++        IstunnonMalli(nimi: "mac-agy/claude-sonnet-4-6", kuvaus: "Claude Sonnet 4.6 (Thinking)", ryhma: "Mac AGY"),
++        IstunnonMalli(nimi: "mac-agy/claude-opus-4-6-thinking", kuvaus: "Claude Opus 4.6 (Thinking)", ryhma: "Mac AGY"),
++        IstunnonMalli(nimi: "mac-agy/gpt-oss-120b-medium", kuvaus: "GPT-OSS 120B (Medium)", ryhma: "Mac AGY"),
+     ]
+ 
+     static let macAgyPurkajat: [PurkajaVaihtoehto] = [
+-        PurkajaVaihtoehto(tunnus: "macos-agy:gemini-3.8-flash-high", kuvaus: "Gemini 3.8 Flash (High)", ryhma: "Mac AGY"),
+-        PurkajaVaihtoehto(tunnus: "macos-agy:gemini-3.8-flash-medium", kuvaus: "Gemini 3.8 Flash (Medium)", ryhma: "Mac AGY"),
+-        PurkajaVaihtoehto(tunnus: "macos-agy:gemini-3.8-flash-low", kuvaus: "Gemini 3.8 Flash (Low)", ryhma: "Mac AGY"),
+-        PurkajaVaihtoehto(tunnus: "macos-agy:claude-sonnet-4-6", kuvaus: "Claude Sonnet 4.6 (Thinking)", ryhma: "Mac AGY"),
+-        PurkajaVaihtoehto(tunnus: "macos-agy:claude-opus-4-6-thinking", kuvaus: "Claude Opus 4.6 (Thinking)", ryhma: "Mac AGY"),
+-        PurkajaVaihtoehto(tunnus: "macos-agy:gpt-oss-120b-medium", kuvaus: "GPT-OSS 120B (Medium)", ryhma: "Mac AGY"),
++        PurkajaVaihtoehto(tunnus: "mac-agy:gemini-3.8-flash-high", kuvaus: "Gemini 3.8 Flash (High)", ryhma: "Mac AGY"),
++        PurkajaVaihtoehto(tunnus: "mac-agy:gemini-3.8-flash-medium", kuvaus: "Gemini 3.8 Flash (Medium)", ryhma: "Mac AGY"),
++        PurkajaVaihtoehto(tunnus: "mac-agy:gemini-3.8-flash-low", kuvaus: "Gemini 3.8 Flash (Low)", ryhma: "Mac AGY"),
++        PurkajaVaihtoehto(tunnus: "mac-agy:claude-sonnet-4-6", kuvaus: "Claude Sonnet 4.6 (Thinking)", ryhma: "Mac AGY"),
++        PurkajaVaihtoehto(tunnus: "mac-agy:claude-opus-4-6-thinking", kuvaus: "Claude Opus 4.6 (Thinking)", ryhma: "Mac AGY"),
++        PurkajaVaihtoehto(tunnus: "mac-agy:gpt-oss-120b-medium", kuvaus: "GPT-OSS 120B (Medium)", ryhma: "Mac AGY"),
+     ]
+ 
+     @Binding var valinnat: PurkuValinnat?
+@@ -104,15 +104,25 @@ struct PurkuValitsimet: View {
+     @EnvironmentObject private var asetukset: Asetukset
+ 
+     private var ryhmat: [(String, [PurkajaVaihtoehto])] {
+-        let p = ((valinnat?.purkajat ?? []).filter { $0.ryhma != "oletus" }) + Self.macAgyPurkajat
+-        return ["Claude", "Mac AGY", "agy", "Paikalliset"].compactMap { r in
++        var p = (valinnat?.purkajat ?? []).filter { $0.ryhma != "oletus" }
++        for extra in Self.macAgyPurkajat {
++            if !p.contains(where: { $0.tunnus == extra.tunnus }) {
++                p.append(extra)
++            }
++        }
++        return ["Claude", "Mac AGY", "agy", "OnePlus Linux AGY", "Paikalliset"].compactMap { r in
+             let osat = p.filter { $0.ryhma == r }
+             return osat.isEmpty ? nil : (r, osat)
+         }
+     }
+     private var malliRyhmat: [(String, [IstunnonMalli])] {
+-        let m = (valinnat?.mallit ?? []) + Self.macAgyMallit
+-        return ["Claude", "Mac AGY", "Paikalliset"].compactMap { r in
++        var m = valinnat?.mallit ?? []
++        for extra in Self.macAgyMallit {
++            if !m.contains(where: { $0.nimi == extra.nimi }) {
++                m.append(extra)
++            }
++        }
++        return ["Claude", "Mac AGY", "agy", "OnePlus Linux AGY", "Paikalliset"].compactMap { r in
+             let osat = m.filter { ($0.ryhma ?? "Claude") == r }
+             return osat.isEmpty ? nil : (r, osat)
+         }
+@@ -179,11 +189,22 @@ struct PurkuValitsimet: View {
+     private func lataa() async {
+         do {
+             let v = try await Asiakas(osoite: asetukset.osoite, avain: asetukset.avain).purkuValinnat()
+-            let yhdistetytPurkajat = v.purkajat + Self.macAgyPurkajat
+-            let yhdistetytMallit = v.mallit + Self.macAgyMallit
++            var yhdistetytPurkajat = v.purkajat
++            for extra in Self.macAgyPurkajat {
++                if !yhdistetytPurkajat.contains(where: { $0.tunnus == extra.tunnus }) {
++                    yhdistetytPurkajat.append(extra)
++                }
++            }
++            var yhdistetytMallit = v.mallit
++            for extra in Self.macAgyMallit {
++                if !yhdistetytMallit.contains(where: { $0.nimi == extra.nimi }) {
++                    yhdistetytMallit.append(extra)
++                }
++            }
+             if !yhdistetytPurkajat.contains(where: { $0.tunnus == purkaja }) { purkaja = "" }
+             if !yhdistetytMallit.contains(where: { $0.nimi == malli }) { malli = "" }
+             valinnat = v
++            ScopesDatabase.jaettu.tallennaPurkuValinnat(v)
+         } catch is CancellationError {
+             return
+         } catch let e as URLError where e.code == .cancelled {
+diff --git a/scopes/ios/Sources/Sivupalkki.swift b/scopes/ios/Sources/Sivupalkki.swift
+index 6229b966..06b09aea 100644
+--- a/scopes/ios/Sources/Sivupalkki.swift
++++ b/scopes/ios/Sources/Sivupalkki.swift
+@@ -59,9 +59,9 @@ struct Sivupalkki: View, Equatable {
+     static func == (a: Sivupalkki, b: Sivupalkki) -> Bool { a.auki == b.auki }
+     @EnvironmentObject private var asetukset: Asetukset
+     @EnvironmentObject private var navigaatio: Navigaatio
+-    @State private var skoopit: [SkooppiYhteenveto] = []
+-    @State private var chatit: [ChatKeskustelu] = []
+-    @State private var agentit: [Agentti] = []
++    @State private var skoopit: [SkooppiYhteenveto] = ScopesDatabase.jaettu.lueSkoopit()
++    @State private var chatit: [ChatKeskustelu] = ScopesDatabase.jaettu.lueChatKeskustelut()
++    @State private var agentit: [Agentti] = ScopesDatabase.jaettu.lueAgentit()
+     @State private var virhe: String?
+     @State private var haku = ""
+     // Arkistointi (SCOPES-LISTA-POISTO 15.10.2026, käyttäjä): skooppiriviä painetaan paikallaan hetki ja vedetään vasemmalle,
+@@ -92,6 +92,9 @@ struct Sivupalkki: View, Equatable {
+         NavigationStack {
+             List {
+                 if let virhe { Text(virhe).foregroundStyle(.red).accessibilityIdentifier("sivupalkki-virhe") }
++                Section {
++                    kordinaattoriRivi
++                }
+                 Section {
+                     ForEach(kohteet) { k in
+                         if case let .skooppi(s) = k {
+@@ -143,6 +146,9 @@ struct Sivupalkki: View, Equatable {
+                     Button { navigaatio.avaa(.infra) } label: { Label("Infra", systemImage: "point.3.connected.trianglepath.dotted") }
+                         .accessibilityIdentifier("sivupalkki-infra").accessibilityShowsLargeContentViewer()
+                     Spacer()
++                    Button { navigaatio.avaa(.viat) } label: { Label("Viat", systemImage: "ladybug") }
++                        .accessibilityIdentifier("sivupalkki-viat").accessibilityShowsLargeContentViewer()
++                    Spacer()
+                     Button { navigaatio.avaa(.android) } label: { Label("Android", systemImage: "iphone") }
+                         .accessibilityIdentifier("sivupalkki-android").accessibilityShowsLargeContentViewer()
+                     Spacer()
+@@ -194,6 +200,49 @@ struct Sivupalkki: View, Equatable {
+         .dynamicTypeSize(...DynamicTypeSize.large)
+     }
+ 
++    private var kordinaattoriValittu: Bool {
++        navigaatio.nakyma == .kordinaattori
++    }
++
++    private var kordinaattoriRivi: some View {
++        Button {
++            navigaatio.avaa(.kordinaattori)
++        } label: {
++            HStack(alignment: .top, spacing: Teema.Vali.m) {
++                ZStack {
++                    RoundedRectangle(cornerRadius: 8)
++                        .fill(Teema.korostus.opacity(0.15))
++                        .frame(width: 28, height: 28)
++                    Image(systemName: "person.3.sequence.fill")
++                        .font(.caption.weight(.bold))
++                        .foregroundStyle(Teema.korostus)
++                }
++                VStack(alignment: .leading, spacing: 2) {
++                    HStack {
++                        Text("Koordinaattori")
++                            .font(.headline)
++                            .foregroundStyle(Color.primary)
++                        Spacer()
++                        Text("3 agenttia")
++                            .font(.caption2.weight(.medium))
++                            .padding(.horizontal, 6)
++                            .padding(.vertical, 2)
++                            .background(Capsule().fill(Teema.korostus.opacity(0.12)))
++                            .foregroundStyle(Teema.korostus)
++                    }
++                    Text("Keskustelu · Selvitys · Ratkaisija")
++                        .font(.caption)
++                        .foregroundStyle(.secondary)
++                }
++            }
++            .padding(.vertical, 2)
++            .contentShape(Rectangle())
++        }
++        .buttonStyle(.plain)
++        .listRowBackground(kordinaattoriValittu ? Teema.korostusTausta : nil)
++        .accessibilityIdentifier("skooppi-kordinaattori")
++    }
++
+     private func valittu(_ k: Kohde) -> Bool {
+         switch k {
+         case let .chat(c): return navigaatio.nakyma == .chat && navigaatio.nykyinenChat == c.id
+@@ -315,9 +364,20 @@ struct Sivupalkki: View, Equatable {
+         async let c = asiakas.keskustelut()
+         async let a = asiakas.agentit()
+         var virheet: [String] = []
+-        do { skoopit = try await s } catch { virheet.append(error.localizedDescription) }
+-        do { chatit = try await c } catch { virheet.append(error.localizedDescription) }
+-        agentit = (try? await a) ?? agentit
++        do {
++            let uudetSkoopit = try await s
++            skoopit = uudetSkoopit
++            ScopesDatabase.jaettu.tallennaSkoopit(uudetSkoopit)
++        } catch { virheet.append(error.localizedDescription) }
++        do {
++            let uudetChatit = try await c
++            chatit = uudetChatit
++            ScopesDatabase.jaettu.tallennaChatKeskustelut(uudetChatit)
++        } catch { virheet.append(error.localizedDescription) }
++        if let uudetAgentit = try? await a {
++            agentit = uudetAgentit
++            ScopesDatabase.jaettu.tallennaAgentit(uudetAgentit)
++        }
+         virhe = virheet.isEmpty ? nil : Array(Set(virheet)).joined(separator: "\n")
+     }
+ }
+diff --git a/scopes/ios/Sources/Viestit.swift b/scopes/ios/Sources/Viestit.swift
+index 04919af8..bea14040 100644
+--- a/scopes/ios/Sources/Viestit.swift
++++ b/scopes/ios/Sources/Viestit.swift
+@@ -465,8 +465,8 @@ struct ChatView: View {
+     @EnvironmentObject private var asetukset: Asetukset
+     @EnvironmentObject private var navigaatio: Navigaatio
+     @Environment(\.scenePhase) private var vaihe
+-    @State private var agentit: [Agentti] = []
+-    @State private var valittu: String?
++    @State private var agentit: [Agentti] = ScopesDatabase.jaettu.lueAgentit()
++    @State private var valittu: String? = ScopesDatabase.jaettu.lueAgentit().first { $0.nimi == "claude-sonnet-5-5" }?.nimi ?? ScopesDatabase.jaettu.lueAgentit().first?.nimi
+     @State private var viestit: [Viesti] = []
+     @State private var keskustelu: String?
+     @State private var teksti = ""
+@@ -590,10 +590,17 @@ struct ChatView: View {
+         guard !odottaa, !vastausKesken else { return }
+         guard let id = p.id else { uusi(); return }
+         guard id != keskustelu else { return }
++        let tallessa = ScopesDatabase.jaettu.lueChatViestit(keskusteluId: id)
++        if !tallessa.isEmpty {
++            viestit = tallessa
++            keskustelu = id
++        }
+         do {
+             avaa(try await asiakas.keskustelu(id))
+         } catch {
+-            nayta(error)
++            if tallessa.isEmpty {
++                nayta(error)
++            }
+         }
+     }
+ 
+@@ -603,6 +610,7 @@ struct ChatView: View {
+         keskustelu = k.id
+         if let a = k.agentti, agentit.contains(where: { $0.nimi == a }) { valittu = a }
+         virhe = nil
++        ScopesDatabase.jaettu.tallennaChatViestit(keskusteluId: k.id, viestit: k.viestit)
+     }
+ 
+     // Verkkokatkos näytetään uudelleenyhdistämisenä, palvelun virhe tekstinä.
+@@ -620,6 +628,7 @@ struct ChatView: View {
+             if agentit.isEmpty { virhe = nil }
+             if !vastausKesken { katkennut = false }
+             agentit = uudet
++            ScopesDatabase.jaettu.tallennaAgentit(uudet)
+             if valittu == nil {
+                 valittu = oletus
+             } else if let poistunut {
+@@ -809,6 +818,7 @@ struct SkooppiViestitView: View {
+     init(nimi: String) {
+         self.nimi = nimi
+         _teksti = State(initialValue: Luonnos.lue("skooppi.\(nimi)"))
++        _tila = State(initialValue: ScopesDatabase.jaettu.lueSkooppiViestit(skooppi: nimi))
+     }
+ 
+     var body: some View {
+@@ -819,8 +829,9 @@ struct SkooppiViestitView: View {
+                     // Istunnon tila suomeksi ja konteksti samalla merkillä kuin skoopin näkymässä (DESIGN-SKOOPPINAKYMA U8, U9).
+                     if let i = t.istunto {
+                         // Tila näkyy aivonapin hehkuna; teksti jäi vain UI-testien ankkuriksi (ei korkeutta, ei väriä).
++                        let tilaTeksti = istunnonTila(i.tila) ?? "Istunto auki"
+                         Color.clear.frame(height: 0)
+-                            .overlay { Text(istunnonTila(i.tila) ?? "Istunto auki").font(.caption).foregroundStyle(.clear).accessibilityIdentifier("viestit-istunto") }
++                            .overlay(Text(tilaTeksti).font(.caption).foregroundStyle(Color.clear).accessibilityIdentifier("viestit-istunto"))
+                     }
+                     Viestilista(viestit: t.viestit, himmeat: odottavat.map(\.viesti), vastaa: t.voiLahettaa ? { v in Task { await laheta(v) } } : nil,
+                                 sulje: t.voiLahettaa ? { Task { await suljeKysymys() } } : nil)
+@@ -836,7 +847,7 @@ struct SkooppiViestitView: View {
+                                        jatka: pysaytetty ? { Task { await laheta("jatka") } } : nil) {
+                                 HStack(spacing: Teema.Vali.s) {
+                                     LiiteValikko(liitteet: $liitteet, virhe: $virhe)
+-                                    MalliValikko(malli: malliValittu ?? t.istunto?.malli, effort: effortValittu ?? t.istunto?.effort,
++                                    MalliValikko(malli: malliValittu ?? t.istunto?.malli, effort: effortValittu ?? t.istunto?.effort, tyyppi: t.istunto?.tyyppi,
+                                                  vapaa: t.istunto?.tila == "idle") { m, e in Task { await vaihdaMalli(m, e) } }
+                                 }
+                             }
+@@ -913,6 +924,7 @@ struct SkooppiViestitView: View {
+         do {
+             let uusi = try await asiakas.viestit(nimi)
+             tila = uusi
++            ScopesDatabase.jaettu.tallennaSkooppiViestit(skooppi: nimi, viestit: uusi)
+             virhe = nil
+             sovitaOdottavat(uusi.viestit)
+             if ["busy", "shell"].contains(uusi.istunto?.tila ?? "") {
+diff --git a/scopes/macos/ScopesMac.xcodeproj/project.pbxproj b/scopes/macos/ScopesMac.xcodeproj/project.pbxproj
+index 24cc294e..12852568 100644
+--- a/scopes/macos/ScopesMac.xcodeproj/project.pbxproj
++++ b/scopes/macos/ScopesMac.xcodeproj/project.pbxproj
+@@ -14,6 +14,9 @@
+ 		46E5ADC6553BFB61C827FF7C /* MacSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECE25CC3D2AA95B1D9B867C /* MacSettingsView.swift */; };
+ 		5BA9157AF6C8AAF8BCFE6433 /* ScopesCore in Frameworks */ = {isa = PBXBuildFile; productRef = AD8FD9F7F031D72611DCA514 /* ScopesCore */; };
+ 		98632A0C305AF90F98965331 /* MacInspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D3D4E7356B0462A0D50D6C /* MacInspectorView.swift */; };
++		AEAF48856B65E4832E267907 /* MacKordinaattoriView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30F9A0369992D0D7A7C730D0 /* MacKordinaattoriView.swift */; };
++		AEAF48856B65E4832E2679E1 /* MacViatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30F9A0369992D0D7A7C730E1 /* MacViatView.swift */; };
++
+ 		B380BF2F23AD97A85A491EB3 /* MacChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 549D45B617067AC68DBFDC00 /* MacChatView.swift */; };
+ 		D28ABC253767FB94C0C398F6 /* MacChatInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = D269BE946F0A527D58F1E88C /* MacChatInput.swift */; };
+ 		D2BE2E6416FB2F0DDF53479B /* MacCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3D60D569A2EA57A0C15A557 /* MacCommands.swift */; };
+@@ -30,6 +33,9 @@
+ /* Begin PBXFileReference section */
+ 		203FA1300F32BCF541BF403B /* MacRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacRootView.swift; sourceTree = "<group>"; };
+ 		276E67C6AD43C9C3CE3DA405 /* ScopesMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopesMacApp.swift; sourceTree = "<group>"; };
++		30F9A0369992D0D7A7C730D0 /* MacKordinaattoriView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacKordinaattoriView.swift; sourceTree = "<group>"; };
++		30F9A0369992D0D7A7C730E1 /* MacViatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacViatView.swift; sourceTree = "<group>"; };
++
+ 		449931D5E4B205ECE235BCE6 /* MacAndroidView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAndroidView.swift; sourceTree = "<group>"; };
+ 		4D9A8BB14D15CC3B48AE1702 /* MacInfraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacInfraView.swift; sourceTree = "<group>"; };
+ 		549D45B617067AC68DBFDC00 /* MacChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacChatView.swift; sourceTree = "<group>"; };
+@@ -87,6 +93,9 @@
+ 				E3D60D569A2EA57A0C15A557 /* MacCommands.swift */,
+ 				4D9A8BB14D15CC3B48AE1702 /* MacInfraView.swift */,
+ 				E5D3D4E7356B0462A0D50D6C /* MacInspectorView.swift */,
++				30F9A0369992D0D7A7C730D0 /* MacKordinaattoriView.swift */,
++				30F9A0369992D0D7A7C730E1 /* MacViatView.swift */,
++
+ 				C34C700D73218E48BEC6CA68 /* MacLrView.swift */,
+ 				9CCE8652C9ABD6170E3E84AF /* MacMenuBar.swift */,
+ 				BAE46FF7D649A4CCE185EB09 /* MacPuraValintaSheet.swift */,
+@@ -190,6 +199,9 @@
+ 				D8042BC5ACBABA7BEE5D9C3A /* MacInfraView.swift in Sources */,
+ 				98632A0C305AF90F98965331 /* MacInspectorView.swift in Sources */,
+ 				D8F6AD3D3E97CB2D3E20C7DD /* MacKeychain.swift in Sources */,
++				AEAF48856B65E4832E267907 /* MacKordinaattoriView.swift in Sources */,
++				AEAF48856B65E4832E2679E1 /* MacViatView.swift in Sources */,
++
+ 				D5D48611FC4167144C410F32 /* MacLrView.swift in Sources */,
+ 				F4B8FA8A166040D9ADCDED89 /* MacMenuBar.swift in Sources */,
+ 				1AA259848340F5F4F001BAB5 /* MacPuraValintaSheet.swift in Sources */,
+diff --git a/scopes/macos/Sources/MacRootView.swift b/scopes/macos/Sources/MacRootView.swift
+index 862829ef..d9b4950a 100644
+--- a/scopes/macos/Sources/MacRootView.swift
++++ b/scopes/macos/Sources/MacRootView.swift
+@@ -68,6 +68,8 @@ public struct MacRootView: View {
+             }
+         } detail: {
+             switch valittuNakyma {
++            case .kordinaattori:
++                MacKordinaattoriView(client: client)
+             case .skoopit:
+                 skooppiDetailView
+             case .chat:
+@@ -81,6 +83,8 @@ public struct MacRootView: View {
+                 MacAndroidView(client: client)
+             case .localregister:
+                 MacLrView(client: client)
++            case .viat:
++                MacViatView(client: client)
+             }
+         }
+         .inspector(isPresented: Binding(
+diff --git a/scopes/macos/Sources/MacSidebar.swift b/scopes/macos/Sources/MacSidebar.swift
+index 833c0bc2..cc5c6d6b 100644
+--- a/scopes/macos/Sources/MacSidebar.swift
++++ b/scopes/macos/Sources/MacSidebar.swift
+@@ -50,6 +50,8 @@ public struct MacSidebar: View {
+             Divider()
+ 
+             switch valittuNakyma {
++            case .kordinaattori:
++                Text("Koordinaattori valittu").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+             case .skoopit:
+                 skoopitSisalto
+             case .chat:
+@@ -60,6 +62,8 @@ public struct MacSidebar: View {
+                 androidSisalto
+             case .localregister:
+                 lrSisalto
++            case .viat:
++                viatSisalto
+             }
+         }
+         .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 340)
+@@ -78,6 +82,32 @@ public struct MacSidebar: View {
+             .padding(.vertical, 6)
+ 
+             List(selection: $valittuSkooppi) {
++                Section {
++                    Button {
++                        valittuNakyma = .kordinaattori
++                    } label: {
++                        HStack(spacing: 8) {
++                            ZStack {
++                                RoundedRectangle(cornerRadius: 6)
++                                    .fill(Color.accentColor.opacity(0.15))
++                                    .frame(width: 24, height: 24)
++                                Image(systemName: "person.3.sequence.fill")
++                                    .font(.caption)
++                                    .foregroundStyle(Color.accentColor)
++                            }
++                            VStack(alignment: .leading, spacing: 1) {
++                                Text("Koordinaattori")
++                                    .font(.headline)
++                                Text("3 agenttia jatkuvasti")
++                                    .font(.caption2)
++                                    .foregroundStyle(.secondary)
++                            }
++                            Spacer()
++                        }
++                        .padding(.vertical, 2)
++                    }
++                    .buttonStyle(.plain)
++                }
+                 Section {
+                     ForEach(suodatetutSkoopit) { skooppi in
+                         HStack(spacing: 8) {
+@@ -197,7 +227,24 @@ public struct MacSidebar: View {
+         }
+     }
+ 
+-    private var suodatetutSkoopit: [SkooppiYhteenveto] {
++    
++    private var viatSisalto: some View {
++        VStack(alignment: .leading, spacing: 10) {
++            Text("Viat ja Diagnostiikka")
++                .font(.headline)
++                .padding(.horizontal, 12)
++                .padding(.top, 12)
++
++            Text("Vikarekisteri, scopes-alaskooppien havainnot ja taustapalvelimen suorituskykyloki.")
++                .font(.caption)
++                .foregroundColor(.secondary)
++                .padding(.horizontal, 12)
++
++            Spacer()
++        }
++    }
++
++private var suodatetutSkoopit: [SkooppiYhteenveto] {
+         skoopit.filter { skooppi in
+             let matchHaku = haku.isEmpty || skooppi.nimi.localizedCaseInsensitiveContains(haku)
+             guard matchHaku else { return false }
+diff --git a/scopes/macos/Sources/MacTypes.swift b/scopes/macos/Sources/MacTypes.swift
+index 1bf8dfca..00a342b3 100644
+--- a/scopes/macos/Sources/MacTypes.swift
++++ b/scopes/macos/Sources/MacTypes.swift
+@@ -4,35 +4,30 @@ import SwiftUI
+ import ScopesCore
+ 
+ public enum MacPaanakyma: String, CaseIterable, Identifiable, Sendable {
++    case kordinaattori = "Koordinaattori"
+     case skoopit = "Skoopit"
+     case chat = "Chat"
+     case infra = "Infra"
+     case android = "Android"
+     case localregister = "Localregister"
++    case viat = "Viat"
+ 
+     public var id: String { rawValue }
+ 
+     public var ikoni: String {
+         switch self {
++        case .kordinaattori: return "person.3.sequence"
+         case .skoopit: return "folder"
+         case .chat: return "bubble.left.and.bubble.right"
+         case .infra: return "point.3.connected.trianglepath.dotted"
+         case .android: return "iphone"
+         case .localregister: return "arrow.triangle.2.circlepath"
++        case .viat: return "ladybug"
+         }
+     }
+ }
+ 
+-public struct VikaKohta: Identifiable, Hashable, Sendable, Codable {
+-    public let vika: String
+-    public let tila: String
+-    public var id: String { vika }
+-
+-    public init(vika: String, tila: String = "avoin") {
+-        self.vika = vika
+-        self.tila = tila
+-    }
+-}
++// VikaKohta tuodaan ScopesCore-moduulista
+ 
+ public struct AsiaKohta: Identifiable, Hashable, Sendable, Codable {
+     public let asia: String
+diff --git a/scopes/palvelu/diagnostiikka.mjs b/scopes/palvelu/diagnostiikka.mjs
+index e4df52fe..369f1ea9 100644
+--- a/scopes/palvelu/diagnostiikka.mjs
++++ b/scopes/palvelu/diagnostiikka.mjs
+@@ -7,7 +7,7 @@
+ //   äppiloki    (~/.local/state/scopes-app.loki)  äpin lähettämät tapahtumat POST /api/diagnostiikka -rungosta: pääsäikeen
+ //               jumit, hitaat ja epäonnistuneet pyynnöt, elinkaari, MetricKitin jumiraportit (Diagnostiikka.swift)
+ // Kumpikin tiedosto kiertää RAJA-koossa nimelle <loki>.1, joten loki ei kasva rajatta 5 s:n kyselyistä.
+-import { appendFileSync, mkdirSync, renameSync, statSync } from 'node:fs';
++import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync } from 'node:fs';
+ import { homedir } from 'node:os';
+ import { dirname, join } from 'node:path';
+ import { performance } from 'node:perf_hooks';
+@@ -96,5 +96,26 @@ export function luoDiagnostiikka(asetukset, { nyt = () => new Date(), raja = RAJ
+     });
+   }
+ 
+-  return { kaari, silmukka, vastaanota, pyyntoloki, appiloki };
++  function lueTilanne(maara = 50) {
++    let pyyntoja = 0, virheita = 0, silmukoita = 0;
++    const viimeisimmat = [];
++    try {
++      if (existsSync(pyyntoloki)) {
++        const lines = readFileSync(pyyntoloki, "utf8").trim().split("\n");
++        pyyntoja = lines.length;
++        for (let i = Math.max(0, lines.length - maara); i < lines.length; i++) {
++          try {
++            const o = JSON.parse(lines[i]);
++            if (o.koodi >= 400) virheita++;
++            if (o.tyyppi === "silmukka") silmukoita++;
++            viimeisimmat.push(o);
++          } catch {}
++        }
++      }
++    } catch {}
++    return { pyyntoja, virheita, silmukoita, viimeisimmat };
++  }
++
++  return { kaari, silmukka, vastaanota, lueTilanne, pyyntoloki, appiloki };
++
+ }
+diff --git a/scopes/palvelu/diagnostiikka.test.mjs b/scopes/palvelu/diagnostiikka.test.mjs
+index f618979c..73a9aecc 100644
+--- a/scopes/palvelu/diagnostiikka.test.mjs
++++ b/scopes/palvelu/diagnostiikka.test.mjs
+@@ -129,3 +129,22 @@ test('tukkeutunut tapahtumasilmukka kirjataan', async () => {
+     assert.ok(r[0].viive >= 500, `viive ${r[0].viive}`);
+   } finally { seis(); }
+ });
++
++test("GET /api/diagnostiikka ja GET /api/viat palauttavat tilan", async () => {
++  const y = ymparisto();
++  const diag = luoDiagnostiikka(y, { nyt: NYT });
++  const { mkdirSync, writeFileSync } = await import("node:fs");
++  mkdirSync(join(y.d, "scopes/viat"), { recursive: true });
++  writeFileSync(join(y.d, "scopes/viat/REKISTERI.md"), "## Viat\n\n| Vika | Tila |\n|---|---|\n| V-100 koe | avoin |\n", "utf8");
++  const { s, portti } = await palvelin(kasittelija({ avain: AVAIN, juuri: y.d }, undefined, undefined, undefined, undefined, diag));
++  try {
++    const v = await pyynto(portti, "/api/viat");
++    assert.equal(v.koodi, 200);
++    assert.deepEqual(v.data, { viat: [{ vika: "V-100 koe", tila: "avoin" }] });
++
++    const d = await pyynto(portti, "/api/diagnostiikka");
++    assert.equal(d.koodi, 200);
++    assert.equal(typeof d.data.pyyntoja, "number");
++    assert.equal(typeof d.data.virheita, "number");
++  } finally { s.close(); }
++});
+diff --git a/scopes/palvelu/kaynnista.sh b/scopes/palvelu/kaynnista.sh
+index bbbcf0b7..917d7e2e 100755
+--- a/scopes/palvelu/kaynnista.sh
++++ b/scopes/palvelu/kaynnista.sh
+@@ -4,6 +4,8 @@
+ # Kuuntelee kaikissa osoitteissa: puhelin tulee kotiverkosta tai WireGuardin läpi, ja jokainen
+ # skooppipyyntö vaatii avaimen (palvelin.mjs). Avain luodaan, jos sitä ei ole.
+ set -u
++[ -x "$HOME/.local/opt/node-v22.23.3-linux-arm64/bin/node" ] && NODE=${NODE:-$HOME/.local/opt/node-v22.23.3-linux-arm64/bin/node}
++export PATH="$HOME/.local/bin:${NODE:+$(dirname "$NODE"):}$PATH"
+ tama=$(cd "$(dirname "$0")" && pwd)
+ portti=${SCOPES_PORTTI:-8787}
+ avain=${SCOPES_AVAIN_TIEDOSTO:-$HOME/.config/scopes/avain}
+diff --git a/scopes/palvelu/lahteet.mjs b/scopes/palvelu/lahteet.mjs
+index a6357c00..dda50d3c 100644
+--- a/scopes/palvelu/lahteet.mjs
++++ b/scopes/palvelu/lahteet.mjs
+@@ -10,7 +10,9 @@
+ //   transkriptin liitteet ja viestit            istunnon ladatut osat tekstinä (istunnonLadatut, V-400)
+ 
+ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
++import { execFileSync } from 'node:child_process';
+ import { dirname, join } from 'node:path';
++import { agyIstunnotSync } from './agy-istunto.mjs';
+ 
+ // "SEURAAVA PAKETTI[ [tunniste]]: ID — kuvaus — polut: … — aloitus: …" → { id, kuvaus, polut, aloitus, teksti }.
+ export function jasennaSeuraava(teksti) {
+@@ -176,40 +178,59 @@ function elossa(pid, procStart, proc) {
+     const stat = readFileSync(join(proc, String(pid), 'stat'), 'utf8');
+     const kentat = stat.slice(stat.lastIndexOf(')') + 2).split(' ');
+     return procStart == null || kentat[19] === String(procStart) ? Number(kentat[1]) : null;
+-  } catch { return null; }
++  } catch {
++    try {
++      process.kill(pid, 0);
++      try {
++        const ppidStr = execFileSync('ps', ['-p', String(pid), '-o', 'ppid='], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
++        const ppid = Number(ppidStr);
++        return Number.isFinite(ppid) ? ppid : 1;
++      } catch {
++        return 1;
++      }
++    } catch {
++      return null;
++    }
++  }
+ }
+ 
+-// Elävät istunnot: [{ id, nimi, tila, kysely, skooppi, konteksti, pysahdys, pakattu, hereilla, alkoi, pid, vanhempi, ruutu, polku }]. polku = transkripti (viestit.mjs); alkoi = startedAt (ms). ruutu = tmux-ruutu (%26) tai null;
++// Elävät istunnot (Claude ja AGY): [{ id, nimi, tila, kysely, skooppi, konteksti, pysahdys, pakattu, hereilla, alkoi, pid, vanhempi, ruutu, polku }].
++// polku = transkripti (viestit.mjs); alkoi = startedAt (ms). ruutu = tmux-ruutu (%26 tai siirto-*) tai null;
+ // pid, vanhempi ja ruutu ovat hallintatoimintoja varten (toiminnot.mjs: /pakkaa oikeaan ruutuun).
+-export function istunnot({ istunnotDir, projektitDir, skooppiNimet, proc = '/proc' }) {
+-  if (!existsSync(istunnotDir)) return [];
++export function istunnot({ istunnotDir, projektitDir, skooppiNimet, proc = '/proc', agyHakemisto, brainHakemisto, listPanes, capturePane, ohitaAgy = false }) {
+   const tulos = [];
+-  for (const tiedosto of readdirSync(istunnotDir).filter((f) => /^\d+\.json$/.test(f))) {
+-    let s;
+-    try { s = JSON.parse(readFileSync(join(istunnotDir, tiedosto), 'utf8')); } catch { continue; }
+-    const vanhempi = s.sessionId ? elossa(s.pid, s.procStart, proc) : null;
+-    if (vanhempi == null) continue;
+-    const polku = join(projektitDir, projektiNimi(s.cwd ?? ''), `${s.sessionId}.jsonl`);
+-    let transkripti = '';
+-    try { transkripti = readFileSync(polku, 'utf8'); } catch { /* uusi istunto ilman transkriptia */ }
+-    tulos.push({
+-      id: s.sessionId,
+-      nimi: s.name ?? null,
+-      tila: s.status ?? null,
+-      // Kyselykortti (AskUserQuestion) auki: waiting + waitingFor "input needed"; lupakysely on "permission prompt".
+-      kysely: s.status === 'waiting' && s.waitingFor === 'input needed',
+-      skooppi: istunnonSkooppi(s.name ?? '', transkripti, skooppiNimet),
+-      konteksti: konteksti(transkripti),
+-      pysahdys: pysahdys(transkripti),
+-      pakattu: pakattu(transkripti),
+-      hereilla: hereilla(transkripti),
+-      alkoi: s.startedAt ?? 0,
+-      pid: s.pid,
+-      vanhempi,
+-      // Remote Controlin SDK-ajo (entrypoint sdk-cli) perii daemonin tmux-ruudun, joten ruutu vain CLI-istunnoille.
+-      ruutu: (s.entrypoint ?? 'cli') === 'cli' ? /\.(%\d+)$/.exec(s.tmux ?? '')?.[1] ?? null : null,
+-      polku,
+-    });
++  if (existsSync(istunnotDir)) {
++    for (const tiedosto of readdirSync(istunnotDir).filter((f) => /^\d+\.json$/.test(f))) {
++      let s;
++      try { s = JSON.parse(readFileSync(join(istunnotDir, tiedosto), 'utf8')); } catch { continue; }
++      const vanhempi = s.sessionId ? elossa(s.pid, s.procStart, proc) : null;
++      if (vanhempi == null) continue;
++      const polku = join(projektitDir, projektiNimi(s.cwd ?? ''), `${s.sessionId}.jsonl`);
++      let transkripti = '';
++      try { transkripti = readFileSync(polku, 'utf8'); } catch { /* uusi istunto ilman transkriptia */ }
++      tulos.push({
++        id: s.sessionId,
++        nimi: s.name ?? null,
++        tila: s.status ?? null,
++        // Kyselykortti (AskUserQuestion) auki: waiting + waitingFor "input needed"; lupakysely on "permission prompt".
++        kysely: s.status === 'waiting' && s.waitingFor === 'input needed',
++        skooppi: istunnonSkooppi(s.name ?? '', transkripti, skooppiNimet),
++        konteksti: konteksti(transkripti),
++        pysahdys: pysahdys(transkripti),
++        pakattu: pakattu(transkripti),
++        hereilla: hereilla(transkripti),
++        alkoi: s.startedAt ?? 0,
++        pid: s.pid,
++        vanhempi,
++        // Remote Controlin SDK-ajo (entrypoint sdk-cli) perii daemonin tmux-ruudun, joten ruutu vain CLI-istunnoille.
++        ruutu: (s.entrypoint ?? 'cli') === 'cli' ? /\.(%\d+)$/.exec(s.tmux ?? '')?.[1] ?? null : null,
++        polku,
++      });
++    }
++  }
++  if (!ohitaAgy) {
++    const agy = agyIstunnotSync({ skooppiNimet, proc, agyHakemisto, brainHakemisto, listPanes, capturePane });
++    tulos.push(...agy);
+   }
+   return tulos;
+ }
+@@ -255,9 +276,12 @@ export function skooppiTila(istunnot) {
+ }
+ 
+ // Skooppilista tiivistettynä: nimi, seuraava paketti, avoimien ja vikojen määrä, istuntojen suurin konteksti, aika, tila.
+-export function lista(asetukset) {
++export function lista(asetukset, lisaIstunnot = []) {
+   const skoopit = lueSkoopit(asetukset.juuri);
+-  const kaikkiIstunnot = istunnot({ ...asetukset, skooppiNimet: Object.keys(skoopit) });
++  const ohitaAgy = asetukset.ohitaAgy ?? (lisaIstunnot != null && lisaIstunnot.length > 0);
++  const loydetyt = istunnot({ ...asetukset, skooppiNimet: Object.keys(skoopit), ohitaAgy });
++  const lisaNahdyt = new Set(lisaIstunnot.map((i) => i.id));
++  const kaikkiIstunnot = [...lisaIstunnot, ...loydetyt.filter((i) => !lisaNahdyt.has(i.id))];
+   return Object.keys(skoopit).map((nimi) => {
+     const s = skooppi(nimi, { juuri: asetukset.juuri, skoopit, kaikkiIstunnot });
+     const tokenit = s.istunnot.map((i) => i.konteksti?.tokenit ?? 0);
+@@ -556,9 +580,31 @@ export function skoopinKonteksti(nimi, { juuri, rekisterit, istunnot: skoopinIst
+   };
+ }
+ 
+-export function yksi(nimi, asetukset) {
++export function yksi(nimi, asetukset, lisaIstunnot = []) {
+   const skoopit = lueSkoopit(asetukset.juuri);
+-  const kaikkiIstunnot = istunnot({ ...asetukset, skooppiNimet: Object.keys(skoopit) });
++  const ohitaAgy = asetukset.ohitaAgy ?? (lisaIstunnot != null && lisaIstunnot.length > 0);
++  const loydetyt = istunnot({ ...asetukset, skooppiNimet: Object.keys(skoopit), ohitaAgy });
++  const lisaNahdyt = new Set(lisaIstunnot.map((i) => i.id));
++  const kaikkiIstunnot = [...lisaIstunnot, ...loydetyt.filter((i) => !lisaNahdyt.has(i.id))];
+   const s = skooppi(nimi, { juuri: asetukset.juuri, skoopit, kaikkiIstunnot });
+   return s && { ...s, konteksti: skoopinKonteksti(nimi, { juuri: asetukset.juuri, rekisterit: s.rekisterit, istunnot: s.istunnot }) };
+ }
++
++export function lueViat(juuri) {
++  const polku = join(juuri, "scopes/viat/REKISTERI.md");
++  if (!existsSync(polku)) return { viat: [] };
++  const lines = readFileSync(polku, "utf8").split("\n");
++  const viat = [];
++  let inViat = false;
++  for (const line of lines) {
++    if (line.trim().startsWith("## Viat")) { inViat = true; continue; }
++    if (inViat && line.trim().startsWith("## ")) break;
++    if (inViat && line.startsWith("|")) {
++      const parts = line.split("|").map((s) => s.trim()).filter(Boolean);
++      if (parts.length >= 2 && parts[0] !== "Vika" && !parts[0].startsWith("---")) {
++        viat.push({ vika: parts[0], tila: parts[1] });
++      }
++    }
++  }
++  return { viat };
++}
+diff --git a/scopes/palvelu/lahteet.test.mjs b/scopes/palvelu/lahteet.test.mjs
+index a8078765..d1e92d58 100644
+--- a/scopes/palvelu/lahteet.test.mjs
++++ b/scopes/palvelu/lahteet.test.mjs
+@@ -1,7 +1,7 @@
+ // node --test scopes/palvelu/lahteet.test.mjs
+ import { test } from 'node:test';
+ import assert from 'node:assert/strict';
+-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
++import { mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
+ import { tmpdir } from 'node:os';
+ import { join } from 'node:path';
+ import { request } from 'node:http';
+@@ -130,6 +130,62 @@ test('lista ja yksi: tiivistelmä ja skoopin näkymä', () => {
+   assert.equal(yksi('puuttuu', a), null);
+ });
+ 
++test('lista ja yksi: AGY-istunnot rikastavat skoopin tilan, istuntomäärän ja kontekstin', () => {
++  const a = ymparisto();
++  utimesSync(join(a.juuri, 'a/R.md'), 1000, 1000);
++  const agy = [{
++    id: 'siirto-b-120000',
++    nimi: 'siirto-b-120000',
++    tila: 'busy',
++    kysely: false,
++    skooppi: 'b',
++    konteksti: { tokenit: 12345, aika: '2026-10-16T15:00:00.000Z' },
++    pysahdys: '2026-10-16T15:00:00.000Z',
++    pakattu: false,
++    hereilla: false,
++    alkoi: 1792150000000,
++    pid: 9999,
++    vanhempi: null,
++    ruutu: 'siirto-b-120000',
++    tyyppi: 'agy',
++  }];
++  const l = lista(a, agy);
++  const b = l.find((x) => x.nimi === 'b');
++  assert.equal(b.istuntoja, 1);
++  assert.equal(b.tila, 'kasittely');
++  assert.equal(b.suurinKonteksti, 12345);
++  assert.equal(b.aika, '2026-10-16T15:00:00.000Z');
++
++  const s = yksi('b', a, agy);
++  assert.equal(s.istunnot.length, 1);
++  assert.equal(s.istunnot[0].id, 'siirto-b-120000');
++  assert.equal(s.istunnot[0].tyyppi, 'agy');
++});
++
++test('istunnot ja lista: AGY-istunto synkronisesti listaukseen, kyselytila ja deduplikointi', () => {
++  const a = ymparisto();
++  const listPanes = () => 'siirto-b-140000 agy 1792160000 7777\n';
++  const capturePane = () => 'Question 1/1: Valitse toiminto?\n  ↑/↓ Navigate · enter Select · esc Skip\n';
++
++  const res = istunnot({ ...a, skooppiNimet: ['a', 'b'], listPanes, capturePane });
++  assert.equal(res.length, 2); // s1 (Claude) ja siirto-b-140000 (AGY)
++  const agy = res.find((i) => i.id === 'siirto-b-140000');
++  assert.equal(agy.skooppi, 'b');
++  assert.equal(agy.tila, 'waiting');
++  assert.equal(agy.kysely, true);
++  assert.equal(agy.tyyppi, 'agy');
++
++  const l = lista({ ...a, listPanes, capturePane });
++  const b = l.find((x) => x.nimi === 'b');
++  assert.equal(b.tila, 'kysely');
++  assert.equal(b.istuntoja, 1);
++
++  // lisaIstunnot samalla id:llä ei monista istuntoa
++  const l2 = lista({ ...a, listPanes, capturePane }, [agy]);
++  const b2 = l2.find((x) => x.nimi === 'b');
++  assert.equal(b2.istuntoja, 1);
++});
++
+ test('skooppiTila: busy käsittelyssä, muu pakkaamaton odottaa, pakattu tai ei istuntoja harmaa', () => {
+   assert.equal(skooppiTila([]), 'pakattu');
+   assert.equal(skooppiTila([{ tila: 'busy', pakattu: true }]), 'pakattu');
+diff --git a/scopes/palvelu/palvelin.mjs b/scopes/palvelu/palvelin.mjs
+index 34f23f87..2f2a24cd 100644
+--- a/scopes/palvelu/palvelin.mjs
++++ b/scopes/palvelu/palvelin.mjs
+@@ -71,23 +71,27 @@
+ // oletus ~/.local/state/scopes-android). Ilman avainta palvelu ei käynnisty.
+ 
+ import { timingSafeEqual } from 'node:crypto';
+-import { readFileSync, realpathSync } from 'node:fs';
++import { appendFileSync, readFileSync, realpathSync } from 'node:fs';
+ import { createServer } from 'node:http';
+ import { homedir } from 'node:os';
+ import { dirname, join, resolve } from 'node:path';
+ import { fileURLToPath } from 'node:url';
+ import { luoDiagnostiikka } from './diagnostiikka.mjs';
+ import { luoKayttoraja } from './kayttoraja.mjs';
+-import { lista, lueSkoopit, rekisterinOsat, rekisterit, yksi } from './lahteet.mjs';
++import { luoAgyKayttoraja } from './agy-kayttoraja.mjs';
++import { lista, lueSkoopit, lueViat, rekisterinOsat, rekisterit, yksi } from './lahteet.mjs';
+ import { luoLiitteet } from './liitteet.mjs';
+ import { luoAndroid } from './android.mjs';
+ import { luoLinuxServer } from './palvelin.mjs';
+ import { luoAsetukset, OLETUS_HAKEMISTO } from './toiminnot-asetukset.mjs';
+ import { luoIstuntoValinta } from './istunto-asetukset.mjs';
++import { luoAgyLuvat } from './agy-luvat.mjs';
+ import { luoPurkajat } from './purkajat.mjs';
+-import { Hylatty, luoToiminnot } from './toiminnot.mjs';
++import { ajaKomento, Hylatty, luoToiminnot } from './toiminnot.mjs';
++import { agyIstunnot } from './agy-istunto.mjs';
+ import { luoViestit } from './viestit.mjs';
+ import { LrVirhe, luoLr } from '../localregister/palvelu.mjs';
++import { luoKordinaattori } from './kordinaattori.mjs';
+ 
+ const tama = dirname(fileURLToPath(import.meta.url));
+ 
+@@ -135,7 +139,7 @@ function runko(req, raja = 1024) {
+   });
+ }
+ 
+-export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset, { android: () => android }), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), purkajat = luoPurkajat({ juuri: asetukset.juuri, paikalliset: () => viestit.agentit() }), linux = luoLinuxServer({ loki: asetukset.toimintoloki, kuiva: asetukset.linuxKuiva === true }), android = luoAndroid({ loki: asetukset.toimintoloki, kuiva: asetukset.androidKuiva === true, ...(asetukset.androidLaite && { laite: asetukset.androidLaite }), ...(asetukset.androidDir && { tuotoksetDir: asetukset.androidDir }) })) {
++export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viestit = luoViestit(asetukset, { android: () => android }), kayttoraja = luoKayttoraja(), liitteet = luoLiitteet(asetukset), diagnostiikka = luoDiagnostiikka(asetukset), kytkimet = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki }), lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null }), purkajat = luoPurkajat({ juuri: asetukset.juuri, paikalliset: () => viestit.agentit() }), linux = luoLinuxServer({ loki: asetukset.toimintoloki, kuiva: asetukset.linuxKuiva === true }), android = luoAndroid({ loki: asetukset.toimintoloki, kuiva: asetukset.androidKuiva === true, ...(asetukset.androidLaite && { laite: asetukset.androidLaite }), ...(asetukset.androidDir && { tuotoksetDir: asetukset.androidDir }) }), agyKayttoraja = luoAgyKayttoraja()) {
+   const istuntoValinta = luoIstuntoValinta(asetukset);
+   // Chat suoratoistona (DEMO-SCOPES-SUORATOISTO): NDJSON-rivit {tyyppi: 'pala', teksti} …, lopuksi
+   // {tyyppi: 'valmis', vastaus, keskustelu, …} tai {tyyppi: 'virhe', virhe}. Hylkäys ennen agentin käynnistystä
+@@ -223,6 +227,16 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
+         if (st) return vastaa(200, await viestit.pysaytaSkooppi(decodeURIComponent(st[1])));
+         const v = polku.match(/^\/api\/skoopit\/([^/]+)\/viesti$/);
+         if (v) return vastaa(200, await viestit.lahetaSkooppiin(decodeURIComponent(v[1]), (await runko(req, 32_768)).teksti));
++        const stm = polku.match(/^\/api\/skoopit\/([^/]+)\/stream$/);
++        if (stm) {
++          const nimi = decodeURIComponent(stm[1]);
++          const { teksti } = await runko(req, 32_768);
++          const tulos = await viestit.lahetaSkooppiin(nimi, teksti);
++          res.writeHead(200, NDJSON);
++          kirjoitaRes(res, { tyyppi: "valmis", vastaus: "", istunto: tulos?.istunto ?? null });
++          res.end();
++          return;
++        }
+         const ml = polku.match(/^\/api\/skoopit\/([^/]+)\/malli$/);
+         if (ml) return vastaa(200, await viestit.vaihdaMalli(decodeURIComponent(ml[1]), await runko(req, 1024)));
+         const l = polku.match(/^\/api\/skoopit\/([^/]+)\/liite$/);
+@@ -240,13 +254,23 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
+         if (t) return vastaa(200, await suorita(t[2], decodeURIComponent(t[1])));
+         return vastaa(404, { virhe: 'tuntematon toiminto' });
+       }
+-      if (polku === '/api/skoopit') return vastaa(200, lista(asetukset));
++      if (polku === '/api/skoopit') {
++        const skoopit = lueSkoopit(asetukset.juuri);
++        const agy = await agyIstunnot({ skooppiNimet: Object.keys(skoopit), aja: asetukset.aja ?? ajaKomento, agyHakemisto: asetukset.agyHakemisto });
++        return vastaa(200, lista({ ...asetukset, ohitaAgy: true }, agy));
++      }
+       if (polku === '/api/asetukset') return vastaa(200, kytkimet.lue());
+       const ig = polku.match(/^\/api\/skoopit\/([^/]+)\/asetukset$/);
+       if (ig) {
+         const v = istuntoValinta(decodeURIComponent(ig[1]), url.searchParams.get('istunto'));
+-        return vastaa(200, { ...v, ...(v.istunto ? kytkimet.lueIstunto(v.istunto) : kytkimet.lue()) });
++        const { agyluvat: _globaali, ...yhteiset } = kytkimet.lue(); // agyluvat on globaali, ei keskustelukohtainen
++        return vastaa(200, { ...v, ...(v.istunto ? kytkimet.lueIstunto(v.istunto) : yhteiset) });
+       }
++      if (polku === '/api/kordinaattori') return vastaa(200, kordinaattori.tila());
++      if (polku === '/api/kordinaattori/skoopit') return vastaa(200, kordinaattori.skoopit());
++      if (polku === '/api/viat') return vastaa(200, lueViat(asetukset.juuri));
++      if (polku === '/api/diagnostiikka') return vastaa(200, diagnostiikka.lueTilanne());
++      if (polku === '/api/kordinaattori/kehote') return vastaa(200, { kehote: kordinaattori.kehote() });
+       if (polku === '/api/agentit') return vastaa(200, await viestit.agentit());
+       if (polku === '/api/purkajat') return vastaa(200, await purkajat.lista());
+       if (polku === '/api/palvelin') return vastaa(200, await linux.tila());
+@@ -255,7 +279,18 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
+       if (polku === '/api/android/ui') return vastaa(200, await android.ui());
+       if (polku === '/api/android/tuotokset') return vastaa(200, await android.tuotokset());
+       if (polku === '/api/android/tuotos') return vastaaTavut(await android.tuotos(url.searchParams.get('polku')));
+-      if (polku === '/api/kayttoraja') return vastaa(200, await kayttoraja());
++      if (polku === '/api/kayttoraja') {
++        const tyyppi = url.searchParams.get('tyyppi');
++        const agentti = url.searchParams.get('agentti');
++        const skooppi = url.searchParams.get('skooppi');
++        const ryhma = url.searchParams.get('ryhma');
++        let onAgy = tyyppi === 'agy' || tyyppi === 'gemini' || agentti === 'android/gemini' || agentti?.startsWith('agy') || agentti?.startsWith('antigravity') || agentti?.includes('gemini');
++        if (!onAgy && skooppi && tyyppi !== 'claude' && !agentti?.startsWith('claude')) {
++          onAgy = (await viestit.onkoAgy?.(skooppi)) || (viestit.skoopinViestit?.(skooppi)?.istunto?.tyyppi === 'agy');
++        }
++        if (onAgy) return vastaa(200, await agyKayttoraja({ ryhma: ryhma || 'gemini' }));
++        return vastaa(200, await kayttoraja());
++      }
+       // Luetaan joka pyynnöllä: avaimen vaihto ei vaadi palvelun uudelleenkäynnistystä.
+       if (polku === '/api/wg-asetus') {
+         try { return vastaa(200, { asetus: readFileSync(asetukset.wgTiedosto, 'utf8') }); } catch { return vastaa(404, { virhe: 'tunnelin asetusta ei ole' }); }
+@@ -271,11 +306,18 @@ export function kasittelija(asetukset, suorita = luoToiminnot(asetukset), viesti
+         return r ? vastaa(200, r) : vastaa(404, { virhe: 'tuntematon kontekstitiedosto' });
+       }
+       const vv = polku.match(/^\/api\/skoopit\/([^/]+)\/viestit$/);
+-      if (vv) return vastaa(200, viestit.skoopinViestit(decodeURIComponent(vv[1])));
++      if (vv) {
++        const nimi = decodeURIComponent(vv[1]);
++        const k = viestit.skoopinViestit(nimi);
++        // Claude-istunnon puuttuessa agy-istunto (AGY-PRE-ISTUNTO) korvaa "skooppi ei ole auki" -vastauksen.
++        return vastaa(200, k.auki ? k : (await viestit.agyViestit(nimi)) ?? k);
++      }
+       const m = polku.match(/^\/api\/skoopit\/(.+)$/);
+       if (m) {
+-        const s = yksi(decodeURIComponent(m[1]), asetukset);
+-        return s ? vastaa(200, { ...s, jonossa: suorita.jono?.(decodeURIComponent(m[1])) ?? [] }) : vastaa(404, { virhe: 'tuntematon skooppi' });
++        const nimi = decodeURIComponent(m[1]);
++        const agy = await agyIstunnot({ skooppiNimet: [nimi], aja: asetukset.aja ?? ajaKomento, agyHakemisto: asetukset.agyHakemisto });
++        const s = yksi(nimi, { ...asetukset, ohitaAgy: true }, agy);
++        return s ? vastaa(200, { ...s, jonossa: suorita.jono?.(nimi) ?? [] }) : vastaa(404, { virhe: 'tuntematon skooppi' });
+       }
+       return vastaa(404, { virhe: 'tuntematon polku' });
+     } catch (e) {
+@@ -297,6 +339,12 @@ if (paaohjelma) {
+   }
+   const diagnostiikka = luoDiagnostiikka(asetukset);
+   diagnostiikka.silmukka();
++  // "Always allow" agy-istunnoille (AGY-PRE-ISTUNTO): taustakierros vastaa lupakyselyihin, kun asetus agyluvat on päällä.
++  const luvatAsetus = luoAsetukset({ hakemisto: asetukset.tilaDir ?? OLETUS_HAKEMISTO, loki: asetukset.toimintoloki });
++  luoAgyLuvat({
++    aja: ajaKomento, paalla: () => luvatAsetus.lue().agyluvat,
++    kirjaa: (rivi) => { try { appendFileSync(asetukset.toimintoloki, JSON.stringify({ aika: new Date().toISOString(), ...rivi }) + '\n'); } catch { /* loki ei estä vastausta */ } },
++  }).kaynnista();
+   const lr = luoLr({ repoJuuri: asetukset.juuri, vientiEtuliite: asetukset.lrVienti ?? null });
+   lr.ajasta();
+   createServer(diagnostiikka.kaari(kasittelija(asetukset, undefined, undefined, undefined, undefined, diagnostiikka, undefined, lr))).listen(portti, osoite, () =>
+diff --git a/scopes/palvelu/purkajat.mjs b/scopes/palvelu/purkajat.mjs
+index 6cf95faa..2faa39dc 100644
+--- a/scopes/palvelu/purkajat.mjs
++++ b/scopes/palvelu/purkajat.mjs
+@@ -10,7 +10,7 @@
+ 
+ import { readFileSync } from 'node:fs';
+ import { join } from 'node:path';
+-import { ajaKomento, Hylatty } from './toiminnot.mjs';
++import { AGY_MALLI, MAC_AGY_MALLI, ajaKomento, Hylatty } from './toiminnot.mjs';
+ import { MALLIT, PAIKALLINEN } from './viestit.mjs';
+ 
+ export const AGENTTI = 'siirtaja-sonnet';
+@@ -55,20 +55,41 @@ export function luoPurkajat({ juuri, paikalliset = async () => [], aja = ajaKome
+       { tunnus: '', kuvaus: `Oletus (${oletus()})`, ryhma: 'oletus' },
+       ...MALLIT.map((m) => ({ tunnus: `claude-cli:${m.nimi}`, kuvaus: m.kuvaus, ryhma: 'Claude' })),
+       { tunnus: `claude-agent:${AGENTTI}`, kuvaus: `${AGENTTI}-agentti`, ryhma: 'Claude' },
+-      ...agyt.map((m) => ({ tunnus: `agy:${m.id}`, kuvaus: m.nimi, ryhma: 'agy' })),
++      ...agyt.map((m) => ({ tunnus: `mac-agy:${m.id}`, kuvaus: `${m.nimi} · macos`, ryhma: 'Mac AGY' })),
++      ...agyt.map((m) => ({ tunnus: `agy:${m.id}`, kuvaus: `${m.nimi} · oneplus linux`, ryhma: 'OnePlus Linux AGY' })),
+       ...lms.map((m) => ({ tunnus: `paikallinen:${m.nimi.slice(PAIKALLINEN.length)}`, kuvaus: m.kuvaus, ryhma: 'Paikalliset' })),
+     ];
+     const mallit = [...MALLIT.map(({ nimi, kuvaus }) => ({ nimi, kuvaus, ryhma: 'Claude' })),
++      ...agyt.map((m) => ({ nimi: `${MAC_AGY_MALLI}${m.id}`, kuvaus: `${m.nimi} · macos`, ryhma: 'Mac AGY' })),
++      ...agyt.map((m) => ({ nimi: `${AGY_MALLI}${m.id}`, kuvaus: `${m.nimi} · oneplus linux`, ryhma: 'OnePlus Linux AGY' })),
+       ...lms.map(({ nimi, kuvaus }) => ({ nimi, kuvaus, ryhma: 'Paikalliset' }))];
+     return { purkajat, mallit, oletusMalli: 'claude-opus-5-5' };
+   }
+ 
+   // Runko {purkaja?, malli?} → { ajaja, malli }; tyhjä tai puuttuva = oletus (null).
+   async function tarkista(runko = {}) {
+-    const purkaja = runko.purkaja ?? '';
+-    const malli = runko.malli ?? '';
++    let purkaja = runko.purkaja ?? '';
++    let malli = runko.malli ?? '';
+     if (typeof purkaja !== 'string' || typeof malli !== 'string') throw new Hylatty(400, 'purkaja ja malli ovat merkkijonoja');
+     const l = (purkaja || malli) ? await lista() : null;
++
++    if (malli && l) {
++      if (malli.startsWith('macos-agy/')) {
++        malli = `${MAC_AGY_MALLI}${malli.slice(10)}`;
++      } else if (!malli.includes('/')) {
++        const loytyi = l.mallit.find((m) => m.nimi === `${MAC_AGY_MALLI}${malli}` || m.nimi === `${AGY_MALLI}${malli}`);
++        if (loytyi) malli = loytyi.nimi;
++      }
++    }
++    if (purkaja && l) {
++      if (purkaja.startsWith('macos-agy:')) {
++        purkaja = `mac-agy:${purkaja.slice(10)}`;
++      } else if (!purkaja.includes(':')) {
++        const loytyi = l.purkajat.find((p) => p.tunnus === `mac-agy:${purkaja}` || p.tunnus === `agy:${purkaja}`);
++        if (loytyi) purkaja = loytyi.tunnus;
++      }
++    }
++
+     if (malli && !l.mallit.some((m) => m.nimi === malli)) throw new Hylatty(400, `tuntematon istunnon malli ${malli.slice(0, 80)}`);
+     if (purkaja && !l.purkajat.some((p) => p.tunnus === purkaja)) {
+       throw new Hylatty(400, `purkaja ei ole saatavilla: ${purkaja.slice(0, 120)}`);
+diff --git a/scopes/palvelu/purkajat.test.mjs b/scopes/palvelu/purkajat.test.mjs
+index f64c02b4..a678e109 100644
+--- a/scopes/palvelu/purkajat.test.mjs
++++ b/scopes/palvelu/purkajat.test.mjs
+@@ -28,12 +28,12 @@ test('lista: oletus, Claude, agentti, agy ja paikalliset; agy välimuistissa', a
+   const { p, kutsut } = purkajat();
+   const l = await p.lista();
+   assert.deepEqual(l.purkajat.map((x) => x.tunnus), ['', 'claude-cli:claude-fable-5-1', 'claude-cli:claude-opus-5-5', 'claude-cli:claude-sonnet-5-5',
+-    'claude-cli:claude-haiku-5-5', 'claude-agent:siirtaja-sonnet', 'agy:gemini-3.8-flash-medium', 'agy:gpt-oss-120b-medium', 'paikallinen:qwen/qwen3.6-35b-a3b']);
++    'claude-cli:claude-haiku-5-5', 'claude-agent:siirtaja-sonnet', 'mac-agy:gemini-3.8-flash-medium', 'mac-agy:gpt-oss-120b-medium', 'agy:gemini-3.8-flash-medium', 'agy:gpt-oss-120b-medium', 'paikallinen:qwen/qwen3.6-35b-a3b']);
+   assert.equal(l.purkajat[0].kuvaus, 'Oletus (claude-cli claude-haiku-5-5)');
+   assert.equal(l.oletusMalli, 'claude-opus-5-5');
+   // Paikalliset mallit myös istunnon malleiksi (15.10.2026: "Paikalliset mallit pitää saada myös keskustelun ajoon").
+   assert.deepEqual(l.mallit.map((m) => `${m.ryhma}:${m.nimi}`), ['Claude:claude-fable-5-1', 'Claude:claude-opus-5-5', 'Claude:claude-sonnet-5-5',
+-    'Claude:claude-haiku-5-5', 'Paikalliset:palvelin/qwen/qwen3.6-35b-a3b']);
++    'Claude:claude-haiku-5-5', 'Mac AGY:mac-agy/gemini-3.8-flash-medium', 'Mac AGY:mac-agy/gpt-oss-120b-medium', 'OnePlus Linux AGY:agy/gemini-3.8-flash-medium', 'OnePlus Linux AGY:agy/gpt-oss-120b-medium', 'Paikalliset:palvelin/qwen/qwen3.6-35b-a3b']);
+   await p.lista();
+   assert.equal(kutsut.length, 1);
+ });
+@@ -45,16 +45,16 @@ test('lista: vanhentunut agy-lista heti, päivitys taustalla yhtenä hakuna', as
+   let hidas = false;
+   const { p, kutsut } = purkajat({ nyt: () => aika,
+     aja: () => (hidas ? new Promise((r) => { vapauta = () => r({ koodi: 0, stdout: 'uusi-malli\tUusi\n', stderr: '' }); }) : { koodi: 0, stdout: AGY, stderr: '' }) });
+-  assert.equal((await p.lista()).purkajat.filter((x) => x.ryhma === 'agy').length, 2);
++  assert.equal((await p.lista()).purkajat.filter((x) => x.ryhma.includes('AGY')).length, 4);
+   aika = 11 * 60_000;
+   hidas = true;
+   const ennen = await p.lista();
+   await p.lista();
+   assert.equal(kutsut.length, 2);
+-  assert.deepEqual(ennen.purkajat.filter((x) => x.ryhma === 'agy').map((x) => x.tunnus), ['agy:gemini-3.8-flash-medium', 'agy:gpt-oss-120b-medium']);
++  assert.deepEqual(ennen.purkajat.filter((x) => x.ryhma.includes('AGY')).map((x) => x.tunnus), ['mac-agy:gemini-3.8-flash-medium', 'mac-agy:gpt-oss-120b-medium', 'agy:gemini-3.8-flash-medium', 'agy:gpt-oss-120b-medium']);
+   vapauta();
+   await new Promise((r) => setImmediate(r));
+-  assert.deepEqual((await p.lista()).purkajat.filter((x) => x.ryhma === 'agy').map((x) => x.tunnus), ['agy:uusi-malli']);
++  assert.deepEqual((await p.lista()).purkajat.filter((x) => x.ryhma.includes('AGY')).map((x) => x.tunnus), ['mac-agy:uusi-malli', 'agy:uusi-malli']);
+   assert.equal(kutsut.length, 2);
+ });
+ 
+@@ -67,6 +67,9 @@ test('tarkista: vain listan jäsenet, tyhjä = oletus', async () => {
+   const { p } = purkajat();
+   assert.deepEqual(await p.tarkista({}), { ajaja: null, malli: null });
+   assert.deepEqual(await p.tarkista({ purkaja: 'agy:gemini-3.8-flash-medium', malli: 'claude-sonnet-5-5' }), { ajaja: 'agy:gemini-3.8-flash-medium', malli: 'claude-sonnet-5-5' });
++  assert.deepEqual(await p.tarkista({ malli: 'gemini-3.8-flash-medium' }), { ajaja: null, malli: 'mac-agy/gemini-3.8-flash-medium' });
++  assert.deepEqual(await p.tarkista({ malli: 'mac-agy/gemini-3.8-flash-medium' }), { ajaja: null, malli: 'mac-agy/gemini-3.8-flash-medium' });
++  assert.deepEqual(await p.tarkista({ malli: 'agy/gemini-3.8-flash-medium' }), { ajaja: null, malli: 'agy/gemini-3.8-flash-medium' });
+   const hylkaa = (r) => assert.rejects(p.tarkista(r), (e) => e instanceof Hylatty && e.koodi === 400);
+   await hylkaa({ purkaja: 'agy:gemini --rm' });
+   await hylkaa({ purkaja: 'paikallinen:muu' });
+diff --git a/scopes/palvelu/toiminnot-asetukset.mjs b/scopes/palvelu/toiminnot-asetukset.mjs
+index db4b31b9..4863e969 100644
+--- a/scopes/palvelu/toiminnot-asetukset.mjs
++++ b/scopes/palvelu/toiminnot-asetukset.mjs
+@@ -16,6 +16,8 @@ export const OLETUS_HAKEMISTO = join(homedir(), '.claude/skills/keskustelun-siir
+ export const ASETUKSET = Object.freeze({
+   automaattijatko: 'automaattivalinta.txt',
+   autopack: 'autopack.txt',
++  // Agy-istuntojen lupakyselyihin vastaaminen (agy-luvat.mjs); globaali, ei keskustelukohtainen.
++  agyluvat: 'agy-luvat.txt',
+ });
+ 
+ export function luoAsetukset({ hakemisto = OLETUS_HAKEMISTO, loki = null } = {}) {
+@@ -56,7 +58,7 @@ export function luoAsetukset({ hakemisto = OLETUS_HAKEMISTO, loki = null } = {})
+ 
+   function asetaIstunto(nimi, tunnus, arvo) {
+     try {
+-      if (typeof nimi !== 'string' || !Object.hasOwn(ASETUKSET, nimi)) throw new Hylatty(404, 'tuntematon asetus');
++      if (typeof nimi !== 'string' || !Object.hasOwn(ASETUKSET, nimi) || nimi === 'agyluvat') throw new Hylatty(404, 'tuntematon asetus');
+       if (typeof arvo !== 'boolean') throw new Hylatty(400, 'arvo: vain päällä tai pois');
+       if (!kelvollinenTunnus(tunnus)) throw new Hylatty(409, 'istunnon tunnus puuttuu');
+       try { asetaIstuntoon(nimi, tunnus, arvo, hakemisto); } catch { throw new Hylatty(500, 'asetuksen tallennus epäonnistui'); }
+diff --git a/scopes/palvelu/toiminnot-asetukset.test.mjs b/scopes/palvelu/toiminnot-asetukset.test.mjs
+index 8165bd90..fe3f4af6 100644
+--- a/scopes/palvelu/toiminnot-asetukset.test.mjs
++++ b/scopes/palvelu/toiminnot-asetukset.test.mjs
+@@ -12,14 +12,14 @@ const tmp = () => mkdtempSync(join(tmpdir(), 'scopes-as-'));
+ 
+ test('asetukset: puuttuva hakemisto ja tiedosto = false', () => {
+   const a = luoAsetukset({ hakemisto: join(tmp(), 'ei-ole') });
+-  assert.deepEqual(a.lue(), { automaattijatko: false, autopack: false });
++  assert.deepEqual(a.lue(), { automaattijatko: false, autopack: false, agyluvat: false });
+ });
+ 
+ test('asetukset: roskasisältö ja jokin muu kuin true = false', () => {
+   const d = tmp();
+   writeFileSync(join(d, ASETUKSET.automaattijatko), '\u0000ÿ roska');
+   writeFileSync(join(d, ASETUKSET.autopack), 'TRUE\n1\n');
+-  assert.deepEqual(luoAsetukset({ hakemisto: d }).lue(), { automaattijatko: false, autopack: false });
++  assert.deepEqual(luoAsetukset({ hakemisto: d }).lue(), { automaattijatko: false, autopack: false, agyluvat: false });
+   writeFileSync(join(d, ASETUKSET.autopack), 'true');
+   assert.equal(luoAsetukset({ hakemisto: d }).lue().autopack, true);
+ });
+@@ -27,11 +27,11 @@ test('asetukset: roskasisältö ja jokin muu kuin true = false', () => {
+ test('asetukset: asetus kirjoittaa muodossa true/false + rivinvaihto ja lukee takaisin', () => {
+   const d = tmp();
+   const a = luoAsetukset({ hakemisto: d });
+-  assert.deepEqual(a.aseta('autopack', true), { automaattijatko: false, autopack: true });
++  assert.deepEqual(a.aseta('autopack', true), { automaattijatko: false, autopack: true, agyluvat: false });
+   assert.equal(readFileSync(join(d, 'autopack.txt'), 'utf8'), 'true\n');
+-  assert.deepEqual(a.aseta('automaattijatko', true), { automaattijatko: true, autopack: true });
++  assert.deepEqual(a.aseta('automaattijatko', true), { automaattijatko: true, autopack: true, agyluvat: false });
+   assert.equal(readFileSync(join(d, 'automaattivalinta.txt'), 'utf8'), 'true\n');
+-  assert.deepEqual(a.aseta('autopack', false), { automaattijatko: true, autopack: false });
++  assert.deepEqual(a.aseta('autopack', false), { automaattijatko: true, autopack: false, agyluvat: false });
+   assert.equal(readFileSync(join(d, 'autopack.txt'), 'utf8'), 'false\n');
+   assert.deepEqual(readdirSync(d).sort(), ['autopack.txt', 'automaattivalinta.txt'].sort(), 'tmp-tiedosto jäi jäljelle');
+ });
+@@ -75,11 +75,11 @@ test('palvelin: GET/POST /api/asetukset vaatii avaimen ja kirjoittaa vain kiinte
+     req.on('error', ei); req.end();
+   });
+   try {
+-    assert.deepEqual(await laheta('/api/asetukset'), [200, { automaattijatko: false, autopack: false }]);
+-    assert.deepEqual(await laheta('/api/asetukset/autopack/paalle', 'POST'), [200, { automaattijatko: false, autopack: true }]);
+-    assert.deepEqual(await laheta('/api/asetukset/automaattijatko/paalle', 'POST'), [200, { automaattijatko: true, autopack: true }]);
+-    assert.deepEqual(await laheta('/api/asetukset/autopack/pois', 'POST'), [200, { automaattijatko: true, autopack: false }]);
+-    assert.deepEqual(await laheta('/api/asetukset'), [200, { automaattijatko: true, autopack: false }]);
++    assert.deepEqual(await laheta('/api/asetukset'), [200, { automaattijatko: false, autopack: false, agyluvat: false }]);
++    assert.deepEqual(await laheta('/api/asetukset/autopack/paalle', 'POST'), [200, { automaattijatko: false, autopack: true, agyluvat: false }]);
++    assert.deepEqual(await laheta('/api/asetukset/automaattijatko/paalle', 'POST'), [200, { automaattijatko: true, autopack: true, agyluvat: false }]);
++    assert.deepEqual(await laheta('/api/asetukset/autopack/pois', 'POST'), [200, { automaattijatko: true, autopack: false, agyluvat: false }]);
++    assert.deepEqual(await laheta('/api/asetukset'), [200, { automaattijatko: true, autopack: false, agyluvat: false }]);
+     assert.equal((await laheta('/api/asetukset/muu/paalle', 'POST'))[0], 404);
+     assert.equal((await laheta('/api/asetukset/..%2Fautopack/paalle', 'POST'))[0], 404);
+     assert.equal((await laheta('/api/asetukset/autopack/ehka', 'POST'))[0], 404);
+@@ -121,7 +121,7 @@ test('palvelin: keskustelukohtaiset kytkimet valitsevat istunnon itse tai ?istun
+     assert.deepEqual(await laheta('/api/skoopit/scopes%20chat/asetukset'), [200, { istunto: A, istuntoja: 1, automaattijatko: false, autopack: true }]);
+     assert.deepEqual(await laheta('/api/skoopit/scopes%20chat/asetukset/autopack/pois', 'POST'), [200, { istunto: A, istuntoja: 1, automaattijatko: false, autopack: false }]);
+     // yhteinen oletus ja toisen skoopin istunto eivät muutu
+-    assert.deepEqual(await laheta('/api/asetukset'), [200, { automaattijatko: false, autopack: true }]);
++    assert.deepEqual(await laheta('/api/asetukset'), [200, { automaattijatko: false, autopack: true, agyluvat: false }]);
+     assert.equal((await laheta(`/api/skoopit/scopes%20lista/asetukset?istunto=${B}`))[1].autopack, true);
+     // useita istuntoja: kirjoitus vaatii valinnan, luku näyttää yhteisen oletuksen
+     assert.deepEqual(await laheta('/api/skoopit/scopes%20lista/asetukset'), [200, { istunto: null, istuntoja: 2, automaattijatko: false, autopack: true }]);
+@@ -135,3 +135,12 @@ test('palvelin: keskustelukohtaiset kytkimet valitsevat istunnon itse tai ?istun
+     assert.equal((await laheta('/api/skoopit/scopes%20chat/asetukset/muu/pois', 'POST'))[0], 404);
+   } finally { srv.close(); }
+ });
++
++test('agyluvat: globaali kytkin, ei keskustelukohtainen (AGY-PRE-ISTUNTO)', () => {
++  const d = mkdtempSync(join(tmpdir(), 'asetukset-'));
++  const a = luoAsetukset({ hakemisto: d });
++  assert.equal(a.lue().agyluvat, false);
++  assert.equal(a.aseta('agyluvat', true).agyluvat, true);
++  assert.equal(luoAsetukset({ hakemisto: d }).lue().agyluvat, true);
++  assert.throws(() => a.asetaIstunto('agyluvat', '38c487b9-3c36-4723-b2af-5f07b106c172', true), (e) => e.koodi === 404);
++});
+diff --git a/scopes/palvelu/toiminnot.mjs b/scopes/palvelu/toiminnot.mjs
+index 8174a7e1..62165e8a 100644
+--- a/scopes/palvelu/toiminnot.mjs
++++ b/scopes/palvelu/toiminnot.mjs
+@@ -24,6 +24,7 @@ import { execFile } from 'node:child_process';
+ import { appendFileSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+ import { homedir } from 'node:os';
+ import { dirname, join } from 'node:path';
++import { agyRuudut } from './agy-istunto.mjs';
+ import { istunnot, lueSkoopit } from './lahteet.mjs';
+ import { keskustelu } from './viestit.mjs';
+ 
+@@ -64,7 +65,12 @@ export function ajaKomento(komento, argumentit, { aikaraja = 150_000, syote = nu
+ // autovaihto.sh:n tulosteesta Remote Control -osoite (OK: <url>).
+ export const istuntoOsoite = (stdout) => /^OK: (https:\/\/claude\.ai\/code\/session_[A-Za-z0-9]+)$/m.exec(stdout)?.[1] ?? null;
+ // Paikallisen mallin istunnolla ei ole Remote Controlia (autovaihto.sh, 15.10.2026): OK-rivi nimeää tmux-istunnon.
+-export const paikallinenTmux = (stdout) => /^OK: paikallinen tmux (siirto-[a-z0-9-]+)$/m.exec(stdout)?.[1] ?? null;
++// Agy-istunto (AGY-PRE-ISTUNTO 16.10.2026) on samanlainen: tmux, ei Remote Controlia.
++export const paikallinenTmux = (stdout) => /^OK: (?:paikallinen|agy|mac-agy) tmux (siirto-[a-z0-9-]+)$/m.exec(stdout)?.[1] ?? null;
++export const MAC_AGY_MALLI = 'mac-agy/';
++// Istunnon malli `agy/<agy-mallin tunnus>` ajaa istunnon agy:llä (autovaihto.sh); agy ei aja Clauden /pura-taitoa, joten se
++// kuuluu vain scopes-perheelle, jonka purku on skripti (pura-malliton.mjs --kohde neutraali).
++export const AGY_MALLI = 'agy/';
+ 
+ // Jonotettavat komennot ryhmittäin: ryhmän uusin korvaa vanhemman (kytkin pois ja päälle → vain /sa), ja herätys lähtee
+ // ennen siirtoa, koska /automaattisiirto päättää istunnon.
+@@ -128,7 +134,8 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
+   }
+ 
+   async function avaaIstunto(skooppi, viesti, malli = null) {
+-    const t = await aja('bash', [autovaihto, 'vaihda', skooppi, '--ei-sulje', ...(malli ? ['--model', malli] : []), '--viesti', viesti]);
++    // viesti null = autovaihto.sh kirjoittaa purkutiedoston itse (agy-uusi skooppi).
++    const t = await aja('bash', [autovaihto, 'vaihda', skooppi, '--ei-sulje', ...(malli ? ['--model', malli] : []), ...(viesti ? ['--viesti', viesti] : [])]);
+     const osoite = istuntoOsoite(t.stdout);
+     const tmux = paikallinenTmux(t.stdout);
+     if (t.koodi !== 0 || !(osoite || tmux)) {
+@@ -152,11 +159,24 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
+     const skoopit = lueSkoopit(asetukset.juuri);
+     if (!skoopit[nimi]) throw new Hylatty(404, 'tuntematon skooppi');
+     const omat = skoopinIstunnot(nimi, skoopit).filter((i) => i.ruutu && !i.pakattu);
+-    if (omat.length !== 1) throw new Hylatty(409, omat.length ? 'skoopissa on useita tmux-istuntoja' : `skoopilla ei ole tmux-istuntoa, johon ${komento} voi lähettää`);
++    if (omat.length !== 1) {
++      if (omat.length === 0) {
++        const agy = await agyRuudut(aja, nimi);
++        if (agy.length === 1) {
++          const [r] = agy;
++          for (const a of [['-l', komento], ['Enter']]) {
++            const t = await aja('tmux', ['send-keys', '-t', r.ruutu, ...a]);
++            if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
++          }
++          return { istunto: r.ruutu, komento };
++        }
++      }
++      throw new Hylatty(409, omat.length ? 'skoopissa on useita tmux-istuntoja' : `skoopilla ei ole tmux-istuntoa, johon ${komento} voi lähettää`);
++    }
+     const [i] = omat;
+     const ryhma = JONO_RYHMA[komento];
+     if (ryhma && jono.delete(`${nimi}\n${ryhma}`)) tallennaJono();
+-    if (i.tila === 'waiting' && komento === '/pakkaa' && kysymysAuki(i)) {
++    if (i.tila === 'waiting' && (komento === '/pakkaa' || komento === '/automaattisiirto') && (i.kysely || kysymysAuki(i))) {
+       // Kuten viestin lähetys (viestit.mjs): Enter valitsisi korostetun vaihtoehdon, joten Escape ensin ja tauko,
+       // ettei Escape + kirjain tulkitu Alt-näppäimeksi.
+       await tarkistaRuutu(i);
+@@ -191,12 +211,18 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
+         kirjaa({ toiminto: j.toiminto, nimi: j.nimi, tulos: 'hylätty', syy: 'jonossa ollut istunto päättyi', istunto: j.istunto });
+         continue;
+       }
+-      if (i.tila !== 'idle') continue;
++      const kysymys = (j.komento === '/pakkaa' || j.komento === '/automaattisiirto') && i.tila === 'waiting' && (i.kysely || kysymysAuki(i));
++      if (i.tila !== 'idle' && !kysymys) continue;
+       jono.delete(avain);
+       tallennaJono();
+       kaynnissa = j.toiminto;
+       try {
+         await tarkistaRuutu(i);
++        if (kysymys) {
++          const t = await aja('tmux', ['send-keys', '-t', i.ruutu, 'Escape']);
++          if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
++          await new Promise((r) => setTimeout(r, asetukset.escapeTauko ?? 800));
++        }
+         await kirjoita(i, j.komento);
+         kirjaa({ toiminto: j.toiminto, nimi: j.nimi, tulos: 'ok', istunto: i.id, komento: j.komento, jonosta: true });
+       } catch (e) {
+@@ -212,14 +238,37 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
+   // Mallivapaa purku (PURA-MALLITON T6b): purkutiedosto kirjoitetaan ennen kuin mitään suljetaan, joten skriptin virhe ei
+   // jätä skooppia ilman istuntoa eikä vaihdu mallireittiin. Suljettavat pois tiedoston ISTUNNOT-riviltä (PURASCRIPT-ISTUNNOT).
+   async function puraMallitta(nimi, suljettavat, malli) {
+-    const r = await aja('node', [malliton, nimi, '--kohde', 'claude', ...(suljettavat.length ? ['--suljettavat', suljettavat.map((i) => i.id).join(',')] : [])]);
++    const r = await aja('node', [malliton, nimi, '--kohde', (malli?.startsWith(AGY_MALLI) || malli?.startsWith(MAC_AGY_MALLI)) ? 'neutraali' : 'claude', ...(suljettavat.length ? ['--suljettavat', suljettavat.map((i) => i.id).join(',')] : [])]);
+     if (r.koodi !== 0 && r.koodi !== 4) {
+       throw new Hylatty(500, (r.stderr.trim().split('\n').filter(Boolean).pop() ?? `pura-malliton exit ${r.koodi}`).slice(0, 300));
+     }
+     const tiedosto = join(homedir(), '.local/state/pura', `${mallitonSlug(nimi)}.md`);
++    if (malli?.startsWith(MAC_AGY_MALLI) && process.platform !== 'darwin') {
++      const json = join(homedir(), '.local/state/pura', `${mallitonSlug(nimi)}.json`);
++      await aja('scp', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', tiedosto, json, 'mac:~/.local/state/pura/']).catch(() => {});
++    }
++    const viestiTiedosto = malli?.startsWith(MAC_AGY_MALLI) ? `~/.local/state/pura/${mallitonSlug(nimi)}.md` : tiedosto;
+     for (const i of suljettavat) { await tarkistaRuutu(i); await kirjoita(i, '/exit'); }
+-    const tulos = await avaaIstunto(nimi, `Malliton purku: lue ${tiedosto} ja noudata sitä.`, malli);
+-    return { ...tulos, suljettiin: suljettavat.map((i) => i.id), tiedosto, ...(malli ? { malli } : {}), ...(r.koodi === 4 ? { varoitus: true } : {}) };
++    const tulos = await avaaIstunto(nimi, `Malliton purku: lue ${viestiTiedosto} ja noudata sitä.`, malli);
++    return { ...tulos, suljettiin: suljettavat.map((i) => i.id), tiedosto: viestiTiedosto, ...(malli ? { malli } : {}), ...(r.koodi === 4 ? { varoitus: true } : {}) };
++  }
++
++  // Uusi skooppi agy-istunnolla (AGY-PRE-ISTUNTO): /pura uusi on Clauden taito, joten vaiheet 0 (luonti, asennus, commit) tehdään
++  // tässä samoin kuin taito ne tekisi, ja autovaihto.sh avaa agy-istunnon neutraalilla purkutiedostolla. Vain scopes-perhe.
++  async function uusiAgy(nimi, malli) {
++    if (!nimi.startsWith('scopes ')) throw new Hylatty(400, 'agy-istunto kuuluu vain scopes-perheen skoopeille: nimi alkaa sanalla scopes');
++    const luonti = await aja('node', [join(asetukset.juuri, 'claude/siirto/tools/luo-skooppi.mjs'), nimi], { cwd: asetukset.juuri });
++    if (luonti.koodi !== 0 && luonti.koodi !== 4) {
++      throw new Hylatty(500, (luonti.stderr.trim().split('\n').filter(Boolean).pop() ?? `luo-skooppi exit ${luonti.koodi}`).slice(0, 300));
++    }
++    const polut = [...luonti.stdout.matchAll(/^KIRJOITETTU: (.+)$/gm)].map((m) => m[1]);
++    const asennus = await aja('bash', [join(asetukset.juuri, 'Infra/skills/install.sh')], { cwd: asetukset.juuri });
++    const git = (...a) => aja('git', a, { cwd: asetukset.juuri });
++    const lisays = await git('add', '--', ...polut);
++    const commit = lisays.koodi === 0 ? await git('commit', '-q', '-m', `feat(siirto): uusi skooppi ${nimi} (Scopes-äppi)`, '--', ...polut) : lisays;
++    if (commit.koodi !== 0) throw new Hylatty(500, `skooppi luotu, mutta commit epäonnistui: ${(commit.stderr.trim() || commit.stdout.trim()).slice(0, 240)}`);
++    const tulos = await avaaIstunto(nimi, null, malli);
++    return { ...tulos, malli, luotu: polut, ...(asennus.koodi !== 0 ? { varoitus: true } : {}), ...(luonti.koodi === 4 ? { varoitus: true } : {}) };
+   }
+ 
+   const toteutus = {
+@@ -229,6 +278,10 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
+       if (!Object.hasOwn(skoopit, nimi)) throw new Hylatty(404, 'tuntematon skooppi');
+       const omat = skoopinIstunnot(nimi, skoopit);
+       if (omat.some((i) => !i.pakattu)) throw new Hylatty(409, 'skoopissa on jo käynnissä oleva istunto');
++      const agyTmux = await agyRuudut(aja, nimi);
++      if (agyTmux.some((r) => !omat.some((i) => i.ruutu === r.ruutu && i.pakattu))) {
++        throw new Hylatty(409, 'skoopissa on jo käynnissä oleva agy-istunto');
++      }
+       // Pakattu istunto suljetaan ennen uutta (käyttäjä 13.10.2026): äpissä skoopin keskustelu jatkuu samassa
+       // näkymässä uudella istunnolla. Remote Control -istuntoa ilman ruutua ei voi sulkea; se jää piiloon.
+       // Varattu estää myös ilman ruutua (SIIRTO-PURA-PAINIKE 14.10.2026): puhelimesta avattu istunto voi olla pakattu,
+@@ -239,6 +292,7 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
+       // Perhetunnistus on yksi kaikille reiteille (T6): 0 = scopes-perhe, 1 = ei; muu exit ei saa pudottaa perhettä mallireittiin.
+       const p = await aja('node', [malliton, '--perhe', nimi]);
+       if (p.koodi === 0) return puraMallitta(nimi, suljettavat, malli);
++      if ((malli?.startsWith(AGY_MALLI) || malli?.startsWith(MAC_AGY_MALLI)) && p.koodi === 1) throw new Hylatty(400, 'agy-istunto kuuluu vain scopes-perheen skoopeille');
+       if (p.koodi !== 1) throw new Hylatty(500, (p.stderr.trim().split('\n').filter(Boolean).pop() ?? `pura-malliton --perhe exit ${p.koodi}`).slice(0, 300));
+       for (const i of suljettavat) { await tarkistaRuutu(i); await kirjoita(i, '/exit'); }
+       const tulos = await avaaIstunto(nimi, `/pura ${nimi}${ajaja ? ` --ajaja=${ajaja}` : ''}`, malli);
+@@ -254,6 +308,7 @@ export function luoToiminnot(asetukset, { aja = ajaKomento, loki = asetukset.toi
+       if (typeof nimi !== 'string' || !UUSI_NIMI.test(nimi)) throw new Hylatty(400, 'nimi: 1–4 sanaa pienaakkosia, numeroita tai viivoja');
+       const skoopit = lueSkoopit(asetukset.juuri);
+       if (skoopit[nimi]) throw new Hylatty(409, 'skooppi on jo olemassa');
++      if (malli?.startsWith(AGY_MALLI) || malli?.startsWith(MAC_AGY_MALLI)) return uusiAgy(nimi, malli);
+       const tulos = await avaaIstunto(nimi, `/pura uusi ${nimi}${ajaja ? ` --ajaja=${ajaja}` : ''}`, malli);
+       return { ...tulos, ...(ajaja ? { purkaja: ajaja } : {}), ...(malli ? { malli } : {}) };
+     },
+diff --git a/scopes/palvelu/toiminnot.test.mjs b/scopes/palvelu/toiminnot.test.mjs
+index 029df05a..2eec1ab1 100644
+--- a/scopes/palvelu/toiminnot.test.mjs
++++ b/scopes/palvelu/toiminnot.test.mjs
+@@ -31,7 +31,7 @@ function ymparisto({ tila = 'idle', tmux = 'siirto-a-1:@1.%5', skoopit = { a: ['
+ function vaarennos({ autovaihto = { koodi: 0, stdout: `UUSI: …\n${URL_OK}\n`, stderr: '' }, ruudunPid = process.pid, malliton = { koodi: 0, stdout: 'KIRJOITETTU: x\n', stderr: '' }, perhe = false } = {}) {
+   const kutsut = [];
+   const aja = async (komento, argumentit) => {
+-    kutsut.push([komento, ...argumentit]);
++    if (komento !== 'tmux' || argumentit[0] !== 'list-panes') kutsut.push([komento, ...argumentit]);
+     if (komento === 'tmux' && argumentit[0] === 'display-message') return { koodi: 0, stdout: `${ruudunPid}\n`, stderr: '' };
+     if (komento === 'tmux') return { koodi: 0, stdout: '', stderr: '' };
+     if (komento === 'node' && argumentit[1] === '--perhe') return typeof perhe === 'object' ? perhe : { koodi: perhe ? 0 : 1, stdout: `PERHE: ${perhe ? 'kyllä' : 'ei'}\n`, stderr: '' };
+@@ -269,7 +269,8 @@ test('arkistoi: työkalun hylkäys (alaskooppeja) → 409 eikä committia', asyn
+ test('yksi toiminto kerrallaan; jokainen yritys lokiin', async () => {
+   const a = ymparisto();
+   let vapauta;
+-  const aja = (_k, argumentit) => argumentit[1] === '--perhe' ? Promise.resolve({ koodi: 1, stdout: '', stderr: '' })
++  const aja = (_k, argumentit) => _k === 'tmux' ? Promise.resolve({ koodi: 0, stdout: '', stderr: '' })
++    : argumentit[1] === '--perhe' ? Promise.resolve({ koodi: 1, stdout: '', stderr: '' })
+     : new Promise((ok) => { vapauta = () => ok({ koodi: 0, stdout: URL_OK, stderr: '' }); });
+   const suorita = luoToiminnot(a, { aja });
+   const eka = suorita('pura', 'b');
+@@ -376,6 +377,13 @@ test('pura: paikallisen mallin istunto palauttaa tmux-nimen osoitteen tilalla',
+   assert.deepEqual(v.kutsut.at(-1), ['bash', join(a.juuri, 'claude/siirto/tools/autovaihto.sh'), 'vaihda', 'b', '--ei-sulje', '--model', 'palvelin/qwen/qwen3-coder-30b', '--viesti', '/pura b']);
+ });
+ 
++test('pura: mac-agy mallin istunto palauttaa tmux-nimen osoitteen tilalla', async () => {
++  const a = ymparisto({ skoopit: { 'scopes test': ['R.md'] } });
++  const v = vaarennos({ perhe: true, autovaihto: { koodi: 0, stdout: 'UUSI: …\nOK: mac-agy tmux siirto-scopes-test-120000\n', stderr: '' } });
++  const r = await luoToiminnot(a, { aja: v.aja })('pura', 'scopes test', { malli: 'mac-agy/gemini-3.8-flash-high' });
++  assert.deepEqual(r, { ok: true, toiminto: 'pura', nimi: 'scopes test', tmux: 'siirto-scopes-test-120000', suljettiin: [], tiedosto: '~/.local/state/pura/scopes-test.md', malli: 'mac-agy/gemini-3.8-flash-high' });
++});
++
+ test('palvelin: POST-reitit vaativat avaimen ja ohjautuvat toimintoihin', async () => {
+   const avain = 'k'.repeat(32);
+   const kutsut = [];
+diff --git a/scopes/palvelu/viestit.mjs b/scopes/palvelu/viestit.mjs
+index 1f577316..f03c6e87 100644
+--- a/scopes/palvelu/viestit.mjs
++++ b/scopes/palvelu/viestit.mjs
+@@ -10,8 +10,9 @@
+ import { randomUUID } from 'node:crypto';
+ import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+ import { basename, dirname, join } from 'node:path';
++import { agyRuudut, agyViestit, haeMacAgyKeskustelu, haeMacAgyKeskusteluSync, jasennaAgyRuutu, loydaKeskustelu, ruudunTila, tyhjennaMacAgyValimuisti } from './agy-istunto.mjs';
+ import { istunnot, lueSkoopit, projektiNimi, pysahdys } from './lahteet.mjs';
+-import { ajaKomento, Hylatty } from './toiminnot.mjs';
++import { ajaKomento, Hylatty, mallitonSlug } from './toiminnot.mjs';
+ 
+ export const MALLIT = [
+   { nimi: 'claude-fable-5-1', kuvaus: 'Fable 5.1', tyyppi: 'malli' },
+@@ -68,7 +69,7 @@ const PAIKALLINEN_ID = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
+ // Mallin vaihto: LM Studio ei mahdu lataamaan toista isoa mallia ensimmäisen rinnalle (8 GB VRAM, 30 GB RAM;
+ // "insufficient system resources" 13.10.2026), joten muu ladattu malli puretaan ensin. Tunnus on tarkistettu
+ // listalta ja PAIKALLINEN_ID-muodosta, joten se ei sisällä lainausmerkkejä eikä kuoren erikoismerkkejä.
+-export const lmsLataa = (id) => `L=~/.lmstudio/bin/lms; $L ps --json | grep -qF '"identifier":"${id}"' || `
++export const lmsLataa = (id) => `mkdir -p ~/.lmstudio/.internal/temp; L=~/.lmstudio/bin/lms; $L ps --json | grep -qF '"identifier":"${id}"' || `
+   + `{ $L unload --all >/dev/null && $L load '${id}' -y --identifier '${id}' -c 8192; }`;
+ 
+ // Paikallisen mallin näyttönimi (CHAT-MALLINIMET, V-330): tunnuksen viimeinen osa ilman tiedosto- ja kvantisointipäätettä,
+@@ -217,6 +218,142 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
+     }
+   }
+ 
++  // Viesti agy-ruutuun:
++  // - Jos ruudussa on monivalinta (kysely: true): valitaan haluttu vaihtoehto Down-näppäimillä + Enter (tai Write-in)
++  // - Tavallinen syöte: C-u tyhjentää kentän, teksti kirjaimellisesti, Enter.
++  // Perillä vasta, kun kysely poistuu ruudulta tai agy:n keskustelutiedostossa on uusi käyttäjän viesti.
++  async function lahetaAgyyn(nimi, r, teksti) {
++    const rivi = teksti.replace(/\s*\n\s*/g, ' ').trim();
++    const alku = Date.now();
++    const slug = mallitonSlug(nimi);
++    const onMac = r.onMac || (r.ruutu && (await aja('tmux', ['display-message', '-p', '-t', r.ruutu, '#{pane_current_command}'])).stdout.trim() === 'ssh');
++    let db = null;
++    let ennen = 0;
++    if (onMac) {
++      tyhjennaMacAgyValimuisti(slug);
++      const mt = await haeMacAgyKeskustelu({ slug, alkoi: r.alkoi, aja });
++      if (mt?.loytyi) {
++        db = mt.dbPolku;
++        ennen = (mt.viestit ?? []).filter((v) => v.rooli === 'kayttaja').length;
++      }
++    } else {
++      db = loydaKeskustelu(slug, r.alkoi, asetukset.agyHakemisto);
++      ennen = db ? agyViestit(db, Infinity).filter((v) => v.rooli === 'kayttaja').length : 0;
++    }
++
++    let onkoKysely = false;
++    const capt = await aja('tmux', ['capture-pane', '-p', '-t', r.ruutu]);
++    if (capt.koodi === 0) {
++      onkoKysely = jasennaAgyRuutu(capt.stdout).kysely;
++    } else if (r.kysely != null) {
++      onkoKysely = r.kysely === true;
++    }
++
++    if (onkoKysely) {
++      let vaihtoehdot = [];
++      if (db) {
++        let viestit = [];
++        if (onMac) {
++          const mt = await haeMacAgyKeskustelu({ slug, alkoi: r.alkoi, aja });
++          viestit = mt?.viestit ?? [];
++        } else {
++          viestit = agyViestit(db, 10);
++        }
++        const viimKysymys = [...viestit].reverse().find((v) => v.rooli === 'kysymys');
++        vaihtoehdot = viimKysymys?.kysymykset?.[0]?.vaihtoehdot ?? [];
++      }
++      let valittuIdx = -1;
++      const siivottu = rivi.toLowerCase().trim();
++      const numMatch = /^(\d+)[\.\)]?$/.exec(siivottu);
++      if (numMatch) {
++        const n = Number(numMatch[1]) - 1;
++        if (n >= 0 && n < vaihtoehdot.length) valittuIdx = n;
++      }
++      if (valittuIdx < 0 && vaihtoehdot.length) {
++        const ilmanNumeroa = siivottu.replace(/^\d+[\.\)]\s*/, '');
++        valittuIdx = vaihtoehdot.findIndex((v) => {
++          const vn = v.nimi.toLowerCase().trim();
++          const vnIlman = vn.replace(/^\d+[\.\)]\s*/, '');
++          return vn === siivottu || vn === ilmanNumeroa || vnIlman === siivottu || vnIlman === ilmanNumeroa;
++        });
++      }
++      if (valittuIdx >= 0) {
++        const painallukset = [];
++        for (let i = 0; i < valittuIdx; i++) painallukset.push('Down');
++        painallukset.push('Enter');
++        for (const p of painallukset) {
++          const t = await aja('tmux', ['send-keys', '-t', r.ruutu, p]);
++          if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
++        }
++      } else {
++        // Custom write-in: mennään Write-in... -kohtaan (vaihtoehdot.length), painetaan Enter, kirjoitetaan teksti
++        const painallukset = [];
++        for (let i = 0; i < (vaihtoehdot.length || 1); i++) painallukset.push('Down');
++        painallukset.push('Enter');
++        for (const p of painallukset) {
++          const t = await aja('tmux', ['send-keys', '-t', r.ruutu, p]);
++          if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
++        }
++        await new Promise((ok) => setTimeout(ok, asetukset.kirjoitaTauko ?? 300));
++        for (const a of [['C-u'], ['-l', rivi], ['Enter']]) {
++          const t = await aja('tmux', ['send-keys', '-t', r.ruutu, ...a]);
++          if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
++        }
++      }
++    } else {
++      for (const a of [['C-u'], ['-l', rivi], ['Enter']]) {
++        const t = await aja('tmux', ['send-keys', '-t', r.ruutu, ...a]);
++        if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
++      }
++    }
++
++    const raja = Date.now() + (asetukset.perillaRaja ?? 10_000);
++    let perilla = false;
++    while (!perilla) {
++      if (onkoKysely) {
++        const capt = await aja('tmux', ['capture-pane', '-p', '-t', r.ruutu]);
++        if (capt.koodi === 0 && !jasennaAgyRuutu(capt.stdout).kysely) {
++          perilla = true;
++          break;
++        }
++      }
++      if (onMac) {
++        tyhjennaMacAgyValimuisti(slug);
++        const mt = await haeMacAgyKeskustelu({ slug, alkoi: r.alkoi, aja });
++        const nytMaara = (mt?.viestit ?? []).filter((v) => v.rooli === 'kayttaja').length;
++        if (nytMaara > ennen) {
++          perilla = true;
++          break;
++        }
++      } else {
++        const d = db ?? loydaKeskustelu(slug, r.alkoi, asetukset.agyHakemisto);
++        const maara = (x) => (x ? agyViestit(x, Infinity).filter((v) => v.rooli === 'kayttaja').length : 0);
++        if (maara(d) > ennen) {
++          perilla = true;
++          break;
++        }
++      }
++      const capt = await aja('tmux', ['capture-pane', '-p', '-t', r.ruutu]);
++      if (capt.koodi === 0) {
++        const j = jasennaAgyRuutu(capt.stdout);
++        if (capt.stdout.includes(`> ${rivi}`) && (j.tila === 'busy' || !capt.stdout.trim().endsWith(`> ${rivi}`))) {
++          perilla = true;
++          break;
++        }
++      }
++      if (Date.now() >= raja) break;
++      await new Promise((ok) => setTimeout(ok, asetukset.perillaVali ?? 500));
++    }
++    const kirjaus = { toiminto: 'viesti', nimi, istunto: r.ruutu, merkkeja: rivi.length, alku: rivi.slice(0, 40), kesto: Date.now() - alku, agy: true };
++    if (!perilla) {
++      const ruutu = await aja('tmux', ['capture-pane', '-p', '-t', r.ruutu]);
++      kirjaa({ ...kirjaus, tulos: 'ei näkynyt', ruutu: ruutu.stdout.split('\n').filter((x) => x.trim()).slice(-8) });
++      throw new Hylatty(504, 'viesti ei näkynyt agy-istunnossa — se voi odottaa istunnon syöttökentässä tai kysymyksen takana; tarkista ennen uudelleenlähetystä');
++    }
++    kirjaa({ ...kirjaus, tulos: 'ok' });
++    return { ok: true, istunto: r.ruutu };
++  }
++
+   // Skoopin pakkaamattomat istunnot uusin ensin: pakattu istunto ei ole enää skoopin keskustelu (käyttäjä 13.10.2026),
+   // ja automaattisiirron jälkeen uusi istunto korvaa vanhan samassa näkymässä.
+   const skoopinIstunnot = (nimi) => {
+@@ -233,7 +370,7 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
+     const [i] = omat;
+     const r = await aja('tmux', ['display-message', '-p', '-t', i.ruutu, '#{pane_pid}']);
+     const ruudunPid = Number(r.stdout.trim());
+-    if (r.koodi !== 0 || !(ruudunPid === i.pid || ruudunPid === i.vanhempi)) throw new Hylatty(409, 'istunnon tmux-ruutu ei täsmää');
++    if (r.koodi !== 0 || !(ruudunPid === i.pid || ruudunPid === i.vanhempi || (i.tyyppi === 'agy' && i.pid == null))) throw new Hylatty(409, 'istunnon tmux-ruutu ei täsmää');
+     return i;
+   }
+ 
+@@ -437,21 +574,85 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
+       const omat = avoimet(nimi);
+       if (!omat.length) return { nimi, auki: false, pakattu: skoopinIstunnot(nimi).length > 0, istunto: null, voiLahettaa: false, viestit: [] };
+       const [i] = omat;
++      if (i.tyyppi === 'agy') {
++        let viestit = (i.viestit && i.viestit.length) ? i.viestit : [];
++        let db = i.dbPolku ?? (i.polku?.endsWith('.db') ? i.polku : null);
++        if (!viestit.length && i.onMac) {
++          const mt = haeMacAgyKeskusteluSync({ slug: mallitonSlug(nimi), alkoi: i.alkoi });
++          if (mt?.loytyi) {
++            viestit = mt.viestit ?? [];
++            db = mt.dbPolku;
++          }
++        } else if (!viestit.length) {
++          db ??= loydaKeskustelu(mallitonSlug(nimi), i.alkoi, asetukset.agyHakemisto);
++          if (db) viestit = agyViestit(db);
++        }
++        return {
++          nimi, auki: true,
++          istunto: { id: i.id, nimi: i.nimi, tila: i.tila, konteksti: i.konteksti, malli: i.malli ?? null, effort: i.effort ?? null, tyyppi: 'agy' },
++          voiLahettaa: Boolean(i.ruutu) && omat.filter((x) => x.ruutu).length === 1,
++          viestit,
++        };
++      }
+       let transkripti = '';
+       try { transkripti = readFileSync(i.polku, 'utf8'); } catch { /* uusi istunto ilman transkriptia */ }
+       return {
+         nimi, auki: true,
+-        istunto: { id: i.id, nimi: i.nimi, tila: i.tila, konteksti: i.konteksti, ...istunnonAsetukset(transkripti) },
++        istunto: { id: i.id, nimi: i.nimi, tila: i.tila, konteksti: i.konteksti, tyyppi: 'claude', ...istunnonAsetukset(transkripti) },
+         voiLahettaa: Boolean(i.ruutu) && omat.filter((x) => x.ruutu).length === 1,
+         viestit: keskustelu(transkripti),
+       };
+     },
+ 
++    // Agy-istunto (AGY-PRE-ISTUNTO): skoopissa ei ole Claude-istuntoa, mutta tmuxissa on agy-ruutu; viestit luetaan agy:n
++    // keskustelutiedostosta (agy-istunto.mjs). null = skoopilla ei ole agy-istuntoa → äppi tarjoaa purun.
++    async agyViestit(nimi) {
++      if (avoimet(nimi).length) return null;
++      const [r] = await agyRuudut(aja, nimi);
++      if (!r) return null;
++      let viestit = [];
++      let db = null;
++      if (r.onMac) {
++        const mt = await haeMacAgyKeskustelu({ slug: mallitonSlug(nimi), alkoi: r.alkoi, aja });
++        if (mt?.loytyi) {
++          viestit = mt.viestit ?? [];
++          db = mt.dbPolku;
++        }
++      } else {
++        db = loydaKeskustelu(mallitonSlug(nimi), r.alkoi, asetukset.agyHakemisto);
++        viestit = db ? agyViestit(db) : [];
++      }
++      const ruutu = await aja('tmux', ['capture-pane', '-p', '-t', r.ruutu]);
++      return {
++        nimi, auki: true,
++        istunto: { id: r.ruutu, nimi: r.ruutu, tila: ruudunTila(ruutu.stdout), konteksti: null, malli: null, effort: null, tyyppi: 'agy' },
++        voiLahettaa: true,
++        viestit,
++      };
++    },
++
++    // Nopea tarkistus: onko skoopilla käynnissä oleva agy-ruutu ilman raskasta tietokannan avausta
++    async onkoAgy(nimi) {
++      const [r] = await agyRuudut(aja, nimi);
++      return Boolean(r);
++    },
++
+     // Viesti skoopin istuntoon: kirjoitetaan ruutuun kirjaimellisesti, rivinvaihdot välilyönneiksi (Enter lähettäisi).
+     async lahetaSkooppiin(nimi, teksti) {
+       if (typeof teksti !== 'string' || !teksti.trim()) throw new Hylatty(400, 'viesti puuttuu');
+       if (teksti.length > VIESTIN_MAKSIMI) throw new Hylatty(413, `viesti yli ${VIESTIN_MAKSIMI} merkkiä`);
++      const omat = avoimet(nimi);
++      if (omat.length === 1 && omat[0].tyyppi === 'agy') {
++        return lahetaAgyyn(nimi, omat[0], teksti);
++      }
++      if (!omat.length) {
++        const [r] = await agyRuudut(aja, nimi);
++        if (r) return lahetaAgyyn(nimi, r, teksti);
++      }
+       const i = await tmuxIstunto(nimi);
++      if (i.tyyppi === 'agy') {
++        return lahetaAgyyn(nimi, i, teksti);
++      }
+       // Auki oleva monivalinta valitsisi Enterillä korostetun vaihtoehdon (käyttäjä 13.10.2026): Escape sulkee sen
+       // ensin, jolloin teksti menee istuntoon vastauksena. Tauko, ettei Escape + kirjain tulkitu Alt-näppäimeksi.
+       let transkripti = '';
+@@ -488,7 +689,18 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
+     // Skoopin stop-nappi (CHAT-STOP): Escape keskeyttää työskentelevän istunnon kuten Claude Coden näppäimistöllä.
+     // Vain työn aikana: vapaassa istunnossa Escape tyhjentäisi kirjoitetun syötteen, kysymyksessä sulkisi kortin.
+     async pysaytaSkooppi(nimi) {
+-      const i = await tmuxIstunto(nimi);
++      let i;
++      try {
++        i = await tmuxIstunto(nimi);
++      } catch (e) {
++        const [r] = await agyRuudut(aja, nimi);
++        if (r) {
++          const ruutu = await aja('tmux', ['capture-pane', '-p', '-t', r.ruutu]);
++          i = { id: r.ruutu, ruutu: r.ruutu, tila: jasennaAgyRuutu(ruutu.stdout).tila };
++        } else {
++          throw e;
++        }
++      }
+       if (i.tila !== 'busy' && i.tila !== 'shell') throw new Hylatty(409, 'istunto ei ole työssä');
+       const t = await aja('tmux', ['send-keys', '-t', i.ruutu, 'Escape']);
+       if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
+@@ -568,7 +780,33 @@ export function luoViestit(asetukset, { aja = ajaKomento, loki = asetukset.toimi
+ 
+     // Kortin X (käyttäjä 13.10.2026, kuten Claude-äpissä): Escape sulkee auki olevan monivalinnan vastaamatta.
+     async suljeKysymys(nimi) {
+-      const i = await tmuxIstunto(nimi);
++      const omat = avoimet(nimi);
++      let i;
++      if (omat.length === 1 && omat[0].tyyppi === 'agy') {
++        i = omat[0];
++      } else {
++        try {
++          i = await tmuxIstunto(nimi);
++        } catch (e) {
++          const [r] = await agyRuudut(aja, nimi);
++          if (r) i = { id: r.ruutu, ruutu: r.ruutu, alkoi: r.alkoi, tyyppi: 'agy' };
++          else throw e;
++        }
++      }
++      if (i.tyyppi === 'agy') {
++        let onkoKysely = false;
++        const capt = await aja('tmux', ['capture-pane', '-p', '-t', i.ruutu]);
++        if (capt.koodi === 0) {
++          onkoKysely = jasennaAgyRuutu(capt.stdout).kysely;
++        } else if (i.kysely != null) {
++          onkoKysely = i.kysely === true;
++        }
++        if (!onkoKysely) throw new Hylatty(409, 'ei auki olevaa kysymystä');
++        const t = await aja('tmux', ['send-keys', '-t', i.ruutu, 'Escape']);
++        if (t.koodi !== 0) throw new Hylatty(502, 'tmux send-keys epäonnistui');
++        kirjaa({ toiminto: 'sulje-kysymys', nimi, istunto: i.id, agy: true });
++        return { ok: true, istunto: i.id };
++      }
+       let transkripti = '';
+       try { transkripti = readFileSync(i.polku, 'utf8'); } catch { /* ei transkriptia */ }
+       const viimeinen = keskustelu(transkripti, 1)[0];
+diff --git a/scopes/palvelu/viestit.test.mjs b/scopes/palvelu/viestit.test.mjs
+index 26e48f1e..ef30396d 100644
+--- a/scopes/palvelu/viestit.test.mjs
++++ b/scopes/palvelu/viestit.test.mjs
+@@ -444,6 +444,10 @@ test('palvelin: chat- ja viestipolut avaimella, iso runko sallittu', async () =>
+     assert.equal((await hae('/api/skoopit/b/viestit')).data.auki, false);
+     assert.equal((await hae('/api/skoopit/a/viesti', 'POST', { teksti: 'moi' })).koodi, 200);
+     assert.equal((await hae('/api/skoopit/b/viesti', 'POST', { teksti: 'moi' })).koodi, 409);
++    const str = await hae('/api/skoopit/a/stream', 'POST', { teksti: 'moi' }, avain, true);
++    assert.equal(str.koodi, 200);
++    assert.match(str.tyyppi, /^application\/x-ndjson/);
++    assert.deepEqual(str.data.map((r) => r.tyyppi), ['valmis']);
+   } finally {
+     srv.close();
+   }
+@@ -593,3 +597,172 @@ test('vaihdaMalli: /model ja /effort ruutuun vain vapaassa istunnossa, arvot lis
+     assert.ok(!lahetetyt.some((k) => k[0] === 'Enter' && lahetetyt.indexOf(k) > lahetetyt.findIndex((x) => x[1] === 's')), 'vahvistusta ei hyväksytä Enterillä');
+   }
+ });
++
++// AGY-PRE-ISTUNTO (16.10.2026): skoopilla ei ole Claude-istuntoa mutta tmuxissa on agy-ruutu → viestit agy:n keskustelutiedostosta,
++// lähetys ruutuun ja perillä vasta, kun tiedostossa on uusi käyttäjän viesti.
++test('agy-istunto: viestit, tila ja lähetys (palvelin ei sano "skooppi ei ole auki")', async () => {
++  const { DatabaseSync } = await import('node:sqlite');
++  const varint = (n) => { const t = []; do { let x = n % 128; n = Math.floor(n / 128); if (n) x |= 0x80; t.push(x); } while (n); return Buffer.from(t); };
++  const num = (f, x) => Buffer.concat([varint(f * 8), varint(x)]);
++  const msg = (f, ...o) => { const b = Buffer.concat(o); return Buffer.concat([varint(f * 8 + 2), varint(b.length), b]); };
++  const str = (f, s) => msg(f, Buffer.from(s, 'utf8'));
++  const aika = msg(5, msg(1, num(1, 1792141799)));
++  const kayttaja = (t) => Buffer.concat([num(1, 14), aika, msg(19, str(2, t))]);
++  const agentti = (t) => Buffer.concat([num(1, 15), aika, msg(20, str(1, t))]);
++  const a = ymparisto();
++  a.agyHakemisto = join(a.juuri, '../agy');
++  mkdirSync(a.agyHakemisto);
++  const polku = join(a.agyHakemisto, 'k1.db');
++  const db = new DatabaseSync(polku);
++  db.exec('CREATE TABLE steps (idx integer, step_type integer NOT NULL DEFAULT 0, step_payload blob, PRIMARY KEY (idx))');
++  const lisaa = (i, t, p) => db.prepare('INSERT INTO steps VALUES (?, ?, ?)').run(i, t, p);
++  lisaa(0, 14, kayttaja('Malliton purku: lue /x/b.md ja noudata sitä.'));
++  lisaa(1, 15, agentti('Raportti. Vastaa numerolla.'));
++  const kutsut = [];
++  const aja = async (komento, argumentit) => {
++    kutsut.push([komento, ...argumentit]);
++    if (argumentit[0] === 'list-panes') return { koodi: 0, stdout: `siirto-b-120000 agy ${Math.floor(Date.now() / 1000)}\n`, stderr: '' };
++    if (argumentit[0] === 'capture-pane') return { koodi: 0, stdout: '>\n? for shortcuts   Gemini 3.8 Flash · high\n', stderr: '' };
++    if (argumentit.includes('Enter')) lisaa(2, 14, kayttaja('1'));
++    return { koodi: 0, stdout: '', stderr: '' };
++  };
++  const v = luoViestit(a, { aja, perillaVali: 5, perillaRaja: 500 });
++  const k = await v.agyViestit('b');
++  assert.equal(k.auki, true);
++  assert.equal(k.voiLahettaa, true);
++  assert.deepEqual([k.istunto.id, k.istunto.tila, k.istunto.malli], ['siirto-b-120000', 'idle', null]);
++  assert.deepEqual(k.viestit.map((x) => `${x.rooli}:${x.teksti}`), ['kayttaja:Malliton purku: lue /x/b.md ja noudata sitä.', 'agentti:Raportti. Vastaa numerolla.']);
++  assert.equal(await v.agyViestit('a'), null, 'skoopilla a on Claude-istunto, agy ei korvaa sitä');
++  assert.deepEqual(await v.lahetaSkooppiin('b', '1'), { ok: true, istunto: 'siirto-b-120000' });
++  assert.deepEqual(kutsut.filter((c) => c[1] === 'send-keys').map((c) => c.slice(4)), [['C-u'], ['-l', '1'], ['Enter']]);
++  db.close();
++});
++
++test('agy-istunto: viesti, joka ei näy keskustelutiedostossa → 504', async () => {
++  const a = ymparisto();
++  a.agyHakemisto = join(a.juuri, '../agy-tyhja');
++  mkdirSync(a.agyHakemisto);
++  const aja = async (komento, argumentit) => argumentit[0] === 'list-panes'
++    ? { koodi: 0, stdout: `siirto-b-120000 agy ${Math.floor(Date.now() / 1000)}\n`, stderr: '' } : { koodi: 0, stdout: '', stderr: '' };
++  const v = luoViestit(a, { aja, perillaVali: 5, perillaRaja: 60 });
++  await assert.rejects(v.lahetaSkooppiin('b', 'moi'), (e) => e instanceof Hylatty && e.koodi === 504);
++});
++
++test('skoopinViestit: AGY-istunto palautuu skoopinViestit-kutsusta suoraan ilman agyViestit-varareittiä', async () => {
++  const { DatabaseSync } = await import('node:sqlite');
++  const varint = (n) => { const t = []; do { let x = n % 128; n = Math.floor(n / 128); if (n) x |= 0x80; t.push(x); } while (n); return Buffer.from(t); };
++  const num = (f, x) => Buffer.concat([varint(f * 8), varint(x)]);
++  const msg = (f, ...o) => { const b = Buffer.concat(o); return Buffer.concat([varint(f * 8 + 2), varint(b.length), b]); };
++  const str = (f, s) => msg(f, Buffer.from(s, 'utf8'));
++  const aika = msg(5, msg(1, num(1, 1792141799)));
++  const kayttaja = (t) => Buffer.concat([num(1, 14), aika, msg(19, str(2, t))]);
++  const agentti = (t) => Buffer.concat([num(1, 15), aika, msg(20, str(1, t))]);
++
++  const a = ymparisto();
++  a.agyHakemisto = join(a.juuri, '../agy-suora');
++  mkdirSync(a.agyHakemisto);
++  const polku = join(a.agyHakemisto, 'k2.db');
++  const db = new DatabaseSync(polku);
++  db.exec('CREATE TABLE steps (idx integer, step_type integer NOT NULL DEFAULT 0, step_payload blob, PRIMARY KEY (idx))');
++  const lisaa = (i, t, p) => db.prepare('INSERT INTO steps VALUES (?, ?, ?)').run(i, t, p);
++  lisaa(0, 14, kayttaja('Malliton purku: lue /x/b.md ja noudata sitä.'));
++  lisaa(1, 15, agentti('Valmis'));
++
++  a.listPanes = () => `siirto-b-120000 agy ${Math.floor(Date.now() / 1000)} 9999\n`;
++  a.capturePane = () => '> \n? for shortcuts   Gemini 3.8 Flash · high\n';
++
++  const v = luoViestit(a);
++  const res = v.skoopinViestit('b');
++  assert.equal(res.auki, true);
++  assert.equal(res.voiLahettaa, true);
++  assert.equal(res.istunto.id, 'siirto-b-120000');
++  assert.equal(res.istunto.tila, 'idle');
++  assert.equal(res.viestit.length, 2);
++  assert.equal(res.viestit[0].teksti, 'Malliton purku: lue /x/b.md ja noudata sitä.');
++  assert.equal(res.viestit[1].teksti, 'Valmis');
++  db.close();
++});
++
++test('agy-istunto: ask_question vastaaminen valinnalla ja write-inillä sekä suljeKysymys', async () => {
++  const { DatabaseSync } = await import('node:sqlite');
++  const varint = (n) => { const t = []; do { let x = n % 128; n = Math.floor(n / 128); if (n) x |= 0x80; t.push(x); } while (n); return Buffer.from(t); };
++  const num = (f, x) => Buffer.concat([varint(f * 8), varint(x)]);
++  const msg = (f, ...o) => { const b = Buffer.concat(o); return Buffer.concat([varint(f * 8 + 2), varint(b.length), b]); };
++  const str = (f, s) => msg(f, Buffer.from(s, 'utf8'));
++  const aika = msg(5, msg(1, num(1, 1792141799)));
++  const kayttaja = (t) => Buffer.concat([num(1, 14), aika, msg(19, str(2, t))]);
++  const agentti = (t) => Buffer.concat([num(1, 15), aika, msg(20, str(1, t))]);
++
++  const kyselyArgs = JSON.stringify({
++    questions: [{
++      question: 'Vahvistatko?',
++      options: ['Kyllä', 'Ei']
++    }]
++  });
++  const kyselyToolCall = (argsJson, vastausVal = null) => {
++    const f4inner = Buffer.concat([str(2, 'ask_question'), str(3, argsJson)]);
++    const f4 = msg(4, f4inner);
++    const f5 = msg(5, f4);
++    const osat = [num(1, 132), aika, f5, str(7, argsJson)];
++    if (vastausVal != null) {
++      const innerObj = Buffer.concat([str(1, 'Vahvistatko?'), str(4, String(vastausVal))]);
++      const f22 = msg(22, msg(1, innerObj));
++      const f2 = msg(2, f22);
++      const f147 = msg(147, f2);
++      osat.push(f147);
++    }
++    return Buffer.concat(osat);
++  };
++
++  const a = ymparisto();
++  a.agyHakemisto = join(a.juuri, '../agy-kysely');
++  mkdirSync(a.agyHakemisto);
++  const polku = join(a.agyHakemisto, 'k-kysely.db');
++  const db = new DatabaseSync(polku);
++  db.exec('CREATE TABLE steps (idx integer, step_type integer NOT NULL DEFAULT 0, step_payload blob, PRIMARY KEY (idx))');
++  const lisaa = (i, t, p) => db.prepare('INSERT INTO steps VALUES (?, ?, ?)').run(i, t, p);
++  lisaa(0, 14, kayttaja('Malliton purku: lue /x/b.md ja noudata sitä.'));
++  lisaa(1, 15, agentti('Kysyn varmistuksen'));
++  lisaa(2, 132, kyselyToolCall(kyselyArgs));
++
++  let ruutuTeksti = 'Question 1/1: Vahvistatko?\n> 1. Kyllä\n  2. Ei\n  ↑/↓ Navigate · enter Select · esc Skip\n';
++  const kutsut = [];
++  const aja = async (komento, argumentit) => {
++    kutsut.push([komento, ...argumentit]);
++    if (argumentit[0] === 'list-panes') return { koodi: 0, stdout: `siirto-b-120000 agy ${Math.floor(Date.now() / 1000)}\n`, stderr: '' };
++    if (argumentit[0] === 'capture-pane') return { koodi: 0, stdout: ruutuTeksti, stderr: '' };
++    if (argumentit[0] === 'display-message') return { koodi: 0, stdout: '12345\n', stderr: '' };
++    if (argumentit.includes('Enter') || argumentit.includes('Escape')) {
++      ruutuTeksti = '>\n? for shortcuts   Gemini 3.8 Flash · high\n';
++    }
++    return { koodi: 0, stdout: '', stderr: '' };
++  };
++
++  const v = luoViestit(a, { aja, perillaVali: 5, perillaRaja: 500, kirjoitaTauko: 0 });
++
++  // 1. Vastaaminen valitsemalla toinen vaihtoehto ("Ei"): painaa Down ja Enter
++  assert.deepEqual(await v.lahetaSkooppiin('b', 'Ei'), { ok: true, istunto: 'siirto-b-120000' });
++  const sendKeys1 = kutsut.filter((c) => c[1] === 'send-keys').map((c) => c.slice(4));
++  assert.deepEqual(sendKeys1, [['Down'], ['Enter']]);
++
++  // 2. Vastaaminen custom write-in -tekstillä ("Oma teksti")
++  kutsut.length = 0;
++  ruutuTeksti = 'Question 1/1: Vahvistatko?\n> 1. Kyllä\n  2. Ei\n  ↑/↓ Navigate · enter Select · esc Skip\n';
++  assert.deepEqual(await v.lahetaSkooppiin('b', 'Oma teksti'), { ok: true, istunto: 'siirto-b-120000' });
++  const sendKeys2 = kutsut.filter((c) => c[1] === 'send-keys').map((c) => c.slice(4));
++  assert.deepEqual(sendKeys2, [['Down'], ['Down'], ['Enter'], ['C-u'], ['-l', 'Oma teksti'], ['Enter']]);
++
++  // 3. suljeKysymys: Escape sulkee kyselykortin
++  kutsut.length = 0;
++  ruutuTeksti = 'Question 1/1: Vahvistatko?\n> 1. Kyllä\n  2. Ei\n  ↑/↓ Navigate · enter Select · esc Skip\n';
++  assert.deepEqual(await v.suljeKysymys('b'), { ok: true, istunto: 'siirto-b-120000' });
++  const sendKeys3 = kutsut.filter((c) => c[1] === 'send-keys').map((c) => c.slice(4));
++  assert.deepEqual(sendKeys3, [['Escape']]);
++
++  // 4. suljeKysymys hylkää 409, jos kysymys ei ole auki
++  ruutuTeksti = '>\n? for shortcuts   Gemini 3.8 Flash · high\n';
++  await hylkaa(v.suljeKysymys('b'), 409);
++
++  db.close();
++});
++
+diff --git a/scopes/performance/REKISTERI.md b/scopes/performance/REKISTERI.md
+deleted file mode 100644
+index 6da2f147..00000000
+--- a/scopes/performance/REKISTERI.md
++++ /dev/null
+@@ -1,28 +0,0 @@
+-# scopes/performance/REKISTERI.md
+-
+-Tilanne: 17.10.2026
+-
+-SEURAAVA PAKETTI: PERFORMANCE-MAARITTELY — kirjaa käyttäjän kanssa skoopin tarkoitus, raja ja ensimmäinen työ, ja korvaa tämä rivi ensimmäisellä oikealla paketilla — polut: scopes/performance/** — aloitus: /pura scopes performance
+-
+-## Tarkoitus ja raja
+-
+-Määrittelemättä: skooppi luotiin komennolla `/pura uusi scopes performance` 17.10.2026 ilman tarkoitusta; paketti PERFORMANCE-MAARITTELY kirjaa sen.
+-
+-## Päätökset
+-
+-- **Käyttäjä 17.10.2026:** skooppi `scopes performance` luotiin komennolla `/pura uusi scopes performance`.
+-
+-## Avoimet asiat
+-
+-| Asia | Tila | Seuraava askel |
+-|---|---|---|
+-| Skooppi on vasta luotu | luotu 17.10.2026 | paketti PERFORMANCE-MAARITTELY |
+-
+-## Viat
+-
+-| Vika | Tila |
+-|---|---|
+-
+-## Historia
+-
+-Historia: `scopes/performance/HISTORIA.md` (syntyy ensimmäisessä pakkauksessa), ei lueta purussa.
+diff --git a/scopes/performance/ios/REKISTERI.md b/scopes/performance/ios/REKISTERI.md
+index 222d0f04..e3c7b73c 100644
+--- a/scopes/performance/ios/REKISTERI.md
++++ b/scopes/performance/ios/REKISTERI.md
+@@ -1,22 +1,45 @@
+ # scopes/performance/ios/REKISTERI.md
+ 
+-Tilanne: 17.10.2026
++Tilanne: 18.10.2026
+ 
+-SEURAAVA PAKETTI: PERFORMANCE-IOS-MAARITTELY — kirjaa käyttäjän kanssa skoopin tarkoitus, raja ja ensimmäinen työ, ja korvaa tämä rivi ensimmäisellä oikealla paketilla — polut: scopes/performance/ios/** — aloitus: /pura scopes performance ios
++SEURAAVA PAKETTI: PERFORMANCE-IOS-TODENNUS-PUHELIMELLA — todenna sivupalkin vedon 60/120 Hz sulavuus, 0 ms tilatietokanta ja chatin optimistinen vaste fyysisellä laitteella — polut: scopes/ios/**, scopes/performance/ios/** — aloitus: /pura scopes performance ios
+ 
+ ## Tarkoitus ja raja
+ 
+-Määrittelemättä: skooppi luotiin komennolla `/pura uusi scopes performance ios` 17.10.2026 ilman tarkoitusta; paketti PERFORMANCE-IOS-MAARITTELY kirjaa sen.
++Kaikki Scopes iOS -äpin suorituskyky-, reagointinopeus- ja optimointikehitys:
++1. Paikallisen suorituskyvyn ja 0 ms vasteaikojen takaaminen: tilarekisteri ja välimuistitietokanta (ScopesDatabase), optimistinen UI ja näkymien (sivupalkki, chat, skooppinäkymä, pura-valinta) välitön avaus ilman palvelimen odottelua.
++2. Käyttöliittymän reagointinopeus ja tuntuma: viestien optimistinen renderöinti, stop/play-painikkeiden välitön reagointi ja haptinen palaute (siirretty skoopista scopes chat responsivity).
++3. Ruudunpäivitysnopeus ja sulavuus: 60/120 Hz ProMotion, animaatiot, sivupalkin veto, listojen vieritys ja pudotettujen ruutujen eliminointi (siirretty skoopista scopes lista).
++4. Suorituskyvyn mittaustyökalut, automaatiot ja diagnostiikka: mittausskriptit (scopes/ios/mittaa.sh), MetricKit ja pääsäikeen jumitusten valvonta.
++
++Kuuluvat:
++- scopes/ios/** (ml. Sources/ScopesDatabase.swift, Juuri.swift, Sivupalkki.swift, Viestit.swift, Nakymat.swift, PuraValinta.swift, mittaa.sh).
++- scopes/shared/ScopesCore/** (tilamallit ja tietokantarakenteet iOS:ää palvelevilta osin).
++- scopes/performance/ios/** (dokumentaatio, profiilit, mittaustulokset).
++
++Ei kuulu:
++- Ominaisuuksien puhtaasti toiminnallinen tai visuaalinen kehitys (kuuluu omistajaskoopeille: chat-toiminnallisuus scopes chat, topbar-napit scopes chat topbar, ulkoasu scopes design, navigointi scopes lista).
+ 
+ ## Päätökset
+ 
+-- **Käyttäjä 17.10.2026:** skooppi `scopes performance ios` luotiin komennolla `/pura uusi scopes performance ios`.
++- **Käyttäjä 17.10.2026:** skooppi scopes performance ios luotiin komennolla /pura uusi scopes performance ios.
++- **Käyttäjä 18.10.2026:** Tämän skoopin tehtävä on keskittyä scopes ios äpin suorituskykyyn.
++- **Käyttäjä 18.10.2026:** Siirretään tähän skooppiin kaikki performance-kehitys (yleinen suorituskyky, 0 ms tilatietokanta, chatin reagointinopeus, sivupalkin sulavuus ja mittaukset).
++- **18.10.2026:** Skoopit scopes performance ja scopes chat responsivity arkistoitu tarpeettomina; vastuu ja koodit siirretty tähän skooppiin.
++- **18.10.2026:** Ajettu kattavat suorituskykymittaukset iPhone 15 Pro -simulaattorissa (Debug vs. Release, sumeus päällä vs. pois) ja kirjattu tulokset tiedostoon scopes/performance/ios/MITTAUKSET-2026-10-18.md.
++- **18.10.2026:** Korjattu Swift 6 Release-käännöksen tyyppitarkastuksen aikarajavirhe tiedostossa Viestit.swift (istunto-ankkuri purettu selkeämmäksi).
++- **18.10.2026:** Sivupalkin veto optimoitu eristämällä päänäkymät PaanakymaSisalto: View, Equatable -komponentiksi (Juuri.swift). Vetoliikkeen ruutumäärä tuplaantui (10 -> 22) ja nykyaika putosi 480 ms:sta 33–170 ms tasolle (MITTAUKSET-2026-10-18.md).
++- **18.10.2026:** ChatView kytketty ScopesDatabase-tietokantaan: agentit ja oletusmalli alustetaan 0 ms suoraan muistista/levyltä, ja keskustelut avautuvat välittömästi välimuistista ennen verkkovastauksen saapumista.
++- **16.10.2026 (siirretty responsivitystä):** Toteutus Viestit.swift: Viestilista(himmeat:) + OdottavaViesti (avain/pohja-sovitus, 90 s vanhenemisraja), oletettuTyo ja pysaytetty asetetaan heti napautuksessa, Syottorivi.tuntuma (UIImpactFeedbackGenerator).
++- **13.10.2026 (siirretty listasta):** Sivupalkki Equatable, .visualEffect piirtoefekti, ISO-aikojen jäsennysoptimointi, mittari Juuri.swiftissä ja scopes/ios/mittaa.sh.
+ 
+ ## Avoimet asiat
+ 
+ | Asia | Tila | Seuraava askel |
+ |---|---|---|
+-| Skooppi on vasta luotu | luotu 17.10.2026 | paketti PERFORMANCE-IOS-MAARITTELY |
++| Paikallinen tilarekisteri ja 0 ms välimuisti | koodattu ja kytketty (ScopesDatabase.swift, Sivupalkki, SkooppiViestitView, ChatView; ScopesCore testit 17/17 ok) | todenna toiminta ja 0 ms avaus oikeassa istunnossa puhelimella |
++| Chatin optimistinen UI ja haptiikka | toteutettu koodissa; odottaa käyttäjän todennusta puhelimella | todenna: lähetä viesti oikeassa istunnossa → himmeä kupla heti, stop/play heti, haptiikka puhelimella |
++| Sivupalkin vetoliikkeen optimointi | toteutettu ja todennettu simulaattorissa (PaanakymaSisalto: Equatable, MITTAUKSET-2026-10-18.md: ruudut 10 -> 22, nykyaika 480 ms -> 33–170 ms) | todenna ProMotion 120 Hz fyysisellä laitteella |
+ 
+ ## Viat
+ 
+@@ -25,4 +48,4 @@ Määrittelemättä: skooppi luotiin komennolla `/pura uusi scopes performance i
+ 
+ ## Historia
+ 
+-Historia: `scopes/performance/ios/HISTORIA.md` (syntyy ensimmäisessä pakkauksessa), ei lueta purussa.
++Historia: scopes/performance/ios/HISTORIA.md (syntyy ensimmäisessä pakkauksessa), ei lueta purussa.
+diff --git a/scopes/shared/ScopesCore/Sources/ScopesCore/Client/ScopesClient.swift b/scopes/shared/ScopesCore/Sources/ScopesCore/Client/ScopesClient.swift
+index 927e8b2d..6ea36b0e 100644
+--- a/scopes/shared/ScopesCore/Sources/ScopesCore/Client/ScopesClient.swift
++++ b/scopes/shared/ScopesCore/Sources/ScopesCore/Client/ScopesClient.swift
+@@ -77,6 +77,16 @@ public struct ScopesClient: Sendable {
+         return try await hae("/api/skoopit/\(koodattuSkooppi)/\(koodattuToiminto)", metodi: "POST", runko: data)
+     }
+ 
++    public func viat() async throws -> [VikaKohta] {
++        struct Vastaus: Decodable { let viat: [VikaKohta] }
++        let v: Vastaus = try await hae("/api/viat")
++        return v.viat
++    }
++
++    public func diagnostiikka() async throws -> DiagnostiikkaTila {
++        return try await hae("/api/diagnostiikka")
++    }
++
+     public func pysayta(skooppi: String) async throws -> LahetysVastaus {
+         let koodattu = skooppi.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? skooppi
+         return try await hae("/api/skoopit/\(koodattu)/stop", metodi: "POST")
+diff --git a/scopes/shared/ScopesCore/Sources/ScopesCore/Models/ScopeModels.swift b/scopes/shared/ScopesCore/Sources/ScopesCore/Models/ScopeModels.swift
+index c2eaf134..8836ca44 100644
+--- a/scopes/shared/ScopesCore/Sources/ScopesCore/Models/ScopeModels.swift
++++ b/scopes/shared/ScopesCore/Sources/ScopesCore/Models/ScopeModels.swift
+@@ -128,3 +128,226 @@ public struct ToimintoVastaus: Codable, Hashable, Sendable {
+     }
+ }
+ 
++
++public struct ChatKeskustelu: Codable, Identifiable, Hashable, Sendable {
++    public let id: String
++    public let otsikko: String
++    public let agentti: String?
++    public let viesteja: Int
++    public let aika: String
++
++    public init(id: String, otsikko: String, agentti: String? = nil, viesteja: Int = 0, aika: String = "") {
++        self.id = id
++        self.otsikko = otsikko
++        self.agentti = agentti
++        self.viesteja = viesteja
++        self.aika = aika
++    }
++}
++
++public struct ChatKeskustelunViestit: Codable, Hashable, Sendable {
++    public let id: String
++    public let agentti: String?
++    public let viestit: [Viesti]
++
++    public init(id: String, agentti: String? = nil, viestit: [Viesti] = []) {
++        self.id = id
++        self.agentti = agentti
++        self.viestit = viestit
++    }
++}
++
++public struct Agentti: Codable, Identifiable, Hashable, Sendable {
++    public let nimi: String
++    public let kuvaus: String
++    public let tyyppi: String
++
++    public var id: String { nimi }
++    public var otsikko: String { kuvaus.isEmpty ? nimi : kuvaus }
++
++    public init(nimi: String, kuvaus: String = "", tyyppi: String = "malli") {
++        self.nimi = nimi
++        self.kuvaus = kuvaus
++        self.tyyppi = tyyppi
++    }
++}
++
++public struct PurkajaVaihtoehto: Codable, Hashable, Sendable {
++    public let tunnus: String
++    public let kuvaus: String
++    public let ryhma: String
++
++    public init(tunnus: String, kuvaus: String, ryhma: String) {
++        self.tunnus = tunnus
++        self.kuvaus = kuvaus
++        self.ryhma = ryhma
++    }
++}
++
++public struct IstunnonMalli: Codable, Hashable, Sendable {
++    public let nimi: String
++    public let kuvaus: String
++    public let ryhma: String?
++
++    public init(nimi: String, kuvaus: String, ryhma: String? = nil) {
++        self.nimi = nimi
++        self.kuvaus = kuvaus
++        self.ryhma = ryhma
++    }
++}
++
++public struct PurkuValinnat: Codable, Hashable, Sendable {
++    public let purkajat: [PurkajaVaihtoehto]
++    public let mallit: [IstunnonMalli]
++    public let oletusMalli: String
++
++    public init(purkajat: [PurkajaVaihtoehto] = [], mallit: [IstunnonMalli] = [], oletusMalli: String = "") {
++        self.purkajat = purkajat
++        self.mallit = mallit
++        self.oletusMalli = oletusMalli
++    }
++}
++
++public struct PakkausKytkimet: Codable, Hashable, Sendable {
++    public var automaattijatko: Bool
++    public var autopack: Bool
++    public var istunto: String?
++    public var istuntoja: Int?
++
++    public init(automaattijatko: Bool = false, autopack: Bool = false, istunto: String? = nil, istuntoja: Int? = nil) {
++        self.automaattijatko = automaattijatko
++        self.autopack = autopack
++        self.istunto = istunto
++        self.istuntoja = istuntoja
++    }
++}
++
++public struct Konteksti: Codable, Hashable, Sendable {
++    public let tokenit: Int
++    public let aika: String?
++
++    public init(tokenit: Int, aika: String? = nil) {
++        self.tokenit = tokenit
++        self.aika = aika
++    }
++}
++
++public struct Istunto: Codable, Identifiable, Hashable, Sendable {
++    public let id: String
++    public let nimi: String?
++    public let tila: String?
++    public let konteksti: Konteksti?
++    public let pakattu: Bool?
++    public let hereilla: Bool?
++    public let malli: String?
++    public let effort: String?
++    public let tyyppi: String?
++
++    public init(id: String, nimi: String? = nil, tila: String? = nil, konteksti: Konteksti? = nil, pakattu: Bool? = nil, hereilla: Bool? = nil, malli: String? = nil, effort: String? = nil, tyyppi: String? = nil) {
++        self.id = id
++        self.nimi = nimi
++        self.tila = tila
++        self.konteksti = konteksti
++        self.pakattu = pakattu
++        self.hereilla = hereilla
++        self.malli = malli
++        self.effort = effort
++        self.tyyppi = tyyppi
++    }
++}
++
++public struct Taulukkorivi: Codable, Hashable, Sendable {
++    public let solut: [String: String]
++
++    public init(solut: [String: String]) {
++        self.solut = solut
++    }
++
++    public var otsikko: String { solut["Asia"] ?? solut["Vika"] ?? solut.values.first ?? "" }
++    public var tila: String? { solut["Tila"] }
++    public var seuraavaAskel: String? { solut["Seuraava askel"] }
++    public var avoin: Bool { !["valmis", "todennettu", "korjattu"].contains((tila ?? "").lowercased()) }
++}
++
++public struct SkooppiNakyma: Codable, Hashable, Sendable {
++    public let nimi: String
++    public let rekisterit: [String]
++    public let seuraava: Seuraava?
++    public let avoimet: [Taulukkorivi]
++    public let viat: [Taulukkorivi]
++    public let istunnot: [Istunto]
++
++    public init(nimi: String, rekisterit: [String] = [], seuraava: Seuraava? = nil, avoimet: [Taulukkorivi] = [], viat: [Taulukkorivi] = [], istunnot: [Istunto] = []) {
++        self.nimi = nimi
++        self.rekisterit = rekisterit
++        self.seuraava = seuraava
++        self.avoimet = avoimet
++        self.viat = viat
++        self.istunnot = istunnot
++    }
++}
++
++public struct VikaKohta: Codable, Identifiable, Hashable, Sendable {
++    public let vika: String
++    public let tila: String
++    public var id: String { vika }
++
++    public var tunnus: String {
++        if let r = vika.range(of: #"V-\d+"#, options: .regularExpression) {
++            return String(vika[r])
++        }
++        return ""
++    }
++
++    public var selite: String {
++        if let r = vika.range(of: #"V-\d+"#, options: .regularExpression) {
++            let loppu = vika[r.upperBound...]
++            return loppu.trimmingCharacters(in: CharacterSet(charactersIn: " -:()"))
++        }
++        return vika
++    }
++
++    public init(vika: String, tila: String = "avoin") {
++        self.vika = vika
++        self.tila = tila
++    }
++}
++
++public struct DiagnostiikkaTila: Codable, Hashable, Sendable {
++    public let pyyntoja: Int
++    public let virheita: Int
++    public let silmukoita: Int
++    public let viimeisimmat: [PyyntoTapahtuma]
++
++    public init(pyyntoja: Int = 0, virheita: Int = 0, silmukoita: Int = 0, viimeisimmat: [PyyntoTapahtuma] = []) {
++        self.pyyntoja = pyyntoja
++        self.virheita = virheita
++        self.silmukoita = silmukoita
++        self.viimeisimmat = viimeisimmat
++    }
++}
++
++public struct PyyntoTapahtuma: Codable, Identifiable, Hashable, Sendable {
++    public var id: String { "\(aika ?? "")-\(polku ?? "")-\(ms ?? 0)-\(UUID().uuidString.prefix(4))" }
++    public let aika: String?
++    public let metodi: String?
++    public let polku: String?
++    public let koodi: Int?
++    public let ms: Int?
++    public let osoite: String?
++    public let katkesi: Bool?
++    public let tyyppi: String?
++    public let viive: Int?
++
++    public init(aika: String? = nil, metodi: String? = nil, polku: String? = nil, koodi: Int? = nil, ms: Int? = nil, osoite: String? = nil, katkesi: Bool? = nil, tyyppi: String? = nil, viive: Int? = nil) {
++        self.aika = aika
++        self.metodi = metodi
++        self.polku = polku
++        self.koodi = koodi
++        self.ms = ms
++        self.osoite = osoite
++        self.katkesi = katkesi
++        self.tyyppi = tyyppi
++        self.viive = viive
++    }
++}
+diff --git a/scopes/viat/REKISTERI.md b/scopes/viat/REKISTERI.md
+index d431ca16..90a00495 100644
+--- a/scopes/viat/REKISTERI.md
++++ b/scopes/viat/REKISTERI.md
+@@ -162,6 +162,8 @@ Raja:
+ | V-551 (omistaja scopes agy siirto) "?"-viesti avaa agy:n pikanäppäinpaneelin | avoin 17.10.2026 |
+ | V-552 (omistaja scopes infra) LM Studion temp-kansio katoaa | avoin 17.10.2026 |
+ | V-553 (omistaja scopes lista) listasta arkistointi oli poistanut skoopit Infran scopes-valikosta ja repositoriosta; korjattu: arkistoidut 15 skooppia palautettu, listasta arkistointi piilottaa vain sivupalkin listasta ja pakkaa CLI-istunnon, skooppi säilyy aina Infrassa | avoin 17.10.2026 |
++| V-554 (omistaja scopes istunnot) orpo duplikaatti-istunto ja sulkemislogiikka | avoin 17.10.2026 |
++| V-555 (omistaja claude siirto / scopes siirto) Mac AGY -istunnon /automaattisiirto jättää keskustelun vanhaan istuntoon: autovaihto.sh ajetaan Macilla, missä TMUX_PANE puuttuu (SSH-yhteys OnePlus-palvelimelta); uusi tmux-istunto syntyy vain Macin paikalliseen tmuxiin ja OnePlus-palvelimen istunto (siirto-scopes-macos-204314) jää auki, jolloin äppi jatkaa vanhassa istunnossa isolla kontekstilla | avoin 18.10.2026 |
+ 
+ ## Historia
+ 

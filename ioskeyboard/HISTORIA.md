@@ -1,0 +1,51 @@
+# scopes ioskeyboard — toteutushistoria
+
+## Toteutushistoria
+
+- 27.10.2026 — Päivitetty näppäimistön ulkoasu ja tyylit (liukuvärit, sävyt vaaleassa ja tummassa teemassa).
+  - Lisätty 1 pt näppäinvarjostus ja 0.5 pt painallusupotus näppäintuntumaan.
+  - Toteutettu natiivi KeyCalloutShape-esikatselukupla ja CalloutAlignment reunakohdistuksille.
+  - Viimeistelty popover-valikon pyöristykset, liukuvärit ja varjot.
+  - Päivitetty testit (KeyboardUITests.swift) ja ajettu simulaattoritestit.
+  - todettu (ei rekisteriin): KeyboardUITests-testisarja ajettu iOS-simulaattorissa.
+  - todettu (ei rekisteriin): Git diff stat: 8 files changed, 667 insertions(+), 96 deletions(-).
+- 27.10.2026 — Suoritettiin skoopin 'scopes ioskeyboard' malliton purku (pura-malliton.mjs)
+  - Käynnistettiin automaattisiirto ja tilanteen pakkausanalyysi
+  - todettu (ei rekisteriin): Jaetun työkloonin juuripuussa on unmerged-ristiriitoja ja haarautuma (42/68) toisissa tiedostoissa (claude/siirto/mittaukset/vaihevirheet.jsonl, scopes2/adapteri/*), git pull palautti exit 1
+  - todettu (ei rekisteriin): Skoopille 'scopes ioskeyboard' ei tehty omia tiedostomuutoksia tässä istunnossa
+- 27.10.2026 — Skoopin poluissa muuttuneita tiedostoja (7 kpl): scopes/ioskeyboard/REKISTERI.md, scopes/ioskeyboard/Sources/KeyboardRootView.swift, scopes/ioskeyboard/Sources/KeyboardViewController.swift, scopes/ioskeyboard/Sources/LandscapeKeyboardView.swift, scopes/ioskeyboard/Sources/Model.swift
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 32 kpl
+  - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \t Executed 8 tests, with 0 failures (0 unexpected) in 21.275 (21.296) seconds\r, \t Executed 9 tests, with 0 failures (0 unexpected) in 20.253 (20.263) seconds\r, \t Executed 9 tests, with 0 failures (0 unexpected) in 20.253 (20.266) seconds\r
+- 27.10.2026 — Skoopin poluissa muuttuneita tiedostoja (5 kpl): scopes/ioskeyboard/REKISTERI.md, scopes/ioskeyboard/Sources/KeyboardRootView.swift, scopes/ioskeyboard/Sources/KeyboardViewController.swift, scopes/ioskeyboard/Sources/Model.swift, scopes/ioskeyboard/Tests/KeyboardUITests.swift
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 36 kpl
+  - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \t Executed 8 tests, with 0 failures (0 unexpected) in 17.766 (17.774) seconds\r, \t Executed 8 tests, with 0 failures (0 unexpected) in 17.192 (17.200) seconds\r, \t Executed 8 tests, with 0 failures (0 unexpected) in 17.192 (17.201) seconds\r
+- 27.10.2026 — Skoopin poluissa muuttuneita tiedostoja (1 kpl): scopes/ioskeyboard/REKISTERI.md
+  - Käsitelty käyttäjän pyyntö: Korjataan kaikki yksi kerrallaan. Ensin automaattisiirto jonka jälkeen automaattisesti toteutus vaih
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 31 kpl
+  - todettu (ei rekisteriin): Testiajon tulos transkriptissa: 12:   - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \\t Executed 5 tests, with 0 failures (0 unexpected) in 15.844 (15.849) seconds\\r, \\t Executed 5 tests, with 0 failures (0 unexpected) in 15.844 (15.849) seconds\\r, \\t Executed 5 tests, with 0 failures (0 unexpected) in 15.844 (15.850) seconds\\r, 7: - Testiajon tulos transkriptissa: 9:   -
+  - todettu (ei rekisteriin): todettu (ei rekisteriin): Testiajon tulos transkriptissa: \\\\t Executed 8 tests, with 0 failures (0 unexpected) in 17.934 (17.941) seconds\\\\r, \\\\t Executed 8 tests, with 0 failures (0 unexpected) in 17.934 (17.946) seconds\\\\r, \\\\t Executed 8 tests, with 0 failures (0 unexpected) in 17.934 (17.947) seconds\\\\r, 12:   - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \\\\t
+  - todettu (ei rekisteriin): Executed 5 tests, with 0 failures (0 unexpected) in 15.844 (15.849) seconds\\\\r, \\\\t Executed 5 tests, with 0 failures (0 unexpected) in 15.844 (15.849) seconds\\\\r, \\\\t Executed 5 tests, with 0 failures (0 unexpected) in 15.844 (15.850) seconds\\\\r, 8: - Testiajon tulos transkriptissa: 9:   - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \\\\t Executed 8 tests, with 0 failures
+  - todettu (ei rekisteriin): (0 unexpected) in 17.934 (17.941) seconds\\\\r, \\\\t Executed 8 tests, with 0 failures (0 unexpected) in 17.934 (17.946) seconds\\\\r, \\\\t Executed 8 tests, with 0 failures (0 unexpected) in 17.934 (17.947) seconds\\\\r, 12:   - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \\\\t Executed 5 tests, with 0 failures (0 unexpected) in 15.844 (15.849) seconds\\\\r, \\\\t Executed 5
+  - todettu (ei rekisteriin): tests, with 0 failures (0 unexpected) in 15.844 (15.849) seconds\\\\r, \\\\t Executed 5 tests, with 0 failures (0 unexpected) in 15.844 (15.850) seconds\\\\r, 7: - Testiajon tulos transkriptissa: 9:   - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \\\\\\\\t Executed 8 tests, with 0 failures (0 unexpected) in 17.934 (17.941) seconds\\\\\\\\r, \\\\\\\\t Executed 8 tests, with 0 failures
+  - todettu (ei rekisteriin): (0 unexpected) in 17.934 (17.946) seconds\\\\\\\\r, \\\\\\\\t Executed 8 tests, with 0 failures (0 unexpected) in 17.934 (17.947) seconds\\\\\\\\r, 12:   - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \\\\\\\\t Executed 5 tests, with 0 failures (0 unexpected) in 15.844 (15.849) seconds\\\\\\\\r, \\\\\\\\t Executed 5 tests, with 0 failures (0 unexpected) in 15.844 (15.849)
+  - todettu (ei rekisteriin): seconds\\\\\\\\r, \\\\\\\\t Executed 5 tests, with 0 failures (0 unexpected) in 15.844 (15.850) seconds\\\\\\\\r
+- 27.10.2026 — Päivitetty ja ylläpidetty scopes/ioskeyboard/REKISTERI.md tilannetta.
+  - todettu (ei rekisteriin): scopes/ioskeyboard/REKISTERI.md muokattu ja valmiina seuraavaan pakettiin.
+- 27.10.2026 — Skoopin poluissa muuttuneita tiedostoja (13 kpl): scopes/ioskeyboard/REKISTERI.md, scopes/ioskeyboard/SUUNNITELMA.md, scopes/ioskeyboard/Sources, scopes/ioskeyboard/Sources/AlternateCharacters.swift, scopes/ioskeyboard/Sources/KeyButtonView.swift
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 39 kpl
+  - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \t Executed 8 tests, with 0 failures (0 unexpected) in 17.934 (17.941) seconds\r, \t Executed 8 tests, with 0 failures (0 unexpected) in 17.934 (17.946) seconds\r, \t Executed 8 tests, with 0 failures (0 unexpected) in 17.934 (17.947) seconds\r
+- 27.10.2026 — Skoopin poluissa muuttuneita tiedostoja (5 kpl): scopes/ioskeyboard/ARKISTO.md, scopes/ioskeyboard/HISTORIA.md, scopes/ioskeyboard/REKISTERI.md, scopes/ioskeyboard/SUUNNITELMA.md, scopes/ioskeyboard/Sources
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 29 kpl
+  - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \t Executed 5 tests, with 0 failures (0 unexpected) in 15.844 (15.849) seconds\r, \t Executed 5 tests, with 0 failures (0 unexpected) in 15.844 (15.849) seconds\r, \t Executed 5 tests, with 0 failures (0 unexpected) in 15.844 (15.850) seconds\r
+- 27.10.2026 — Todettiin ja hienosäädettiin näppäimistölaajennuksen toiminta simulaattorissa (IOSKEYBOARD-TODENNUS)
+  - Laadittiin KeyboardUITests (5/5 testiä exit 0), joka todentaa KeyboardViewControllerin, pysty- ja vaakatilat sekä asettelut
+  - Hienosäädettiin vaakatilan näppäinleveydet suhteeseen 5:6 tasavertaisen näppäinkoon saavuttamiseksi molemmille peukaloille
+  - Lisättiin numeroiden ja erikoismerkkien tuki vaakatilaan säilyttäen keskimmäiset koodaus- ja nuolinäppäimet
+  - ratkennut (Avoimet asiat): Näppäimistön todennus ja asettelusäädöt — Todettu simulaattorissa ja testisarjassa 27.10.2026.
+- 26.10.2026 — Toteutettiin SkoopitKeyboard-näppäimistölaajennuksen perusrunko ja 2-sarakkeinen vaakatila (IOSKEYBOARD-RUNKO)
+  - Päivitettiin vaakatilan keskiosio kahdeksi pystyriviksi (8 näppäintä: /, `, :, -, ", _, ◀, ▶) ja toteutettiin kohdistimen siirto
+  - Käännettiin ja varmistettiin näppäimistölaajennuksen koodirunko Macilla
+  - ratkennut (Avoimet asiat): Näppäimistölaajennuksen arkkitehtuuri ja asettelut — Arkkitehtuuri ja asettelut määritelty SUUNNITELMA.md:ssä ja toteutettu paketissa IOSKEYBOARD-RUNKO 26.10.2026.
+  - ratkennut (Avoimet asiat): Laajennuksen perusrunko ja XcodeGen-target — SkoopitKeyboard-perusrunko ja XcodeGen-target toteutettu sekä varmistettu Macilla 26.10.2026.
+  - todettu (ei rekisteriin): Käännös Macilla onnistui puhtaasti ja SkoopitKeyboard-kohde linkittyy odotetusti
+  - todettu (ei rekisteriin): Skoopin omat tiedostot on commitattu puhtaasti gitiin ilman likaisia paikallisia muutoksia

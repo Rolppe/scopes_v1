@@ -1,0 +1,42 @@
+# scopes macos agy — toteutushistoria
+
+## Toteutushistoria
+
+- 18.10.2026 — Toteutettu ja muokattu skoopin tiedostoja (13 kpl): scopes/macos/Info.plist, scopes/macos/Sources/MacInspectorView.swift, scopes/macos/Sources/MacRootView.swift, scopes/macos/Sources/MacSidebar.swift, scopes/macos/agy/REKISTERI.md
+  - Käsitelty käyttäjän pyyntö: 1.
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 81 kpl
+  - todettu (ei rekisteriin): Yksikkötestit ja rajapintavalidoinnit suoritettu hyväksytysti
+- 17.10.2026 — Käynnistetty ja suoritettu skoopin 'scopes macos agy' automaattisiirto ja pakkausprosessi
+  - Päivitetty skoopin dokumentaatio (ARKISTO.md, HISTORIA.md, REKISTERI.md)
+  - Varmistettu skoopin perusmäärittelyt ja kytkennät
+  - todettu (ei rekisteriin): Muutetut tiedostot skoopissa: scopes/macos/agy/ARKISTO.md, scopes/macos/agy/HISTORIA.md, scopes/macos/agy/REKISTERI.md
+  - todettu (ei rekisteriin): Git-historiassa tuoreimmat commitit sisältävät pakkausajot ja synkronoinnit (esim. bc9d9d1e chore(siirto): AJO pakkaa scopes macos agy)
+  - todettu (ei rekisteriin): Työkalukutsuissa vahvistettu automaattisiirron taustaprosessin suoritus
+- 17.10.2026 — Päivitetty ja täydennetty scopes macos agy -skoopin dokumentaatio ja rekisteritila (HISTORIA.md, REKISTERI.md)
+  - Synkronoitu etähaaran muutokset ja varmistettu skoopin eheys git-historiassa
+  - todettu (ei rekisteriin): Skoopin omat muutetut tiedostot rajattu oikein: scopes/macos/agy/HISTORIA.md ja scopes/macos/agy/REKISTERI.md
+  - todettu (ei rekisteriin): Etähaaran yhdistäminen ja ristiriitojen ratkaisu suoritettu onnistuneesti (commitit 935ce137 ja 91bca3fa)
+- 17.10.2026 — Verifioitu paketti MACOS-AGY-VALMIS: perusmäärittely, asetusvalinnat ja MacAGYRunner
+  - Varmistettu MacSettingsView-näkymän AGYYmparisto-valinnat ja AppStorage-tallennus
+  - Varmistettu macOS AGY -ajajan toiminta ja kytkentä päänäkymään
+  - todettu (ei rekisteriin): Kontekstikoko pakkaushetkellä: 83 k (syöte 82624, ulostulo 6955)
+  - todettu (ei rekisteriin): Skoopin omissa poluissa (scopes/macos/agy/**) ei havaitsemattomia erillisiä muokkaustarpeita — aiempi toteutus verifioitu toimivaksi
+- 17.10.2026 — Verifioitu paketti MACOS-AGY-VALMIS: perusmäärittely, asetusvalinnat ja MacAGYRunner
+  - Varmistettu MacSettingsView-näkymän AGYYmparisto-valinnat ja AppStorage-tallennus
+  - Varmistettu macOS AGY -ajajan toiminta ja kytkentä päänäkymään
+  - todettu (ei rekisteriin): Kontekstikoko pakkaushetkellä: 83 k (syöte 82624, ulostulo 6955)
+  - todettu (ei rekisteriin): Skoopin omissa poluissa (scopes/macos/agy/**) ei havaitsemattomia erillisiä muokkaustarpeita — aiempi toteutus verifioitu toimivaksi
+- 17.10.2026 — Korjattu Mac AGY -istuntojen viestien luku ja lähetys Scopes-palvelussa ja iOS-äpissä
+  - Laajennettu agyIstunnotSync tunnistamaan Mac-istunnot tmux-ruuduista
+  - Korjattu etäistunnon transkriptien ja tietokantojen haku Macilta OnePlus-palvelimelle tyhjän chatin ja 504-aikakatkaisun poistamiseksi
+  - todettu (ei rekisteriin): OnePlus-palvelimen taustapalvelu etsi aiemmin AGY-transkripteja vain paikallisesti aiheuttaen viestit: [] ja 504 Gateway Timeout -virheen lähetettäessä
+  - todettu (ei rekisteriin): Mac AGY -istuntojen viestien luku ja lähetys todennettu onnistuneesti korjausten jälkeen
+- 17.10.2026 — Toteutettu MacSettingsView-asetuksiin AGY-agentti- ja mallivalinnat (purku, siirto ja pakkaus)
+  - Toteutettu MacAGYRunner macOS-alustan Antigravity-ajoon ja mallilistaukseen
+  - Kytketty MacRootView-päänäkymän toiminnot lukemaan AGY-asetukset ja välittämään ne toimintopyyntöihin
+  - Tuotu Macilla pyörivät AGY-mallit iOS Scopes -sovelluksen mallivalintoihin (MalliValikko, Nakymat, PuraValinta)
+  - Käännetty ja asennettu päivitetty iOS-sovellus iPhoneen skoopit-asennus.sh -skriptillä
+  - Kirjattu vika V-553 rekisteriin (scopes/macos/agy/REKISTERI.md)
+  - todettu (ei rekisteriin): ScopesMac- ja ScopesCoreTests-käännökset ja testit hyväksytty
+  - todettu (ei rekisteriin): iOS-käännös ja asennus iPhoneen onnistui build ok -tuloksella (skoopit-asennus.sh)
+  - todettu (ei rekisteriin): Muutoksia tehty yhteensä 7 tiedostoon (+321, -18 riviä git diff statin mukaan)

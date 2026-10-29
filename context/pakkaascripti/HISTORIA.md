@@ -1,0 +1,46 @@
+# scopes context pakkaascripti — toteutushistoria
+
+## Toteutushistoria
+
+- 16.10.2026 — malliton purku; kesken jäänyt M11 oli jo tehty (54e53d68), joten Jäljellä-kohdassa ei ollut tehtävää.
+  - 16.10.2026: äpin viestivirhe kirjattu omistajalle: V-514 → scopes chat (commit dd0b787, push ok). Kortin vaihtoehto "A2 taustalla" lähti viestinä ilman käyttäjän valintaa ja liittyi seuraavaan viestiin (scopes-toiminnot.loki 04:02:13Z ja 04:08:52Z).
+  - M12 vaihe 1 ja 2 (CLI-istunnon esitiedot) kirjattu SUUNNITELMA.md:hen (cb1725fe, 1ab4098e, c691b385).
+  - M13 E3 Sonnetilla ajettu Sonnet-ali-agentilla (brief ~/.local/state/pakkaascripti/m11/brief-m13.md) ja kirjattu SUUNNITELMA.md:hen (9ef79ae9); pisteet ja kulu tarkistettu pääistunnossa (score.mjs v3 19/33, v5 18/33; driver.log cum 0,987 $).
+  - M11-aineisto kopioitu pysyvästi ~/.local/state/pakkaascripti/m11/ (alkuperäinen oli istunnon 312c2d24 scratchpadissa).
+  - Käyttäjän päätökset kirjattu REKISTERI.md:hen (cb1725fe, 00a01c94, b42d7ce5).
+  - todettu (ei rekisteriin): M12 vaihe 1 (viikon transkriptit, ~/.claude/projects/*/*.jsonl): cli Opus 710/7901 harkintalohkosta (9 %) sisältää tekstiä, cli Sonnet 34/552, sdk-cli Haiku 0/2402. Kaikki viikon cli-istunnot ovat Remote Control -istuntoja (bridgeSessionId). Allekirjoituksen pituus ei erottele (tekstilohkot mediaani 1236, tyhjät 1324 merkkiä).
+  - todettu (ei rekisteriin): M12 vaihe 2: tavallinen tmux-CLI-istunto ilman bridgeä (Claude Code v2.1.301, Opus 5.5, transkripti ac6d2d36): 1/5 harkintalohkosta tekstinä (61 merkkiä). CLI-vaihto ei tuo harkintaa transkriptiin.
+  - todettu (ei rekisteriin): M13 (V5 = V3 Sonnetilla): 18/33 vs V3 19/33; istunnon kulu 0,987 $ (0,045 $/erä, 17-kertainen); ylimääräiset päätökset ja rivit 31 ja 21 (V3 45 ja 31); pakkaa-vaiheet 5/5, 47–63 s; C-hylkäykset 1,4 per ajo. M11:n yhteisesti puuttuneista vain s2 #17 osui. Lokit ~/.local/state/pakkaascripti/m11/m13/.
+  - todettu (ei rekisteriin): Kaikissa M13- ja V3-ajoissa: "KESKEN: VIRHE — rivi 'Viimeinen viesti' puuttuu" (m13/s3/v5.vaiheet.out:77), mittausjärjestelyn puute.
+- 16.10.2026 — CONTEXT-PAKKAASCRIPTI-M11 ajettu Sonnet-ali-agentilla (ohje scratchpad/m11/brief-m11.md), tulos kirjattu SUUNNITELMA.md:n lukuun "M11 tulos" ja rekisteriin — commit 54e53d68 (push ok).
+  - 16.10.2026: käyttäjän valinta E1 kirjattu rekisterin Päätöksiin ja Hybridin tarkistuspisteet -riville — commit f41ac36f (push ok).
+  - viat (ratkaistu, ei rekisteriin): muistiossa ei uusia vikoja eikä taulukossa rivejä; ei muutoksia
+  - todettu (ei rekisteriin): M11 (5 istuntoa, 22 pakettirajaa, uusi 33 kohdan rubriikki Sonnet-diffeistä; usage.jsonl ja analyze.mjs tarkistettu pääistunnossa): kohdat V1 17/33, V3 19/33, V4a juokseva muistio 15/33, V4b elävä rekisteri 16/33; Haiku-kulu 22 erää V1 0,054 $, V3 0,058 $, V4a 0,092 $, V4b 0,060 $.
+  - todettu (ei rekisteriin): M11: V4a vähentää ylituotantoa (33 päätöstä vs V3 45) mutta C-hylkäykset 3,2/ajo; V4b ratkenneita jäi auki 1/5 (V3 2/5), päätöksiä 49, pakkaa-vaiheet 22 ajoa ≈83 s/piste ja 5,3 M tokenia. Sisältöpuute (s3 kohdat 21, 23–26; s2 14–17) puuttuu kaikilta: pääistunnon harkinta ei ole syötteessä.
+  - todettu (ei rekisteriin): pakkaa-vaiheet.mjs ilman --kuiva ajaa ideat-sulun (committaa ja pushaa jaetun ideakirjan) ja kirjoittaa oikeaan siirtotilaan (pakkaa-vaiheet.mjs:755-815), joten V4b ajettiin --kuiva-tilassa ja DIFF sovellettiin worktreen rekisteriin git applylla (patch puuttuu koneelta).
+- 16.10.2026 — 15.–16.10.2026: paketti CONTEXT-PAKKAASCRIPTI-TARKISTUSPISTEET: hybridin tarkistuspisteiden vaihtoehdot (laukaisu L1–L3, erän lähde E1–E2, ajotapa A1–A2) kirjattu scopes/context/pakkaascripti/SUUNNITELMA.md M7:ksi; käyttäjän lisävaihtoehto E3 (rinnakkainen Haiku-istunto) arvioitu (fb581244).
+  - 16.10.2026: M8 E3-toistomittaus ali-agentilla (5 scopes-istuntoa, 22 pakettirajaa, V1 ilman ja V2 tulosteiden kanssa) kirjattu SUUNNITELMA.md M8 (8948b910).
+  - 16.10.2026: M9 E3 rekisterillä (V3) kirjattu SUUNNITELMA.md M9 (be7206d9).
+  - 16.10.2026: M10 Haikun virheiden juurisyyanalyysi M8/M9-lokeista kirjattu SUUNNITELMA.md M10 (3cb38309).
+  - 16.10.2026: M11-mittaussuunnitelma ja SEURAAVA PAKETTI CONTEXT-PAKKAASCRIPTI-M11 kirjattu (f428944e); M8-aineisto kopioitu pysyvään paikkaan ~/.local/state/pakkaascripti/m8/ (2,7 M; scratchpad häviää istunnon mukana).
+  - viat (ratkaistu, ei rekisteriin): muistiossa ei uusia vikoja eikä muutoksia taulukkoon
+  - todettu (ei rekisteriin): M8 laatu: Sonnet-commitin 33 rekisterikohdasta V1 19 (58 %), V2 14 (42 %); pakkaa-vaiheet --kuiva V1 5/5 ok, V2 4/5 (exit 1, C ei korjaantunut).
+  - todettu (ei rekisteriin): M9 V3 (rekisterin Päätökset-, Avoimet- ja Viat-luvut istunnon alun tilassa): 0,058 $, 5/5 ok, C-hylkäykset 2,8 → 1,6 per ajo, kohdat 18/33 (55 %), poisto ilman korvaajaa 2 → 0, väärä tila 5 → 6.
+  - todettu (ei rekisteriin): M10 juurisyy (s5/v3.era1–8.md, merge.mjs): Haiku toisti kaikki rivit joka erässä ja loi välitilarivejä ("Ali-agentin kartoitus | käynnissä"), joita mikään erä ei sulkenut; merge.mjs säilytti ne ja uudelleen muotoillut päätökset. Rekisteri oli jäädytetty istunnon alkuun.
+  - todettu (ei rekisteriin): Haiku sai purkuraportin vain pääistunnon viestinä; puuttuivat purkutiedoston ohjeet, Tarkoitus ja raja, TYOTAVAT.md, luetut tiedostot ja pääistunnon sisäiset päätökset.
+- 15.10.2026 — skooppi luotiin `/pura uusi scopes context pakkaascripti` -komennolla (luo-skooppi.mjs exit 0, rakennetesti ok; commit f9c9ff49 sisältää skoopin luonnin vakiotiedostot Infra/skills/keskustelun-siirto/SKILL.md, references/scopes.md, claude/siirto/state/skoopit.json) ja purettiin mallittomasti (pura-malliton.mjs exit 0).
+  - 15.10.2026: paketti CONTEXT-PAKKAASCRIPTI-MAARITTELY valmis: tarkoitus, raja ja ensimmäinen työ kirjattu rekisteriin (4b3da1e8).
+  - 15.10.2026: paketti CONTEXT-PAKKAASCRIPTI-MITTAUS valmis: nykyinen pakkausketju kartoitettu ali-agentilla ja kirjattu scopes/context/pakkaascripti/SUUNNITELMA.md lukuihin M1–M3 (e237b32a).
+  - 15.10.2026: käyttäjän pyynnöstä R-vaihtoehdon kustannus arvioitu nykyiseen verrattuna: SUUNNITELMA.md M4 (c8e8d24c).
+  - 15.10.2026: käyttäjän hybridiehdotus kirjattu M5:ksi (3d398288), Haiku-toistomittaus ajettu ali-agentilla ja tulos kirjattu M6:ksi (e63d728b).
+  - ratkennut (Avoimet asiat): Nykyisen pakkauksen mittaus ja suunnitelma — Paketti CONTEXT-PAKKAASCRIPTI-MITTAUS valmis: nykyinen pakkausketju mitattu ja kirjattu SUUNNITELMA.md lukuihin M1–M4.
+  - ratkennut (Avoimet asiat): Hybridi: ajonaikainen kirjoitus skripti + Haiku (käyttäjän ehdotus, M5) — Hybridiehdotus kirjattu M5:ksi ja Haiku-toistomittaus ajettu ja kirjattu M6:ksi; jatko kulkee uudella rivillä TARKISTUSPISTEET.
+  - todettu (ei rekisteriin): Pakkauksen ainoa erillinen mallikutsu on vaihe 2 eli pakkaa-vaiheet.mjs:n A/B/C/K (claude/siirto/ajaja.json:6-8 paketoi = claude-cli + claude-sonnet-5-5; pakkaa-vaiheet.mjs:1-30). Muu on skripteissä (pakkaa-alku.mjs, pakkaa-loppu.mjs, pakkaa-git.sh).
+  - todettu (ei rekisteriin): claude/siirto/mittaukset/ajajat.jsonl: Sonnet-pakkauksia n=215 (12.–15.10.), mediaani 43 s ja 152 k tokenia; scopes-skoopit 163/215.
+  - todettu (ei rekisteriin): Sonnet-kirjurisessiot (618 kpl, ~/.claude/projects/-home-user-palvelin/*.jsonl): tokeneista välimuistiluku 77 %, kirjoitus 20 %, tulos 2,5 %. Hinta noin 0,14 $ per pakkaus (1 h TTL 0,19 $); dollareista yli puolet on välimuistikirjoitusta (~17 k per claude -p -sessio).
+  - todettu (ei rekisteriin): Pääistunnon konteksti pakkaa-alun hetkellä: mediaani 123 k, p90 172 k (98 pakkausta).
+  - todettu (ei rekisteriin): R (pääistunto kirjoittaa rivit) arvioitu 0,11–0,19 $ per pakkaus ja noin 40–60 s, eli tasoissa nykyisen kanssa (SUUNNITELMA.md M4).
+  - todettu (ei rekisteriin): Haiku-toisto (M6; 10 scopes-muistiota, --kuiva erillisissä worktreissä, kaikki exit 0): - Haiku kokonaisena: 2,0 C-hylkäystä per ajo, 84,5 s, 255 k tokenia. - Haiku 1–3 kohdan erinä: 0,67 C-hylkäystä per ajo, 17 s, 48 k tokenia. - Sonnet kokonaisena: 1,0 C-hylkäystä per ajo, 40 s, 183 k tokenia. - A- ja B-vaiheessa ei hylkäyksiä millään mallilla.
+  - todettu (ei rekisteriin): - Haiku kokonaisena teki 2 omaa rivivirhettä 10 muistiosta (tila "kesken" vs "korjattu"; vieraan V-312-rivin omistajan vaihto). Erissä ei vääriä eikä ylimääräisiä rivejä. - Jokaisella claude -p -kutsulla on noin 48 k:n kiinteä tokenikulu.
+  - todettu (ei rekisteriin): Sivuhavainto: claude/tools/vieras-skooppi.mjs lukee kutsujan CLAUDE_CODE_SESSION_ID:n, joten ali-agentin kuivatoisto vaatii `env -u CLAUDE_CODE_SESSION_ID`.
+  - todettu (ei rekisteriin): Infra/skills/pakkaa/SKILL.md:30 väittää vaiheen 2 kestävän 4–7 min; se on vanha aliagenttiluku, ja claude-cli-mediaani on 43 s (ei korjattu: kuuluu skooppiin claude siirto).

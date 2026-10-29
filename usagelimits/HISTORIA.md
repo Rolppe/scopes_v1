@@ -1,0 +1,45 @@
+# scopes usagelimits — toteutushistoria
+
+## Toteutushistoria
+
+- 28.10.2026 — Käsitelty käyttäjän pyyntö: Jatka
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 8 kpl
+  - todettu (ei rekisteriin): Testiajoja ei löytynyt transkriptista — testitulosta ei väitetä
+- 27.10.2026 — Tarkistettu git-synkan tila (`bash Infra/git/synkka.sh tila`) ja pull-tilanne skoopille scopes usagelimits
+  - Analysoitu git-indeksin tila ja todettu vieraiden skooppien selvittämättömät ristiriidat
+  - Käynnistetty automaattisiirto ja valmisteltu skoopin hybridi-pakkaus
+  - todettu (ei rekisteriin): Git-synkan tila: `SYNKKA juuri: haarautunut 42/68 — ihminen; likainen puu (25 muutosta); haara claude/charming-brahmagupta-p9hmm7, kartassa claude_local (exit 1)`
+  - todettu (ei rekisteriin): Git pull estyi muiden skooppien unmerged-tiedostoista johtuen (`claude/siirto/mittaukset/vaihevirheet.jsonl` ja `scopes2/adapteri/*`)
+  - todettu (ei rekisteriin): Skoopilla `scopes usagelimits` ei ole omia likaisia tiedostoja tai muokkauksia tässä istunnossa
+  - todettu (ei rekisteriin): Aiemman tilan mukaisesti suunnitellut paketit (USAGELIMITS-PALVELU, USAGELIMITS-MALLIVALIKKO, USAGELIMITS-PURKAVALINTA) ovat valmiit ja todennettu
+- 27.10.2026 — Skoopin poluissa muuttuneita tiedostoja (3 kpl): scopes/macos/Sources/MacRootView.swift, scopes/shared/ScopesUI/Tests/ScopesUITests/ScopesUITests.swift, scopes/usagelimits/REKISTERI.md
+  - Käsitelty käyttäjän pyyntö: Jatka
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 37 kpl
+  - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \t Executed 6 tests, with 0 failures (0 unexpected) in 0.008 (0.009) seconds\r, \t Executed 6 tests, with 0 failures (0 unexpected) in 0.008 (0.009) seconds\r, \t Executed 6 tests, with 0 failures (0 unexpected) in 0.008 (0.010) seconds\r
+- 27.10.2026 — Skoopin poluissa muuttuneita tiedostoja (5 kpl): scopes/macos/Sources/MacPuraValintaSheet.swift, scopes/macos/Sources/MacRootView.swift, scopes/usagelimits/ARKISTO.md, scopes/usagelimits/HISTORIA.md, scopes/usagelimits/REKISTERI.md
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 28 kpl
+  - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \t Executed 4 tests, with 0 failures (0 unexpected) in 0.002 (0.004) seconds\r, \t Executed 22 tests, with 0 failures (0 unexpected) in 0.025 (0.029) seconds\r, 7: - Testiajon tulos transkriptissa: 7:   - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \\\\t Executed 8 tests, with 0 failures (0 unexpected) in 17.934 (17.941) seconds\\\\r, \\\\t Executed 8
+  - todettu (ei rekisteriin): tests, with 0 failures (0 unexpected) in 17.934 (17.946) seconds\\\\r, \\\\t Executed 8 tests, with 0 failures (0 unexpected) in 17.934 (17.947) seconds\\\\r, 10:   - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \\\\t Executed 5 tests, with 0 failures (0 unexpected) in 15.844 (15.849) seconds\\\\r, \\\\t Executed 5 tests, with 0 failures (0 unexpected) in 15.844 (15.849) seconds\\\\r,
+  - todettu (ei rekisteriin): \\\\t Executed 5 tests, with 0 failures (0 unexpected) in 15.844 (15.850) seconds\\\\r
+- 27.10.2026 — Skoopin poluissa muuttuneita tiedostoja (5 kpl): scopes/macos/Sources/MacPuraValintaSheet.swift, scopes/macos/Sources/MacRootView.swift, scopes/usagelimits/ARKISTO.md, scopes/usagelimits/HISTORIA.md, scopes/usagelimits/REKISTERI.md
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 29 kpl
+  - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \t Executed 4 tests, with 0 failures (0 unexpected) in 0.002 (0.004) seconds\r, \t Executed 22 tests, with 0 failures (0 unexpected) in 0.025 (0.029) seconds\r, 7: - Testiajon tulos transkriptissa: 7:   - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \\\\t Executed 8 tests, with 0 failures (0 unexpected) in 17.934 (17.941) seconds\\\\r, \\\\t Executed 8
+  - todettu (ei rekisteriin): tests, with 0 failures (0 unexpected) in 17.934 (17.946) seconds\\\\r, \\\\t Executed 8 tests, with 0 failures (0 unexpected) in 17.934 (17.947) seconds\\\\r, 10:   - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \\\\t Executed 5 tests, with 0 failures (0 unexpected) in 15.844 (15.849) seconds\\\\r, \\\\t Executed 5 tests, with 0 failures (0 unexpected) in 15.844 (15.849) seconds\\\\r,
+  - todettu (ei rekisteriin): \\\\t Executed 5 tests, with 0 failures (0 unexpected) in 15.844 (15.850) seconds\\\\r
+- 27.10.2026 — Skoopin poluissa muuttuneita tiedostoja (6 kpl): scopes/ios/Sources/PuraValinta.swift, scopes/macos/Sources/MacPuraValintaSheet.swift, scopes/macos/Sources/MacRootView.swift, scopes/shared/ScopesCore/Sources/ScopesCore/Models/ScopeModels.swift, scopes/shared/ScopesUI/Tests/ScopesUITests/ScopesUITests.swift
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 43 kpl
+  - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \t Executed 4 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds\r, \t Executed 4 tests, with 0 failures (0 unexpected) in 0.002 (0.004) seconds\r, \t Executed 22 tests, with 0 failures (0 unexpected) in 0.025 (0.029) seconds\r
+- 27.10.2026 — Skoopin poluissa muuttuneita tiedostoja (1 kpl): scopes/usagelimits/REKISTERI.md
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 27 kpl
+  - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \t Executed 4 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds\r, \t Executed 4 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds\r, \t Executed 4 tests, with 0 failures (0 unexpected) in 0.002 (0.004) seconds\r
+- 27.10.2026 — Skoopin poluissa muuttuneita tiedostoja (4 kpl): scopes/usagelimits/ARKISTO.md, scopes/usagelimits/HISTORIA.md, scopes/usagelimits/KARTOITUS.md, scopes/usagelimits/REKISTERI.md
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 32 kpl
+  - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \t Executed 4 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds\r, \t Executed 4 tests, with 0 failures (0 unexpected) in 0.002 (0.004) seconds\r, 7: - Testiajon tulos transkriptissa: \\t Executed 4 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds\\r, \\t Executed 4 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds\\r, \\t
+  - todettu (ei rekisteriin): Executed 4 tests, with 0 failures (0 unexpected) in 0.002 (0.004) seconds\\r
+- 26.10.2026 — Eroteltu macOS AGY ja OnePlus Linux AGY käyttörajojen seuranta toisistaan (USAGELIMITS-PALVELU)
+  - Toteutettu luoMacAgyKayttoraja hakemaan Macin AGY-tila ja laskemaan pyynnöt Macin brain-hakemistosta 30 s TTL-välimuistilla
+  - Toteutettu ja todennettu koottu rajapinta käyttörajojen kyselyyn taustapalvelussa
+  - Commitattu muutokset tunnisteella 00302708 (feat(scopes usagelimits): erottele macos ja oneplus agy ja toteuta koottu rajapinta)
+  - todettu (ei rekisteriin): OnePlus Linux AGY pyyntömäärä lähteestä: 1464 / 1500 pyyntöä (97.6 %)
+  - todettu (ei rekisteriin): macOS AGY pyyntömäärä lähteestä: 1156 / 1500 pyyntöä (77.1 %)
+  - todettu (ei rekisteriin): Testit ajettu ja todennettu onnistuneesti taustapalvelun osalta (scopes/palvelu/*.test.mjs)

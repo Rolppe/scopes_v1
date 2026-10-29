@@ -1,0 +1,427 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0E6B3D1F28BD48D7447CE2D5 /* LiitteetMac.swift in Sources */ = {isa = PBXBuildFile; fileRef = 825390E6864BD7D77BDC658E /* LiitteetMac.swift */; };
+		11B3C8B90F15086122E914C7 /* MacSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82229D4DA492D91699657C68 /* MacSidebar.swift */; };
+		1AA259848340F5F4F001BAB5 /* MacPuraValintaSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAE46FF7D649A4CCE185EB09 /* MacPuraValintaSheet.swift */; };
+		1E139BF3A63F67E11D17B2EA /* MacRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 203FA1300F32BCF541BF403B /* MacRootView.swift */; };
+		28020BF50B061D31110A19D4 /* MacAGYRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D83BBB22D0721BE5F4348A73 /* MacAGYRunner.swift */; };
+		2D8E1FD11BB6F54AACBD5324 /* MacViatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2721ABC7B14C7BDBA4A2668 /* MacViatView.swift */; };
+		32DA70225B39929F9159BE2D /* ScopesUI in Frameworks */ = {isa = PBXBuildFile; productRef = EF7B7FDCAA8938A8875F98C4 /* ScopesUI */; };
+		46E5ADC6553BFB61C827FF7C /* MacSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECE25CC3D2AA95B1D9B867C /* MacSettingsView.swift */; };
+		5BA9157AF6C8AAF8BCFE6433 /* ScopesCore in Frameworks */ = {isa = PBXBuildFile; productRef = AD8FD9F7F031D72611DCA514 /* ScopesCore */; };
+		98632A0C305AF90F98965331 /* MacInspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D3D4E7356B0462A0D50D6C /* MacInspectorView.swift */; };
+		AEAF48856B65E4832E267907 /* MacKordinaattoriView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30F9A0369992D0D7A7C730D0 /* MacKordinaattoriView.swift */; };
+		B380BF2F23AD97A85A491EB3 /* MacChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 549D45B617067AC68DBFDC00 /* MacChatView.swift */; };
+		D28ABC253767FB94C0C398F6 /* MacChatInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = D269BE946F0A527D58F1E88C /* MacChatInput.swift */; };
+		D2BE2E6416FB2F0DDF53479B /* MacCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3D60D569A2EA57A0C15A557 /* MacCommands.swift */; };
+		D5D48611FC4167144C410F32 /* MacLrView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34C700D73218E48BEC6CA68 /* MacLrView.swift */; };
+		D8042BC5ACBABA7BEE5D9C3A /* MacInfraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D9A8BB14D15CC3B48AE1702 /* MacInfraView.swift */; };
+		D8F6AD3D3E97CB2D3E20C7DD /* MacKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = B49BEA8A41AA06C4A5188E14 /* MacKeychain.swift */; };
+		DF65B9A90689B0AB5A497A5A /* MacTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = F145F6671FB56E02A5DEE53F /* MacTypes.swift */; };
+		F4B8FA8A166040D9ADCDED89 /* MacMenuBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CCE8652C9ABD6170E3E84AF /* MacMenuBar.swift */; };
+		F4D451E37CF566E2E271B76E /* MacQuestionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93457A3637DA1682CBB4ADCE /* MacQuestionCard.swift */; };
+		F7D0FA9289B3129EED2CEEA3 /* MacAndroidView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 449931D5E4B205ECE235BCE6 /* MacAndroidView.swift */; };
+		FCC76926C0D496524C591F87 /* ScopesMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 276E67C6AD43C9C3CE3DA405 /* ScopesMacApp.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		203FA1300F32BCF541BF403B /* MacRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacRootView.swift; sourceTree = "<group>"; };
+		276E67C6AD43C9C3CE3DA405 /* ScopesMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopesMacApp.swift; sourceTree = "<group>"; };
+		30F9A0369992D0D7A7C730D0 /* MacKordinaattoriView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacKordinaattoriView.swift; sourceTree = "<group>"; };
+		449931D5E4B205ECE235BCE6 /* MacAndroidView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAndroidView.swift; sourceTree = "<group>"; };
+		4D9A8BB14D15CC3B48AE1702 /* MacInfraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacInfraView.swift; sourceTree = "<group>"; };
+		549D45B617067AC68DBFDC00 /* MacChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacChatView.swift; sourceTree = "<group>"; };
+		82229D4DA492D91699657C68 /* MacSidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacSidebar.swift; sourceTree = "<group>"; };
+		825390E6864BD7D77BDC658E /* LiitteetMac.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiitteetMac.swift; sourceTree = "<group>"; };
+		8B97D358DD3FBD8E93602333 /* ScopesMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ScopesMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		93457A3637DA1682CBB4ADCE /* MacQuestionCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacQuestionCard.swift; sourceTree = "<group>"; };
+		9CCE8652C9ABD6170E3E84AF /* MacMenuBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacMenuBar.swift; sourceTree = "<group>"; };
+		B49BEA8A41AA06C4A5188E14 /* MacKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacKeychain.swift; sourceTree = "<group>"; };
+		BAE46FF7D649A4CCE185EB09 /* MacPuraValintaSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacPuraValintaSheet.swift; sourceTree = "<group>"; };
+		C2721ABC7B14C7BDBA4A2668 /* MacViatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacViatView.swift; sourceTree = "<group>"; };
+		C2D98CB69819AD3C2D3144E6 /* ScopesCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ScopesCore; path = "../scopes-shared/ScopesCore"; sourceTree = SOURCE_ROOT; };
+		C34C700D73218E48BEC6CA68 /* MacLrView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacLrView.swift; sourceTree = "<group>"; };
+		D269BE946F0A527D58F1E88C /* MacChatInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacChatInput.swift; sourceTree = "<group>"; };
+		D83BBB22D0721BE5F4348A73 /* MacAGYRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAGYRunner.swift; sourceTree = "<group>"; };
+		E3D60D569A2EA57A0C15A557 /* MacCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacCommands.swift; sourceTree = "<group>"; };
+		E5D3D4E7356B0462A0D50D6C /* MacInspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacInspectorView.swift; sourceTree = "<group>"; };
+		EE7C87E77DAB3443C1363774 /* ScopesUI */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ScopesUI; path = "../scopes-shared/ScopesUI"; sourceTree = SOURCE_ROOT; };
+		EECE25CC3D2AA95B1D9B867C /* MacSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacSettingsView.swift; sourceTree = "<group>"; };
+		F145F6671FB56E02A5DEE53F /* MacTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacTypes.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B34536ECA91D9CD0F3FF524E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5BA9157AF6C8AAF8BCFE6433 /* ScopesCore in Frameworks */,
+				32DA70225B39929F9159BE2D /* ScopesUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		2055ED16925B5E3CC17F8C70 = {
+			isa = PBXGroup;
+			children = (
+				E12113AD9116C643B85E8FDF /* Packages */,
+				C3E56FFBFB040D987F9AC4D0 /* Sources */,
+				34D0F0387C800B362B4B27BC /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		34D0F0387C800B362B4B27BC /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				8B97D358DD3FBD8E93602333 /* ScopesMac.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		C3E56FFBFB040D987F9AC4D0 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				449931D5E4B205ECE235BCE6 /* MacAndroidView.swift */,
+				D269BE946F0A527D58F1E88C /* MacChatInput.swift */,
+				549D45B617067AC68DBFDC00 /* MacChatView.swift */,
+				E3D60D569A2EA57A0C15A557 /* MacCommands.swift */,
+				4D9A8BB14D15CC3B48AE1702 /* MacInfraView.swift */,
+				E5D3D4E7356B0462A0D50D6C /* MacInspectorView.swift */,
+				30F9A0369992D0D7A7C730D0 /* MacKordinaattoriView.swift */,
+				C34C700D73218E48BEC6CA68 /* MacLrView.swift */,
+				9CCE8652C9ABD6170E3E84AF /* MacMenuBar.swift */,
+				BAE46FF7D649A4CCE185EB09 /* MacPuraValintaSheet.swift */,
+				93457A3637DA1682CBB4ADCE /* MacQuestionCard.swift */,
+				203FA1300F32BCF541BF403B /* MacRootView.swift */,
+				EECE25CC3D2AA95B1D9B867C /* MacSettingsView.swift */,
+				82229D4DA492D91699657C68 /* MacSidebar.swift */,
+				F145F6671FB56E02A5DEE53F /* MacTypes.swift */,
+				C2721ABC7B14C7BDBA4A2668 /* MacViatView.swift */,
+				276E67C6AD43C9C3CE3DA405 /* ScopesMacApp.swift */,
+				D04E5B4E169C3B166EA33CC1 /* Platform */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		D04E5B4E169C3B166EA33CC1 /* Platform */ = {
+			isa = PBXGroup;
+			children = (
+				825390E6864BD7D77BDC658E /* LiitteetMac.swift */,
+				D83BBB22D0721BE5F4348A73 /* MacAGYRunner.swift */,
+				B49BEA8A41AA06C4A5188E14 /* MacKeychain.swift */,
+			);
+			path = Platform;
+			sourceTree = "<group>";
+		};
+		E12113AD9116C643B85E8FDF /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				C2D98CB69819AD3C2D3144E6 /* ScopesCore */,
+				EE7C87E77DAB3443C1363774 /* ScopesUI */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		D08AC73B5B23C460F3FA76C8 /* ScopesMac */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5E7C7AC929F28DD2214AF3D3 /* Build configuration list for PBXNativeTarget "ScopesMac" */;
+			buildPhases = (
+				640E215BB0EB18A86C7C46FF /* Sources */,
+				B34536ECA91D9CD0F3FF524E /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ScopesMac;
+			packageProductDependencies = (
+				AD8FD9F7F031D72611DCA514 /* ScopesCore */,
+				EF7B7FDCAA8938A8875F98C4 /* ScopesUI */,
+			);
+			productName = ScopesMac;
+			productReference = 8B97D358DD3FBD8E93602333 /* ScopesMac.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		19EFD60BA8CD231C65B0B5E4 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					D08AC73B5B23C460F3FA76C8 = {
+						DevelopmentTeam = YOUR_TEAM_ID;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 49F5B419FA4BDD5A3BC634D5 /* Build configuration list for PBXProject "ScopesMac" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 2055ED16925B5E3CC17F8C70;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				2AB126AF3B444C2F254B4D3D /* XCLocalSwiftPackageReference "../scopes-shared/ScopesCore" */,
+				B183A9B08C9EB676A2571056 /* XCLocalSwiftPackageReference "../scopes-shared/ScopesUI" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 34D0F0387C800B362B4B27BC /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D08AC73B5B23C460F3FA76C8 /* ScopesMac */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		640E215BB0EB18A86C7C46FF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0E6B3D1F28BD48D7447CE2D5 /* LiitteetMac.swift in Sources */,
+				28020BF50B061D31110A19D4 /* MacAGYRunner.swift in Sources */,
+				F7D0FA9289B3129EED2CEEA3 /* MacAndroidView.swift in Sources */,
+				D28ABC253767FB94C0C398F6 /* MacChatInput.swift in Sources */,
+				B380BF2F23AD97A85A491EB3 /* MacChatView.swift in Sources */,
+				D2BE2E6416FB2F0DDF53479B /* MacCommands.swift in Sources */,
+				D8042BC5ACBABA7BEE5D9C3A /* MacInfraView.swift in Sources */,
+				98632A0C305AF90F98965331 /* MacInspectorView.swift in Sources */,
+				D8F6AD3D3E97CB2D3E20C7DD /* MacKeychain.swift in Sources */,
+				AEAF48856B65E4832E267907 /* MacKordinaattoriView.swift in Sources */,
+				D5D48611FC4167144C410F32 /* MacLrView.swift in Sources */,
+				F4B8FA8A166040D9ADCDED89 /* MacMenuBar.swift in Sources */,
+				1AA259848340F5F4F001BAB5 /* MacPuraValintaSheet.swift in Sources */,
+				F4D451E37CF566E2E271B76E /* MacQuestionCard.swift in Sources */,
+				1E139BF3A63F67E11D17B2EA /* MacRootView.swift in Sources */,
+				46E5ADC6553BFB61C827FF7C /* MacSettingsView.swift in Sources */,
+				11B3C8B90F15086122E914C7 /* MacSidebar.swift in Sources */,
+				DF65B9A90689B0AB5A497A5A /* MacTypes.swift in Sources */,
+				2D8E1FD11BB6F54AACBD5324 /* MacViatView.swift in Sources */,
+				FCC76926C0D496524C591F87 /* ScopesMacApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		46B191B97421195B85D7F171 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = YOUR_TEAM_ID;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		7C8FEF925ECB609F37E68CF6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.scopes.mac;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		987D5DB44A182A6CB20715B8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.scopes.mac;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		B32E2B9488560E4C3D080CC2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = YOUR_TEAM_ID;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		49F5B419FA4BDD5A3BC634D5 /* Build configuration list for PBXProject "ScopesMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B32E2B9488560E4C3D080CC2 /* Debug */,
+				46B191B97421195B85D7F171 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		5E7C7AC929F28DD2214AF3D3 /* Build configuration list for PBXNativeTarget "ScopesMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7C8FEF925ECB609F37E68CF6 /* Debug */,
+				987D5DB44A182A6CB20715B8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		2AB126AF3B444C2F254B4D3D /* XCLocalSwiftPackageReference "../scopes-shared/ScopesCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "../scopes-shared/ScopesCore";
+		};
+		B183A9B08C9EB676A2571056 /* XCLocalSwiftPackageReference "../scopes-shared/ScopesUI" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "../scopes-shared/ScopesUI";
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AD8FD9F7F031D72611DCA514 /* ScopesCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ScopesCore;
+		};
+		EF7B7FDCAA8938A8875F98C4 /* ScopesUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ScopesUI;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 19EFD60BA8CD231C65B0B5E4 /* Project object */;
+}
