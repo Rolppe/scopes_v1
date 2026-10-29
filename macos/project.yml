@@ -1,0 +1,31 @@
+name: ScopesMac
+options:
+  deploymentTarget:
+    macOS: "14.0"
+settings:
+  base:
+    DEVELOPMENT_TEAM: YOUR_TEAM_ID
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+packages:
+  ScopesCore:
+    path: ../scopes-shared/ScopesCore
+  ScopesUI:
+    path: ../scopes-shared/ScopesUI
+targets:
+  ScopesMac:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources: [Sources]
+    dependencies:
+      - package: ScopesCore
+      - package: ScopesUI
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.scopes.mac
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: Scopes
+        NSLocalNetworkUsageDescription: Sovellus lukee skooppien tilan kotipalvelimelta.

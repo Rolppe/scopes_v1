@@ -1,0 +1,54 @@
+# scopes siirto — toteutushistoria
+
+## Toteutushistoria
+
+- 15.10.2026 — mallittoman purku (`~/.local/state/pura/scopes-siirto.md`); raportti esitetty, /sa-herätykset luotu (cron 545e82b7, 051c5f92, 9a73772d). Ei tiedostomuutoksia.
+  - Käyttäjä vastasi tehtäväkysymykseen "/pakkaa" → tämä pakkaus.
+  - todettu (ei rekisteriin): Purkuraportti: skoopissa 0 heti ajettavaa, 0 odottaa käyttäjää; avoimet V-265/V-296/V-298 kuuluvat scopes viat -skooppiin.
+  - todettu (ei rekisteriin): pakkaa-alku.mjs 15.10.2026: SYNKKA ok, SEURAAVA-HEAD = "ei mitään — V-424 kuitattu ja V-440 korjattu 15.10.2026 …".
+- 15.10.2026 — klo 16.33: `/pura scopes siirto --autojatko` (autovaihto). Purun ajoi aja-siirtaja.sh (claude-cli claude-haiku-5-5, 67 s, ARVIO 6/6), exit 0.
+  - `/sa` asetettu (cron 2cfdf485, 95976f76; uusinta 056d9673 22.10.2026 klo 14.33).
+  - Tämä sessio ei muuttanut yhtään tiedostoa eikä tehnyt committeja. Muutetut tiedostot -luvun polut ovat muiden keskustelujen työtä (likainen puu ja niiden commitit), eivät tämän skoopin.
+  - viat (ratkaistu, ei rekisteriin): havainto, ei kirjattu V-riviksi (omistaja claude siirto); kirjataan, jos toistuu
+  - todettu (ei rekisteriin): kesken.mjs "scopes siirto": exit 0, `KESKEN: ei` (muistio 15.10.2026 klo 16.30).
+  - todettu (ei rekisteriin): Purun ISTUNNOT-rivi nimesi istunnon 50d6c66e "palvelin-64" toiseksi istunnoksi, vaikka se oli purkava sessio itse (sama id kuin tämän session scratchpad).
+- 15.10.2026 — /pura scopes siirto (claude-cli claude-haiku-5-5, 6/6). SEURAAVA oli "ei mitään"; käyttäjä valitsi V-424:n.
+  - V-424 (PURA-MALLITON T2, toiminto `pura-testi`, commit 11573880) kuitattu omistajana: koodi luettu (scopes/palvelu/toiminnot.mjs:232), samat estot kuin `pura`ssa (toiminnot.mjs:214), tiedosto kirjoitetaan ennen sulkemista. `node --test` scopes/palvelu: 118/118 (toiminnot.test.mjs 24/24). IDEAT-tila jo "tuotannossa"; ei muutoksia.
+  - RISTIRIIDAT-raportin commit 028019cd (scopes lista muutti toiminnot.mjs + toiminnot.test.mjs) kuitattu samoilla testeillä: vihreä.
+  - Käyttäjän pyynnöstä ("Korvaa v-440", tulkittu: korjaa) V-440 korjattu commitissa ebfe3447 (claude siirron tiedosto, käyttäjän pyyntö): claude/siirto/tools/pura-malliton.mjs — SANO-käsky ohjeessa vain, kun SANO-rivejä on (molemmat kohteet); neutraali kysymys aidattuna kopioitavana lohkona, joka päättyy "Vastaa numerolla."; pura-malliton.test.mjs uusi testi "V-440". Testit 38/38. Todennus: `pura-malliton.mjs "scopes context purascript" --kohde neutraali --ei-synkka --ulos <scratchpad>` exit 0, kysymyslohko aidattu.
+  - Tiedoksi-rivit: V-475 → claude siirto (commit 5cc6b4a), V-476 → scopes context purascript (commit 49a339f, T5-uusinta voi edetä).
+  - viat (ratkaistu, ei rekisteriin): V-424 kuitattu, ei vika tälle skoopille, toteutus vihreä
+  - viat (ratkaistu, ei rekisteriin): V-440 korjattu ebfe3447 (claude siirron vika, korjattu täällä käyttäjän pyynnöstä)
+  - todettu (ei rekisteriin): KONTEKSTI purun jälkeen 65 k (konteksti-nyt.mjs 15.10.2026 13.23Z).
+  - todettu (ei rekisteriin): IDEAT.md:n Tila-sarakkeessa "tuotannossa" on 151 rivillä lopputila; avoin-tiloja 2.
+  - todettu (ei rekisteriin): V-440:n osat, joita ei korjattu skriptissä: tiedosto annettava system-viestinä ja num_ctx ≥ 16384 (kutsujan asetuksia, kirjattu V-476:een T5-uusinnalle).
+- 14.10.2026 — SIIRTO-PURA-PAINIKE tehty (autojatko, /pura scopes siirto --autojatko 14.10.2026).
+  - Todennus automaattisiirron aikajanasta: edellisen session 45f05e46 autovaihto 14.10.2026 → tämä sessio 0a52a566. Aikajana transkripteista lahteet.mjs:n `pakattu()`- ja `istunnonSkooppi()`-funktioilla: autovaihto-kutsu 09:35:09Z, uusi istunto skoopin istunto 09:35:13Z (transkriptissa `/pura scopes siirto`), vanha pakattu vasta 09:35:23Z (PAKATTU-rivi kirjoitetaan autovaihdon jälkeen, pakkaa/SKILL.md "PAKATTU-ilmoitus"). Skoopissa oli koko ajan pakkaamaton istunto → viestit.mjs `skoopinViestit` palautti auki: true → äppi ei näyttänyt Pura-painiketta (Viestit.swift: Pura vain kun auki == false).
+  - Korjattu jäljelle jäänyt aukko: toiminnot.mjs `pura` tarkisti varattu-tilan vain tmux-ruudullisista pakatuista istunnoista. Ruuduton (puhelimesta/Remote Control -daemonista avattu, entrypoint sdk-cli) pakattu istunto, joka on yhä autovaihdossa (busy), ei estänyt → Pura olisi avannut toisen istunnon. Nyt `varattu = omat.find(tila !== 'idle')`. Commit dcefb46c (scopes/palvelu/toiminnot.mjs, toiminnot.test.mjs).
+  - Testi: toiminnot.test.mjs, uusi tapaus `ymparisto({ tila: 'busy', tmux: null })` → 409. node --test 13/13 läpi; mutaatiotarkistus: ilman korjausta 12/13 (uusi testi kaatuu). Huom: `tmux: undefined` laukaisi oletusarvon, siksi null.
+  - scopes chatille tiedoksi vika.sh-reitillä: V-366 → scopes chat (tiedoksi), commit 05b38bc, push ok — rivin scopes/chat/REKISTERI.md:71 voi sulkea scopes chatin pakkauksessa (sääntö 15: chat-rekisteriin ei koskettu).
+  - Palvelu: käyttäjä pyysi uudelleenkäynnistystä; ei tarvittu — palvelin.mjs (PID 629) oli jo käynnistynyt 12.55, commitin dcefb46c (12.39) jälkeen, työpuusta jossa korjaus on; /api/terveys {"ok":true}.
+  - ratkennut (Avoimet asiat): Pura-painike voi näkyä automaattisiirron aikana (reunatapaus, scopes chat -rekisterin rivi) — Todennettu automaattisiirron aikajanasta 14.10.2026 (autovaihto 45f05e46 → 0a52a566) ja jäljelle jäänyt aukko korjattu commitilla dcefb46c (toiminnot.mjs: varattu = omat.find(tila !== 'idle'), testi 13/13); scopes chatille V-366 tiedoksi.
+  - todettu (ei rekisteriin): Pura-painikkeen ikkuna automaattisiirrossa: 0 s tässä siirrossa (uusi skoopissa 10 s ennen kuin vanha pakattiin). Järjestys nojaa siihen, että PAKATTU/PAKKAUS-rivi tulee loppuviestissä autovaihdon jälkeen.
+  - todettu (ei rekisteriin): Todennus tehtiin palvelun tilasta (sama data, josta äppi päättää painikkeen), ei puhelimen näytöltä.
+- 14.10.2026 — SIIRTO-KYTKIMET-PUHELIN tehty: Skoopit-äppi asennettu puhelimeen `bash scopes/ios/asenna.sh` puhtaasta HEAD-worktreestä (18c7366a) scratchpadissa, jotta toisen keskustelun committoimaton scopes/ios-muutos (Infra-korttien vetojärjestys, Infra.swift +38, SkoopitUITests.swift +25) ei mennyt puhelimeen; build ok 6 s, asennus valmis, profiili voimassa 2026-10-20T08:20:55Z. Worktree poistettu (puhdas).
+  - Käyttäjä todensi puhelimessa 14.10.2026: skoopin valikossa näkyvät Automaattijatko- ja Autopack-kytkimet ("Näkyvät, käänsin").
+  - ratkennut (Avoimet asiat): Automaattijatko- ja Autopack-kytkimet — Käyttäjä todensi 14.10.2026 puhelimessa, että Automaattijatko- ja Autopack-kytkimet näkyvät skoopin valikossa.
+  - todettu (ei rekisteriin): State-tiedostojen seuranta (Monitor, 1 s): lähtö automaattivalinta=false autopack=true; 12:32:06 automaattivalinta=true, 12:32:07 autopack=false (puhelimen kytkimet kirjoittavat ~/.claude/skills/keskustelun-siirto/state/{automaattivalinta,autopack}.txt); arvot palautettu käsin false/true 12:32:31 (muoto `false\n`/`true\n`).
+  - todettu (ei rekisteriin): Rivin "Automaattijatko- ja Autopack-kytkimet" tila: todennettu 14.10.2026 (korjaus 8ff5b35b).
+- 14.10.2026 — Käyttäjä 14.10.2026: pakkauksen paketin valintaan aina vaihtoehto `Ei seuraavaa pakettia — pakkaa vain`: kirjoittaa `SEURAAVA PAKETTI: ei mitään — käyttäjä valitsi pakkaa vain <pvm>` eikä vaihda sessiota, vaikka pakkaus olisi automaattisiirto, autopack tai autojatko. Commit 2daaf1fe (Infra/skills/pakkaa/SKILL.md, automaattisiirto/SKILL.md, keskustelun-siirto/SKILL.md 7b), install.sh ajettu (exit 0).
+  - Käyttäjä 14.10.2026: skoopin kolmen pisteen valikkoon (Nakymat.swift, Pidä muisti hereillä -kytkimen alle) kaksi erillistä globaalia kytkintä: Automaattijatko → `~/.claude/skills/keskustelun-siirto/state/automaattivalinta.txt`, Autopack → `state/autopack.txt`. Commit 8ff5b35b: uusi `scopes/palvelu/toiminnot-asetukset.mjs` (+ test, 6 testiä), palvelin.mjs `GET /api/asetukset`, `POST /api/asetukset/<automaattijatko|autopack>/<paalle|pois>` (vain kiinteät nimet, avainsuojattu, kirjaus toimintolokiin; ympäristömuuttuja SCOPES_TILA_DIR), Asiakas/Malli/Nakymat.swift, UI-testi testPakkaaIlmanIstuntoaLukittu. Toteutti sonnet-ali-agentti; pääistunto tarkisti diffit ja committasi vain omat hunkit (toisen keskustelun Infra.swift ja testInfraJarjestys-hunkki jätettiin).
+  - SIIRTO-JONO-ASENNUS tehty 14.10.2026: scopes-palvelu käynnistetty uudelleen (vanha pid 16064 → uusi 20269, kaynnista.sh exit 0); `scopes/palvelu` oli puhdas ennen.
+  - ratkennut (Avoimet asiat): Jono levylle (toiminnot.mjs) — Jono asennettu ja todennettu 14.10.2026 (SIIRTO-JONO-ASENNUS): scopes-palvelu käynnistetty uudelleen, vanha pid 16064 → uusi 20269.
+  - todettu (ei rekisteriin): `node --test 'scopes/palvelu/*.test.mjs'` 71/71 (pääistunto ajoi itse). Node 22: `node --test scopes/palvelu/` ei toimi (hakemisto tulkitaan moduuliksi) — käytä glob-muotoa.
+  - todettu (ei rekisteriin): Ali-agentti: `bash scopes/ios/testi.sh` (SCOPES_OSOITE koeinstanssiin :8788, SCOPES_VAIN=testPakkaaIlmanIstuntoaLukittu) exit 0 Macin simulaattorissa.
+  - todettu (ei rekisteriin): Elävä palvelu: `GET /api/asetukset` → `{"automaattijatko":false,"autopack":true}`. Jonotettu `herata-pois` varatulle istunnolle → `jonossa:true`, ja `~/.local/state/scopes-toiminnot-jono.json` syntyi.
+  - todettu (ei rekisteriin): Puhelimen äppi ei vielä näytä kytkimiä: uusi äppi asentamatta (`scopes/ios/asenna.sh` lähettää työpuun Sources-hakemiston Maciin, eli mukaan lähtevät myös toisen keskustelun committoimattomat muutokset, kuten Infra.swift).
+- 14.10.2026 — skooppi `scopes siirto` luotiin `/pura uusi scopes siirto` (commit 43924cb6).
+  - SIIRTO-MAARITTELY tehty: tarkoitus, raja ja ensimmäinen työ kirjattiin rekisteriin (commit 466f40c5).
+  - Jono levylle: `scopes/palvelu/toiminnot.mjs` tallentaa jonon jokaisen muutoksen jälkeen tiedostoon `scopes-toiminnot-jono.json` toimintolokin viereen (kirjoitus tmp + rename) ja lukee sen käynnistyksessä (`oletusJonotiedosto`, `kelpaaJonoon`, `tallennaJono`, `kaynnistaAjastin`). Uusi testi toiminnot.test.mjs: "jono: säilyy palvelun uudelleenkäynnistyksen yli; levyn kelvoton rivi ohitetaan". Commit 466f40c5.
+  - scopes hallinta yhdistettiin scopes siirtoon: scopes/hallinta/REKISTERI.md poistettiin; skoopit.json, reitittimen skooppilista, polkukartta (toiminnot*.mjs → scopes siirto, scopes/hallinta/** pois) ja references/scopes.md päivitettiin (466f40c5). install.sh ajettu.
+  - Muutosilmoitukset omistajille: V-322 → claude siirto (commit 2420722), V-323 → scopes (commit 3050f7d).
+  - todettu (ei rekisteriin): `rakennetesti.mjs`: scopes siirto 6/6 ok; koko ajo exit 0.
+  - todettu (ei rekisteriin): `skooppi-polusta.mjs scopes/palvelu/toiminnot.mjs` → scopes siirto.
+  - todettu (ei rekisteriin): Elävä palvelu ajaa vielä vanhaa koodia; käynnistystä ei tehty, koska scopes/palvelu/palvelin.mjs oli muokattu ja liitteet*.mjs committaamatta toisen keskustelun työstä. Pakkaushetkellä 14.10.2026 `git status --short scopes/palvelu` oli puhdas.

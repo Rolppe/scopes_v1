@@ -1,0 +1,32 @@
+# scopes siirto agymacos — toteutushistoria
+
+## Toteutushistoria
+
+- 27.10.2026 — Skoopin poluissa muuttuneita tiedostoja (8 kpl): claude/siirto/tools/pura-malliton.test.mjs, scopes/ios/Sources/Infra.swift, scopes/ios/Sources/Sivupalkki.swift, scopes/ios/Sources/Viestit.swift, scopes/palvelu/agy-kayttoraja.mjs
+  - Käsitelty käyttäjän pyyntö: 1.
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 36 kpl
+  - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \t Executed 4 tests, with 0 failures (0 unexpected) in 0.010 (0.010) seconds\r, \t Executed 22 tests, with 0 failures (0 unexpected) in 0.028 (0.030) seconds\r, \t Executed 22 tests, with 0 failures (0 unexpected) in 0.028 (0.032) seconds\r
+- 27.10.2026 — Skoopin poluissa muuttuneita tiedostoja (17 kpl): claude/siirto/state/skoopit.json, claude/siirto/tools/asetus-tila.mjs, claude/siirto/tools/asetus-tila.test.mjs, claude/siirto/tools/pura-malliton.mjs, scopes/ios/Sources/Malli.swift
+  - Käsitelty käyttäjän pyyntö: Malliton purku: lue ~/.local/state/pura/scopes-siirto-agymacos.md ja noudata sitä.
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 46 kpl
+  - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \t Executed 4 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds\r, \t Executed 4 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds\r, \t Executed 4 tests, with 0 failures (0 unexpected) in 0.002 (0.004) seconds\r
+- 27.10.2026 — Skoopin poluissa muuttuneita tiedostoja (9 kpl): claude/siirto/state/skoopit.json, scopes/ios/Sources/Malli.swift, scopes/ios/Sources/MalliValikko.swift, scopes/ios/Sources/Viestit.swift, scopes/palvelu/toiminnot.mjs
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 24 kpl
+  - todettu (ei rekisteriin): Testiajon tulos transkriptissa: 11:   - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \\t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds\\r, \\t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds\\r, \\t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.005) seconds\\r, 8: - Testiajon tulos transkriptissa: \\t Executed 4
+  - todettu (ei rekisteriin): tests, with 0 failures (0 unexpected) in 0.002 (0.004) seconds\\r, 7:   - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \\\\t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds\\\\r, \\\\t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds\\\\r, \\\\t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.005) seconds\\\\r, 11:   -
+  - todettu (ei rekisteriin): todettu (ei rekisteriin): Testiajon tulos transkriptissa: \\\\t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds\\\\r, \\\\t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds\\\\r, \\\\t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.005) seconds\\\\r, 7: - Testiajon tulos transkriptissa: 7:   - todettu (ei rekisteriin): Testiajon
+  - todettu (ei rekisteriin): tulos transkriptissa: \\\\t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds\\\\r, \\\\t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds\\\\r, \\\\t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.005) seconds\\\\r, 11:   - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \\\\t Executed 3 tests, with 0 failures (0 unexpected)
+  - todettu (ei rekisteriin): in 0.002 (0.003) seconds\\\\r, \\\\t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds\\\\r, \\\\t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.005) seconds\\\\r, 8: - Testiajon tulos transkriptissa: \\\\t Executed 4 tests, with 0 failures (0 unexpected) in 0.002 (0.004) seconds\\\\r, 7:   - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \\\\\\\\t
+  - todettu (ei rekisteriin): Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds\\\\\\\\r, \\\\\\\\t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds\\\\\\\\r, \\\\\\\\t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.005) seconds\\\\\\\\r, 11:   - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \\\\\\\\t Executed 3 tests, with 0 failures (0 unexpected) in
+  - todettu (ei rekisteriin): 0.002 (0.003) seconds\\\\\\\\r, \\\\\\\\t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds\\\\\\\\r, \\\\\\\\t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.005) seconds\\\\\\\\r
+- 26.10.2026 — Käsitelty käyttäjän pyyntö: Jatka
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 2 kpl
+  - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds\r, \t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds\r, \t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.005) seconds\r
+- 26.10.2026 — Skoopin poluissa muuttuneita tiedostoja (16 kpl): scopes/ios/.gitignore, scopes/ios/Sources/Asetukset.swift, scopes/ios/Sources/Malli.swift, scopes/ios/Sources/MalliValikko.swift, scopes/ios/Sources/Nakymat.swift
+  - Käsitelty käyttäjän pyyntö: Jatka
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 18 kpl
+  - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds\r, \t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds\r, \t Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.005) seconds\r
+- 26.10.2026 — Skoopin poluissa muuttuneita tiedostoja (6 kpl): claude/siirto/state/skoopit.json, claude/siirto/tools/pura-malliton.mjs, claude/siirto/tools/pura-malliton.test.mjs, scopes/palvelu/toiminnot.mjs, scopes/palvelu/toiminnot.test.mjs
+  - Käsitelty käyttäjän pyyntö: /automaattisiirto
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 8 kpl
+  - todettu (ei rekisteriin): Testiajoja ei löytynyt transkriptista — testitulosta ei väitetä

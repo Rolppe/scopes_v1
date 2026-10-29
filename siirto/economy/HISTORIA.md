@@ -1,0 +1,41 @@
+# scopes siirto economy — toteutushistoria
+
+## Toteutushistoria
+
+- 27.10.2026 — Analysoitiin ja todennettiin siirtotalouden säästötoimien kattavuus OnePlus AGY -istunnoissa
+  - Vahvistettiin säästötoimien universaali soveltuvuus kaikille skooppiperheille (scopes, scopes2, infra, claude, plugin, models)
+  - Käynnistettiin automaattisiirto ja keskustelun pakkausprosessin valmistelu
+  - todettu (ei rekisteriin): AGENTS.md ohjaa jokaista AGY-istuntoa repositoriojuuresta riippumatta skoopista (mm. ECONOMY-TASK-ODOTUS ja WaitMsBeforeAsync: 10000)
+  - todettu (ei rekisteriin): hybridi-pakkaus.mjs ja skooppipolku.mjs tukevat determinististä hybridipakkausta kaikille skooppiperheille
+  - todettu (ei rekisteriin): Skoopilla 'scopes siirto economy' ei ole paikallisia muokkaamattomia tiedostoja tai diffiä (git diff stat tyhjä)
+- 27.10.2026 — Selvitetty ja korjattu ExistsSync is not defined -virhe tiedostosta scopes/palvelu/toiminnot.mjs lisäämällä puuttuva existsSync node:fs -tuontiin
+  - Ajettu scopes/siirto/economy/gate.sh hyväksytysti läpi
+  - Commitoitu korjaus: a9645ded fix(scopes siirto economy): korjaa puuttuva existsSync-tuonti toiminnot.mjs:ssa
+  - todettu (ei rekisteriin): scopes/palvelu/toiminnot.mjs:ssä kutsuttiin existsSync-funktiota ilman importia mac-agy-mallin tilasynkronoinnissa
+  - todettu (ei rekisteriin): scopes/siirto/economy/gate.sh: porttitarkistus hyväksytty (exit 0)
+  - todettu (ei rekisteriin): Testiajoja ei löytynyt transkriptista — testitulosta ei väitetä
+- 27.10.2026 — Skoopin poluissa muuttuneita tiedostoja (10 kpl): scopes/agy/siirto/pakkausscripti/muistio.mjs, scopes/palvelu/economy.mjs, scopes/palvelu/economy.test.mjs, scopes/palvelu/palvelin.mjs, scopes/siirto/economy/ARKKITEHTUURI.md
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 18 kpl
+  - todettu (ei rekisteriin): Testiajoja ei löytynyt transkriptista — testitulosta ei väitetä
+- 27.10.2026 — Skoopin poluissa muuttuneita tiedostoja (8 kpl): scopes/palvelu/economy.mjs, scopes/palvelu/economy.test.mjs, scopes/palvelu/palvelin.mjs, scopes/siirto/economy/ARKKITEHTUURI.md, scopes/siirto/economy/REKISTERI.md
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 16 kpl
+  - todettu (ei rekisteriin): Testiajon tulos transkriptissa: 47: ℹ tests 8, 49: ℹ pass 8, 50: ℹ fail 0
+- 27.10.2026 — Skoopin poluissa muuttuneita tiedostoja (15 kpl): .agents/skills/automaattisiirto/SKILL.md, .agents/skills/pakkaa/SKILL.md, AGENTS.md, scopes/agy/siirto/pakkausscripti/louhija.mjs, scopes/agy/siirto/pakkausscripti/pakkaa-hybridi.mjs
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 23 kpl
+  - todettu (ei rekisteriin): Testiajoja ei löytynyt transkriptista — testitulosta ei väitetä
+- 27.10.2026 — Skoopin poluissa muuttuneita tiedostoja (9 kpl): scopes/palvelu/economy.mjs, scopes/palvelu/economy.test.mjs, scopes/palvelu/palvelin.mjs, scopes/siirto/economy/ARKISTO.md, scopes/siirto/economy/ARKKITEHTUURI.md
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 18 kpl
+  - todettu (ei rekisteriin): Testiajon tulos transkriptissa: 35: ℹ tests 8, 37: ℹ pass 8, 38: ℹ fail 0
+- 27.10.2026 — Skoopin poluissa muuttuneita tiedostoja (8 kpl): scopes/palvelu/economy.mjs, scopes/palvelu/economy.test.mjs, scopes/palvelu/palvelin.mjs, scopes/siirto/economy/ARKKITEHTUURI.md, scopes/siirto/economy/REKISTERI.md
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 17 kpl
+  - todettu (ei rekisteriin): Testiajon tulos transkriptissa: 202: ℹ tests 201, 204: ℹ pass 201, 205: ℹ fail 0
+- 27.10.2026 — Skoopin poluissa muuttuneita tiedostoja (7 kpl): scopes/siirto/economy/ARKKITEHTUURI.md, scopes/siirto/economy/REKISTERI.md, scopes/palvelu/economy.mjs, scopes/palvelu/economy.test.mjs, scopes/siirto/economy/gate.sh
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 15 kpl
+  - todettu (ei rekisteriin): Testiajon tulos transkriptissa: 23: ℹ tests 8, 25: ℹ pass 8, 26: ℹ fail 0
+- 27.10.2026 — Skoopin poluissa muuttuneita tiedostoja (2 kpl): scopes/siirto/economy/REKISTERI.md, scopes/siirto/economy/ARKKITEHTUURI.md
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 11 kpl
+  - todettu (ei rekisteriin): Testiajoja ei löytynyt transkriptista — testitulosta ei väitetä
+- 27.10.2026 — Skoopin poluissa muuttuneita tiedostoja (2 kpl): scopes/siirto/economy/REKISTERI.md, scopes/siirto/economy/SUUNNITELMA.md
+  - Käsitelty käyttäjän pyyntö: Kulutuksessa merkkttävin tekijä on 1500 kutsun raja käytettäessä agy
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 8 kpl
+  - todettu (ei rekisteriin): Testiajoja ei löytynyt transkriptista — testitulosta ei väitetä

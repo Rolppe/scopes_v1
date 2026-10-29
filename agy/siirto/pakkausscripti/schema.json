@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PakkausHarkinta",
+  "type": "object",
+  "required": ["tehty", "todettu", "paatokset", "avoimet", "viat", "hukka", "kesken", "seuraavaPaketti"],
+  "properties": {
+    "tehty": {
+      "type": "array",
+      "description": "Konkreettiset asiat, jotka saatiin valmiiksi tässä keskustelussa.",
+      "items": { "type": "string" }
+    },
+    "todettu": {
+      "type": "array",
+      "description": "Mittaukset, havainnot, testitulokset ja faktat.",
+      "items": { "type": "string" }
+    },
+    "paatokset": {
+      "type": "array",
+      "description": "Tehdyt arkkitehtuuri- ja linjauspäätökset.",
+      "items": { "type": "string" }
+    },
+    "avoimet": {
+      "type": "array",
+      "description": "Uudet tai jatkavat avoimet asiat.",
+      "items": {
+        "type": "object",
+        "required": ["asia", "tila", "askel"],
+        "properties": {
+          "asia": { "type": "string", "minLength": 1 },
+          "tila": { "type": "string", "minLength": 1 },
+          "askel": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "viat": {
+      "type": "array",
+      "description": "Havaitut viat tai tyhjä lista jos ei vikoja.",
+      "items": {
+        "type": "object",
+        "required": ["vika", "tila"],
+        "properties": {
+          "vika": { "type": "string", "minLength": 1 },
+          "tila": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "hukka": {
+      "type": "string",
+      "description": "Hukkuiko tietoa tai tehtiinkö turhaa työtä? Esimerkiksi: 'ei — ei havaittu hukkatietoja'.",
+      "pattern": "^(ei — .*|kyllä — .*|\\|.*\\|)$"
+    },
+    "kesken": {
+      "type": "string",
+      "description": "Jäikö käyttäjän pyynnöstä jotain tekemättä? Esimerkiksi: 'ei — kaikki pyydetty käsitelty'.",
+      "pattern": "^(ei — .*|kyllä — .*|Viimeinen viesti[\\s\\S]*)$"
+    },
+    "seuraavaPaketti": {
+      "type": "string",
+      "description": "Seuraava ajettava paketti muodossa: 'SEURAAVA PAKETTI: <id> — <kuvaus> — polut: <polut> — aloitus: <komento>' tai 'SEURAAVA PAKETTI: ei mitään — <perustelu>'.",
+      "pattern": "^SEURAAVA PAKETTI: (ei mitään — .*|.+ — .+ — polut: .+ — aloitus: .+)$"
+    }
+  }
+}

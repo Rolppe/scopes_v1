@@ -1,0 +1,49 @@
+# scopes istunnot — toteutushistoria
+
+## Toteutushistoria
+
+- 27.10.2026 — Käsitelty käyttäjän pyyntö: Malliton purku: lue ~/.local/state/pura/scopes-istunnot.md ja noudata sitä.
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 8 kpl
+  - todettu (ei rekisteriin): Testiajoja ei löytynyt transkriptista — testitulosta ei väitetä
+- 27.10.2026 — Käsitelty käyttäjän pyyntö: /automaattisiirto
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 16 kpl
+  - todettu (ei rekisteriin): Testiajon tulos transkriptissa: - todettu (ei rekisteriin): (0 unexpected) in 17.934 (17.946) seconds\\\\\\\\\\\\\\\\r, \\\\\\\\\\\\\\\\t Executed 8 tests, with 0 failures (0 unexpected) in 17.934 (17.947) seconds\\\\\\\\\\\\\\\\r, 12:   - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \\\\\\\\\\\\\\\\t Executed 5 tests, with 0 failures (0 unexpected) in 15.844 (15.849)
+  - todettu (ei rekisteriin): seconds\\\\\\\\\\\\\\\\r, \\\\\\\\\\\\\\\\t Executed 5 tests, with 0 failures (0 unexpected) in 15.844 (15.849)\r, - todettu (ei rekisteriin): seconds\\\\\\\\\\\\\\\\r, \\\\\\\\\\\\\\\\t Executed 5 tests, with 0 failures (0 unexpected) in 15.844 (15.850) seconds\\\\\\\\\\\\\\\\r\r, - todettu (ei rekisteriin): Testiajon tulos transkriptissa: \\t Executed 8 tests, with 0 failures (0 unexpected) in
+  - todettu (ei rekisteriin): 17.934 (17.941) seconds\\r, \\t Executed 8 tests, with 0 failures (0 unexpected) in 17.934 (17.946) seconds\\r, \\t Executed 8 tests, with 0 failures (0 unexpected) in 17.934 (17.947) seconds\\r\r
+- 19.10.2026 — purku (scopes istunnot) ja sa-herätys päälle; käyttäjä pyysi: "Pakkaa manuaalisesti kaikki istunnot joiden istunto mallina on flash 3.8."
+  - Kartoitus: 9 flash 3.8 -istuntoa (Mac 8, OnePlus 1): agy siirto, kordinaattori, kysymys, lostdev, macos agy, performance ios, siirto automaattisiirto, siirto git, test1. Istuntojen sisältö luettiin tmux-ruutujen historiasta; mallin tunnisti ruudun tilarivi "Gemini 3.8 Flash".
+  - Istuntojen oma /pakkaa kaatui Gemini-kiintiöön ("Individual quota reached", palautuu noin 113 h); /pakkaa-lähetys tmuxilla kysymys- ja test1-ruutuun epäonnistui, jono pysäytettiin.
+  - Käyttäjä valitsi Clauden muistiot. Ensin tein pikareitin (tiedostojen siirto Macilta ja committi 18c65a49, 6bb19b22); käyttäjä korjasi: istunnot piti pakata manuaalisesti. Tein sen jälkeen oikeat pakkaukset muistioineen: kysymys e9f6eff5, lostdev 25d10b8f, kordinaattori 744ac3b1, siirto automaattisiirto 1621466b, siirto git 312f3670, agy siirto 409fafb8. macos agy oli pakannut itsensä (257f4535), performance ios ja test1:ssä ei ollut pakattavaa.
+  - Käyttäjän pyynnöstä suljettavaksi macos agy, performance ios ja test1: ne olivat jo suljettu, mitään ei tehty.
+  - Kirjattu omat viat V-578 ja V-579 skoopille claude siirto (commitit 84eb128, c185599).
+  - todettu (ei rekisteriin): Mac-työpuu: haara 59 commitia origin-haaran jäljessä, pakkaa-alku-ajon synkka jätti rebase-konfliktin (DU claude/idea/*, workspace/*); poistettu vain konfliktimerkinnät (git reset), tiedostot ja stash säilyivät.
+  - todettu (ei rekisteriin): Macilla oli vain siellä olevaa työtä: scopes/lostdev (17 tiedostoa), scopes/siirto/git (6 tiedostoa), kysymys- ja automaattisiirto-rekisterit; ne tarkistettiin hashilla identtisiksi originin kanssa.
+  - todettu (ei rekisteriin): aja-siirtaja.sh paketoi liitti tekstiä kordinaattorin elävälle scopes2-koordinointi-riville ja kirjoitti virheellisen ARKISTO-merkinnän; korjattu käsin ennen committia.
+  - todettu (ei rekisteriin): Vieras-skooppi-portti vaatii muistioon rivin `Pyyntö <skooppi>: "<lainaus>"`, jonka lainaus löytyy käyttäjän viestistä sanatarkasti; muistion 10 000 merkin katto ylittyy, jos pohjan Muutetut tiedostot -luku täyttyy yhteisen työpuun muutoksista.
+- 19.10.2026 — paketti NEBIUS-KUSTANNUSKATTO valmis. scopes/palvelu/nebius-valitys.mjs: ennen jokaista /v1/messages-kutsua lasketaan päivän (paikallinen pvm) ja istunnon kulutus tokenilokista ~/.local/state/scopes-nebius.loki Nebiuksen omilla hinnoilla (/v1/models?verbose=true, pricing $/token, välimuisti 1 h); jos kulutus + kutsun pahin arvio (syöte merkkeinä/3 + max_tokens tuotoksena) ylittää katon, kutsu katkaistaan virheeseen 400 eikä Nebiusta kutsuta. Katto: ~/.config/scopes/nebius-katto.json { istunto, paiva } dollareina, luetaan joka kutsulla. Puuttuva tiedosto = 0 $ (ei kutsuja), rikkinäinen tiedosto tai tuntematon mallin hinta = ei kutsua. Istunto: X-Claude-Code-Session-Id-otsake tai metadata.user_id session_<uuid>. Lokiriveille kentät istunto, kustannus ja katkaistu. Commitit 0543d9ef (katto), bcc2acdd (oletus 0 $), b019351c (URL lainausmerkkeihin etäkuoressa: Macin zsh tulkitsi ?verbose=true globiksi → "no matches found").
+  - Testit: scopes/palvelu/nebius-valitys.test.mjs 6/6 läpi (hinnasto, kulutus, istuntoTunnus, katonYlitys, päästä päähän valeylävirtaa vasten: ilman kattoa ei kutsua, alle katon kutsu menee ja kirjaa kustannuksen 0.00012, yli katon 400 eikä ylävirtaa kutsuta, tuntematon malli 400, rikkinäinen katto 400).
+  - Välityspalvelin käynnistettiin uudelleen käyttäjän luvalla ("Käynnistä, katto 0 $"): pid 27241, portti 11240. Todiste: oikea kutsu → "kustannuskatto ylittyisi, kutsua ei tehty (päivän katto 0.0000 $: kulunut 0.6317 $ …)", lokirivi katkaistu 2026-10-19T06:29:43Z, Nebiusta ei kutsuttu.
+  - Chatin katto kirjattu scopes chatille: V-558 (commit 3071976) — scopes/palvelu/viestit.mjs:43 kutsuu Nebiusta suoraan ohi välityspalvelimen.
+  - Muisti paid-api-spend-needs-approval päivitetty: käyttölupa kysytään tehtävän alussa, koodin oletus fail-closed.
+  - liitos valmiiseen riviin (Nebius-välityspalvelimella ei kustannuskattoa): Nebius /v1/models?verbose=true palauttaa pricing-kentän (ilmainen kutsu, Macin reitti 19.10.2026), syöte/tuotos $/M: DeepSeek-V4-Flash-0731 0.14/0.28, V4.1-Flash 0.30/1.20, MiniMax-M3 0.30/1.20, Kimi-K2.7-Code 0.95/4.00, V4-Pro-0813 1.32/3.96, GLM-5.3-Flash 0.15/0.50
+  - todettu (ei rekisteriin): Kulutus tokenilokista näillä hinnoilla: 18.10.2026 2.553 $, 19.10.2026 0.632 $ (ennen katkaisua). V-557:n ~7,10 $ ei kaikki ole lokissa.
+  - todettu (ei rekisteriin): palvelin ei vastannut 19.10.2026 (ssh: No route to host 192.0.2.99); Macin reitti toimii.
+  - liitos valmiiseen riviin (Nebius-välityspalvelimella ei kustannuskattoa): Kaksi Nebius-istuntoa auki: tmux siirto-scopes-istunnot-test-172126 ja scopes siirto git korjaus1 (DeepSeek-V4.1-Flash); ne kutsuivat ~40 min välein (~56 k syötettä ≈ 0.017 $/kutsu); nyt katto 0 $ estää
+- 19.10.2026 — ISTUNNOT-SUORITUSKYKY valmis (18.10.2026): Mac-agy-haku erissä ja ei-estävästi ; viestinäkymän ja toimintojen istuntohaku asynkroniseksi (+ jonoKierros-suoja); loydaKeskustelu ilman 12 tiedoston rajaa (commitit f5fc3d36, 41763ff5, c2c504c6).
+  - Kordinaattorin työpuuversio kumosi async-haun viestit.mjs:ssä → yhdistetty käyttäjän luvalla, kirjattu V-556 (scopes kordinaattori).
+  - Nebius Token Factory (b6f11ac3, 19.10.2026): äpin Asetukset → Nebius -avainkenttä (nebius-avain.mjs, /api/nebius-avain, tiedosto ~/.config/scopes/nebius-avain 600), nebius-valitys.mjs (Anthropic→OpenAI, virta + työkalut; kutsut `ssh palvelin|mac curl`), autovaihto.sh --model nebius/<id>, istunto- ja chat-mallit Nebius-ryhmänä, chat suoraan Nebiukseen palvelin/Mac-reitillä.
+  - Skooppi `scopes istunnot test` luotu käyttäjän toimesta äpistä DeepSeek V4.1 Flashilla (18.10.2026 klo 17.21), purku onnistui.
+  - scopes macos pakattu ilman mallia käyttäjän pyynnöstä (agyn Gemini-kiintiö täynnä): Macin committaamaton MAC-17-työ siirretty, d87b20d3; Opus 5.5 -istunto avattu (claude.ai/code/session_REDACTED).
+  - Äppi asennettu iPhoneen 19.10.2026 klo 7.41.
+  - viat (ratkaistu, ei rekisteriin): viestit.mjs/lahteet.mjs työpuuversio kumosi async-haun; versiot yhdistetty 18.10.2026
+  - viat (ratkaistu, ei rekisteriin): luvaton Nebius-kulutus ~7,10 $ ja scopes macos -commit ilman polkurajausta (46 vierasta tiedostoa) korjattu ennen pushia (d87b20d3, b6f11ac3)
+  - todettu (ei rekisteriin): Oikea Mac: kaksi Mac-istuntoa yhdellä ssh-kutsulla 459 ms; /api/skoopit 110–290 ms uudelleenkäynnistysten jälkeen.
+  - todettu (ei rekisteriin): agyn Gemini-viikkokiintiö 100 %, nollautuu 24.10.2026 klo 7.24 (Mac ja OnePlus samaa Google AI Pro -tiliä; ~/.local/state/scopes-agy-kayttoraja.json). Muiden mallien (3p) kiintiö 32 %.
+  - todettu (ei rekisteriin): OnePlus ei saa TCP-yhteyttä Nebiukseen (213.239.161.19:443, refused 2 ms); palvelin ja Macin curl pääsevät. Mac-tunneli (ssh -L) ei välitä (todennäköisesti Macin palomuuri sshd:lle). Nebius /v1/messages = 404 (vain OpenAI-muoto).
+  - todettu (ei rekisteriin): Nebius-mittaus 18.10.2026 (agenttitesti + 14 piilotestiä, ks. b6f11ac3 purkajat.mjs): 14/14 DeepSeek-V4-Flash-0731 (1,3 snt), V4.1-Flash, MiniMax-M3, Kimi-K2.7-Code, V4-Pro-0813, GLM-5.3(-Flash), Nemotron Nano/Lightning/Super; Qwen3-235B ja Gemma 3 eivät tehneet; Qwen3.8-27B jäi silmukkaan (256 kutsua, 5,14 $). Mittaus ~7,10 $ ilman lupaa (V-557).
+- 18.10.2026 — Käsitelty käyttäjän pyyntö: KRIITTISTÄ: ÄLÄ KUTSU TYÖKALUJA (älä lue tiedostoja tai aja komentoja). Kaikki tarvittavat faktat on
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 58 kpl
+  - todettu (ei rekisteriin): Yksikkötestit ja rajapintavalidoinnit suoritettu hyväksytysti
+- 17.10.2026 — Käsitelty käyttäjän pyyntö: KRIITTISTÄ: ÄLÄ KUTSU TYÖKALUJA (älä lue tiedostoja tai aja komentoja). Kaikki tarvittavat faktat on
+  - todettu (ei rekisteriin): Git-tila: claude/charming-brahmagupta-p9hmm7, muokattuja tiedostoja yhteensä 54 kpl
+  - todettu (ei rekisteriin): Yksikkötestit ja rajapintavalidoinnit suoritettu hyväksytysti

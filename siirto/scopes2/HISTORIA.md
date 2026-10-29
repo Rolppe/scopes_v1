@@ -1,0 +1,16 @@
+# scopes siirto scopes2 — toteutushistoria
+
+## Toteutushistoria
+
+- 19.10.2026 — skooppi `scopes siirto scopes2` luotu (`/pura uusi`, 20dcb199) ja purettu mallitta. Käyttäjän pyyntö (välitetty skoopista scopes macos): uusi purku ja pakkaus scopes2-skoopeille + toimivuustesti.
+  - SIIRTO-SCOPES2-MAARITTELY tehty: tarkoitus ja raja kirjattu `scopes/siirto/scopes2/REKISTERI.md`:hen (työpuussa, tähän committiin).
+  - Commit d543a3ed (vain omat hunkit erillisellä indeksillä; toisen keskustelun stagetut muutokset `pura-malliton.mjs`:ssä ja testissä jätettiin indeksiin): `claude/siirto/tools/pura-malliton.mjs` `PERHEJUURET = ['scopes/', 'scopes2/']` + `onPerhe`; uusi `scopes/agy/siirto/pakkausscripti/skooppipolku.mjs` (`skoopinHakemisto`, `onPerheenSkooppi`) käyttöön `pakkaa-hybridi.mjs`, `louhija.mjs`, `harkinta.mjs`; testit `pura-malliton.test.mjs` (SIIRTO-SCOPES2, väliaikainen skooppikartta) ja `testit/test11_scopes2.test.mjs`; `.agents/skills/pakkaa/SKILL.md` Vaihtoehto A ja `Infra/skills/pura/SKILL.md` vaihe 1 kattavat scopes2:n; `install.sh` ajettu.
+  - Käyttäjän luvalla (AskUserQuestion-valinta "Luo scopes2 ja testaa") yläskooppi `scopes2` luotu (7522ac47; toteutussuunnitelman H-3:n ensimmäinen osa).
+  - /vika: V-561 → scopes context purascript (tiedoksi, da81f11), V-562 → scopes agy siirto pakkausscripti (6b257d8), V-563 → scopes toteutussuunnitelma (tiedoksi, H-10 ratkaistu, 1879f40), V-564 → scopes2 (b895cd4); claude/idea-push lykätty (puu likainen).
+  - viat (ratkaistu, ei rekisteriin): ei tämän skoopin vikoja; löydetyt viat kirjattu omistajille (V-562 pakkaa-hybridi, V-564 scopes2 repokartta)
+  - liitos valmiiseen riviin (Uusi purku ja pakkaus scopes2-skoopeille): testit: pura-malliton.test.mjs 45/45; pakkausscripti.test.mjs + testit/*.test.mjs 213/213; commitoitava puu eristettynä (checkout-index) purku 44/44 ja test11+test3 14/14
+  - todettu (ei rekisteriin): Ensimmäinen ajo kaatoi test3:n 2 testiä: lyhyt nimi `palvelu` → `scopes/palvelu` on vanhaa käytöstä; `skoopinHakemisto` säilyttää sen (nimi ilman juurisanaa saa `scopes/`-etuliitteen).
+  - liitos valmiiseen riviin (Uusi purku ja pakkaus scopes2-skoopeille): Oikea purku todettu 19.10.2026: `pura-malliton.mjs --perhe scopes2` → `PERHE: kyllä` exit 0; `pura-malliton.mjs scopes2 --kohde claude` exit 0, raportti `LÄHDE: git`, SEURAAVA SCOPES2-MAARITTELY
+  - todettu (ei rekisteriin): Oikea pakkaus `pakkaa-hybridi.mjs scopes2 --kuiva --ilman-mallia`: exit 0, PORTTI ok. `--vahvistettu --ilman-mallia`: vaiheet 1–4 ok, vaihe 5 exit 3 (`AJAJA: agy-kiintiö lopussa 24.10. klo 07.24 asti`; pakkaa-hybridi.mjs:227 pakottaa `--ajaja=agy:<malli>`, ei varareittiä); ei rekisteripäivitystä eikä committia.
+  - todettu (ei rekisteriin): Muistio oli käyttökelvoton (V-562 kohta 2): louhija poimi toisen istunnon transkriptin (id=e21896b5, Gemini) ja synteesi väitti testit ajetuiksi ilman lähdettä → muistio poistettu, varareittiä (pakkaa-sonnet) ei ajettu.
+  - todettu (ei rekisteriin): `siirra-skooppi.sh scopes2 --kuiva` exit 0: pakkaa-loppu siirtäisi scopes2/:n omaan repoon `github-scopes2:Rolppe/scopes2.git`; alias ei resolvoidu (`git ls-remote` → Could not resolve hostname) → V-564.
