@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  node:
+    name: Node service tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      # The test files that run without the private monorepo's tooling (see README, "Tests").
+      - name: node --test
+        run: >
+          node --test agy/models/mallit.test.mjs palvelu/agy-istunto.test.mjs palvelu/agy-kayttoraja.test.mjs
+          palvelu/agy-luvat.test.mjs palvelu/mac-claude.test.mjs palvelu/nebius-avain.test.mjs
+          palvelu/nebius-valitys.test.mjs palvelu/purkajat.test.mjs siirto/git/*.test.mjs
+          siirto/economy/kuluttajat.test.mjs siirto/economy/task-odotus.test.mjs siirto/economy/claude/*.test.mjs
+
+  tunnel:
+    name: WireGuard tunnel tests (Go)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ios/tunneli/go.mod
+          cache-dependency-path: ios/tunneli/go.sum
+      - name: go test
+        working-directory: ios/tunneli
+        run: go test ./...
