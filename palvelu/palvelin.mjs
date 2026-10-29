@@ -85,7 +85,7 @@ import { lista, lueSkoopit, lueViat, rekisterinOsat, rekisterit, yksi } from './
 import { luoLiitteet } from './liitteet.mjs';
 import { luoNebiusAvain } from './nebius-avain.mjs';
 import { luoAndroid } from './android.mjs';
-import { luoLinuxServer } from './palvelin.mjs';
+import { luoLinuxServer } from './linux-server.mjs';
 import { luoAsetukset, OLETUS_HAKEMISTO } from './toiminnot-asetukset.mjs';
 import { luoIstuntoValinta } from './istunto-asetukset.mjs';
 import { luoAgyLuvat } from './agy-luvat.mjs';

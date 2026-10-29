@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { createServer, request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { HERATA, jarjestelma, luoLinuxServer } from './palvelin.mjs';
+import { HERATA, jarjestelma, luoLinuxServer } from './linux-server.mjs';
 import { kasittelija } from './palvelin.mjs';
 import { Hylatty } from './toiminnot.mjs';
 
