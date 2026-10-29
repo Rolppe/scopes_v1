@@ -9,9 +9,9 @@ settings:
     SWIFT_VERSION: "5.0"
 packages:
   ScopesCore:
-    path: ../scopes-shared/ScopesCore
+    path: ../shared/ScopesCore
   ScopesUI:
-    path: ../scopes-shared/ScopesUI
+    path: ../shared/ScopesUI
 targets:
   ScopesMac:
     type: application
