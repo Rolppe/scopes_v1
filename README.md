@@ -1,5 +1,7 @@
 # Scopes v1 (Skoopit)
 
+[![CI](https://github.com/Rolppe/scopes_v1/actions/workflows/ci.yml/badge.svg)](https://github.com/Rolppe/scopes_v1/actions/workflows/ci.yml)
+
 An iPhone app and a home-server service for monitoring and steering dozens of parallel Claude Code sessions that run in tmux.
 
 The app shows each "scope" (a named work area with its own register file), how large the context of its running
@@ -164,13 +166,15 @@ that also creates the key. Without the private monorepo around it the server doe
 
 ## Tests
 
+CI (GitHub Actions) runs the standalone Node test set below and the Go tunnel tests on every push.
+
 | Suite | Count | Runs without the monorepo? |
 |---|---|---|
 | Node (`node:test`), 47 files (static count of `test()` calls) | 534 | 21 files have passing tests; see below |
 | Swift packages `shared/ScopesCore`, `shared/ScopesUI` | 22 + 6 | yes, `swift test` in each directory (verified, all pass) |
 | `remoteterminal` Swift package | 22 | needs SwiftTerm download; not run |
 | XCUITest (`ios/UITests`) | 61 test methods | no: need a Mac simulator and the live server |
-| Go (`ios/tunneli`) | 4 | needs Go module download; not run offline |
+| Go (`ios/tunneli`) | 4 | yes; passes in CI (`go test ./...`) |
 
 Verified on Node 26.7: the 16 files that load standalone and fully pass give 106 passing tests:
 
