@@ -14,7 +14,10 @@ SwiftUI:lla ja testataan iOS-simulaattorissa.
 
 1. `cd ios/tunneli && ./rakenna.sh` – kääntää `Tunneli.xcframework`in (Go 1.26, gomobile tulee `go.mod`:n tool-direktiivillä).
 2. `cd ios && xcodegen` – generoi `Skoopit.xcodeproj`:n, Info.plistit ja entitlementit `project.yml`:stä.
-   Vaihda `project.yml`:n `DEVELOPMENT_TEAM: YOUR_TEAM_ID` omaan Apple-tiimiisi (bundle-etuliite `com.example`).
+   Simulaattoribuildi ei tarvitse tiimiä (`CODE_SIGNING_ALLOWED=NO`, kohta 3). Laitteelle vaihda `project.yml`:n
+   `DEVELOPMENT_TEAM: YOUR_TEAM_ID` omaan Apple-tiimiisi ja bundle-etuliite `com.example` omaksesi kaikkialla, koska app group
+   ja taustatehtävän tunnus toistuvat koodissa (`ios/Jaettu/Tilannekuva.swift`, `ios/Sources/Ilmoitukset.swift`):
+   `grep -rl 'com\.example' ios | xargs sed -i '' 's/com\.example/<oma.etuliite>/g'` ennen `xcodegen`iä.
 3. Avaa `Skoopit.xcodeproj` Xcodessa tai aja
    `xcodebuild -project Skoopit.xcodeproj -scheme Skoopit -destination "platform=iOS Simulator,id=<simctl list devices -tulosteen UDID>" CODE_SIGNING_ALLOWED=NO build-for-testing`.
 
