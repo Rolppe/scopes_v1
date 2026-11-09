@@ -1,8 +1,8 @@
-# agy-ohjeet — scopes toteutussuunnitelma
+# Toisen agentti-CLI:n ohjeet — scopes toteutussuunnitelma
 
-Kirjoitettu 21.10.2026 (Opus 5.5, käyttäjän pyyntö patriotin kautta: "Agy flash 3.8 on tyhmempi ja tarvitsee yksityiskohtaisemman ohjeistuksen"). Ohjeet ovat agy-mallille (Gemini Flash 3.8) Macilla (`mac-agy/<id>`). Agy ei lataa `CLAUDE.md`:tä eikä Clauden muistia, joten jokainen ohje on itsenäinen: kaikki tarvittava on tässä tiedostossa ja tehtävän omassa tiedostossa.
+Kirjoitettu 21.10.2026 (vahva taso 5.5, käyttäjän pyyntö patriotin kautta: "Toinen agentti-CLI, kevyt malli 3.8, on tyhmempi ja tarvitsee yksityiskohtaisemman ohjeistuksen"). Ohjeet ovat toisen agentti-CLI:n mallille (ulkoinen malli, kevyt 3.8) Macilla (`mac-agy/<id>`). Toinen agentti-CLI ei lataa `CLAUDE.md`:tä eikä agentti-CLI:n muistia, joten jokainen ohje on itsenäinen: kaikki tarvittava on tässä tiedostossa ja tehtävän omassa tiedostossa.
 
-Lähtötila 21.10.2026: agy-skoopeissa (scopes2 ydin, macos, ios, shared, adapteri) ei ole yhtään tekemätöntä briefattua tehtävää (kaikilla `briefit/`-tehtävillä on `feat(scopes2 …): T-NN` -commit). Jäljellä on vain valvoja-ajoja. Ohjeet tehtiin käyttäjän valinnalla näille:
+Lähtötila 21.10.2026: toisen agentti-CLI:n skoopeissa (scopes2 ydin, macos, ios, shared, adapteri) ei ole yhtään tekemätöntä briefattua tehtävää (kaikilla `briefit/`-tehtävillä on `feat(scopes2 …): T-NN` -commit). Jäljellä on vain valvoja-ajoja. Ohjeet tehtiin käyttäjän valinnalla näille:
 
 | Ohje | Tehtävä | Ajopaikka | Voiko ajaa ilman ihmistä |
 |---|---|---|---|
@@ -10,27 +10,27 @@ Lähtötila 21.10.2026: agy-skoopeissa (scopes2 ydin, macos, ios, shared, adapte
 | [T-59.md](T-59.md) | ARK-17:n iOS-hyväksyntä, vain simulaattoriosat | Mac | Kyllä, jos lukot ovat vapaat. Fyysinen iPhone ja tuotantoistunnon vertailu eivät kuulu tähän. |
 | [KUIVA.md](KUIVA.md) | Kuivaharjoitus: preflight ja tiedostoviestit ilman muutoksia (28.10.2026) | Mac | Kyllä; ajoistunto lähettää yhden kuittausviestin |
 
-Uudet briefit kirjoitetaan agy-tarkkuudella: `briefit/README.md`, luku "agy-tarkkuus".
+Uudet briefit kirjoitetaan toisen agentti-CLI:n tarkkuudella: `briefit/README.md`, luku "Toisen agentti-CLI:n tarkkuus".
 
 ## Kuka käynnistää
 
-Agy-istunnon avaa koordinaattori tai overseer (`bash claude/siirto/tools/autovaihto.sh vaihda "<skooppi>" --model mac-agy/<id>`), ja ajava skooppi on tehtävän tiedostossa. Agy-istunto ei avaa eikä ohjaa muita istuntoja.
+Toisen agentti-CLI:n istunnon avaa koordinaattori tai overseer (`bash claude/siirto/tools/autovaihto.sh vaihda "<skooppi>" --model mac-agy/<id>`), ja ajava skooppi on tehtävän tiedostossa. Toisen agentti-CLI:n istunto ei avaa eikä ohjaa muita istuntoja.
 
-Agy käynnistyy jaetussa kloonissa `~/sessions-repo` (`autovaihto.sh:400`, `-c "$MAC_JUURI"`). Agy ei lataa `CLAUDE.md`:tä eikä muistia: sen konteksti on vain `-i`-viesti ja tiedostot, jotka se lukee. Siksi aloitusviesti on aina alla oleva vakioprompti.
+Toinen agentti-CLI käynnistyy jaetussa kloonissa `~/sessions-repo` (`autovaihto.sh:400`, `-c "$MAC_JUURI"`). Toinen agentti-CLI ei lataa `CLAUDE.md`:tä eikä muistia: sen konteksti on vain `-i`-viesti ja tiedostot, jotka se lukee. Siksi aloitusviesti on aina alla oleva vakioprompti.
 
 ## Vakioaloitusprompti (lisätty 28.10.2026, overseerin tilaus vaihe 2 (4))
 
 Käynnistäjä täyttää kulmasulkeet. Ruutujen nimet ovat tmux-istuntojen nimiä, ja ne vaihtuvat istunnon mukana, joten ne haetaan käynnistyshetkellä (`tmux ls -F '#S'`; overseer `siirto-scopes-overseer-<aika>`, koordinaattori `siirto-scopes-kordinaattori-<aika>`). Älä kopioi vanhaa nimeä tästä tiedostosta.
 
 ```
-Olet agy-toteuttaja tehtävässä <T-NN>. Oma ruutu: <oma tmux-istunto>. Ajoistunto (raportoi ja commitoi): <ruutu>. Overseer: <siirto-scopes-overseer-…>. Koordinaattori: <siirto-scopes-kordinaattori-…>.
+Olet toisen agentti-CLI:n toteuttaja tehtävässä <T-NN>. Oma ruutu: <oma tmux-istunto>. Ajoistunto (raportoi ja commitoi): <ruutu>. Overseer: <siirto-scopes-overseer-…>. Koordinaattori: <siirto-scopes-kordinaattori-…>.
 Lue nämä kokonaan tässä järjestyksessä ennen mitään muuta komentoa:
 1. ~/sessions-repo/scopes/toteutussuunnitelma/agy/README.md
 2. <ohjeen tai briefin absoluuttinen polku>
 Tee sitten README:n "Preflight", lähetä ALOITUS-viesti ajoistunnolle, tee ohjeen askeleet järjestyksessä ja lopeta VALMIS- tai PYSÄHDYN-viestiin.
 ```
 
-Autovaihdossa sama teksti kirjoitetaan purkutiedostoon, jonka `-i`-viesti nimeää ("Malliton purku: lue … ja noudata sitä"), luvuksi `## Agy-aloitus`. Purkutiedoston muut luvut eivät koske agya.
+Autovaihdossa sama teksti kirjoitetaan purkutiedostoon, jonka `-i`-viesti nimeää ("Malliton purku: lue … ja noudata sitä"), luvuksi `## Agy-aloitus`. Purkutiedoston muut luvut eivät koske toista agentti-CLI:tä.
 
 ## Preflight jokaisen ajon alussa (lisätty 28.10.2026, vaihe 2 (1))
 
@@ -51,9 +51,9 @@ Rivin 6 putki on vain levytilan lukuun. Porttia ei koskaan ajeta putken kanssa (
 
 ## Ajopaikka: Mac vai Linux, portti kerrallaan (lisätty 28.10.2026, vaihe 2 (2))
 
-Agy ajaa Macilla. Ohje kertoo portin, ja tämä taulukko kertoo, voiko sen ajaa Macilla. Jos portti on "vain Linux", **STOP** ennen sen ajoa: ajoistunto ajaa sen palvelimella.
+Toinen agentti-CLI ajaa Macilla. Ohje kertoo portin, ja tämä taulukko kertoo, voiko sen ajaa Macilla. Jos portti on "vain Linux", **STOP** ennen sen ajoa: ajoistunto ajaa sen palvelimella.
 
-| Portti | Mac (agy) | Linux (palvelin) | Syy |
+| Portti | Mac (toinen agentti-CLI) | Linux (palvelin) | Syy |
 |---|---|---|---|
 | `scopes2/shared/gate.sh` (Apple: T-45-G…T-49, T-52, T-58, T-62, T-71, T-87, T-97, T-100, T-102) | kyllä | ajaa Macin ssh:n yli, ei agylle | xcodebuild, simulaattorit, `lockf`-lukot `~/scopes2-lukot/` |
 | `scopes2/ydin/gate.sh` | kyllä (P-18, `lockf ~/scopes2-rakennus/.lukko`) | kyllä (`flock`) | ydinkäännökset Mac-jonossa P-18:n mukaan |
@@ -63,21 +63,21 @@ Agy ajaa Macilla. Ohje kertoo portin, ja tämä taulukko kertoo, voiko sen ajaa 
 
 ## Commit-sääntö (lisätty 28.10.2026, vaihe 2 (3))
 
-Agy ei commitoi eikä pushaa koskaan. Ajoistunto (Claude-istunto, jonka nimi on aloitusviestissä) tekee sen:
-1. Agy jättää muutokset omaan worktreehensä ja lähettää VALMIS-viestin, jossa on `COMMIT: commitoimatta, worktree <polku>` ja `git -C <worktree> status --short` -rivit raportissa.
+Toinen agentti-CLI ei commitoi eikä pushaa koskaan. Ajoistunto (agentti-CLI-istunto, jonka nimi on aloitusviestissä) tekee sen:
+1. Toinen agentti-CLI jättää muutokset omaan worktreehensä ja lähettää VALMIS-viestin, jossa on `COMMIT: commitoimatta, worktree <polku>` ja `git -C <worktree> status --short` -rivit raportissa.
 2. Ajoistunto tarkistaa diffin briefin may-listaa vasten ja ajaa Acceptance-portin itse.
 3. Ajoistunto commitoi polkuina worktreessä (`git -C <worktree> commit -m "<viesti>" -- <polut>`; ei `-a`, ei `--amend`, ei `stash`), pushaa ja poistaa worktreen `git worktree remove <polku>` ilman `--force`ia. Jos poisto ei onnistu, worktree jää ja asia kirjataan.
 
 Valvoja-ajo (T-72, T-59) ei muuta tiedostoja, joten siinä ei ole commitoitavaa.
 
-## Säännöt jokaiselle agy-ajolle
+## Säännöt jokaiselle toisen agentti-CLI:n ajolle
 
 1. **Tee vain ohjeen askeleet, järjestyksessä.** Älä korjaa koodia, älä paranna testejä äläkä keksi lisätarkistuksia. Valvoja-ajo ei muuta yhtään repon tiedostoa.
 2. **Oma worktree.** Älä aja mitään kansiossa `~/sessions-repo`. Se on jaettu klooni, jossa muut istunnot työskentelevät, ja portti kaatuu (exit 2), jos joku kirjoittaa siihen kesken ajon. Jokainen ohje luo oman worktreen ja poistaa sen lopuksi.
 3. **Portti lokiin, ei putkeen.** Aja portti aina muodossa `bash <gate.sh> <ID> > <loki> 2>&1; echo "EXIT=$?"`. Älä lisää `| tail`-, `| grep`- tai `| tee`-putkea, koska putki peittää exit-koodin. Lue tulos rivistä `EXIT=` ja lokin viimeisestä rivistä (`PORTTI VIHREÄ: <ID>` tai `PORTTI PUNAINEN: <ID> (exit N)`).
 4. **Aikaraja.** Macissa ei ole `timeout`-komentoa. Käytä `gtimeout` (`/opt/homebrew/bin/gtimeout`), kun ohje sanoo. Portilla on omat aikarajansa, joten sitä ei kääritä.
 5. **Exit-koodit:** 0 = vihreä. 1 = testi punainen tai tuntematon ID. 2 = aita (puu muuttui ajon aikana). 75 = lukko varattu.
-6. **Raportti repon ulkopuolelle.** Kirjoita tulokset kansioon `$HOME/agy-raportit/<tehtävä>/` (ohje antaa polun). Älä kirjoita rekisteriin, `SUUNNITELMA.md`:hen tai mihinkään `scopes/`-alle. Claude-istunto kirjaa tuloksen myöhemmin raportin perusteella.
+6. **Raportti repon ulkopuolelle.** Kirjoita tulokset kansioon `$HOME/agy-raportit/<tehtävä>/` (ohje antaa polun). Älä kirjoita rekisteriin, `SUUNNITELMA.md`:hen tai mihinkään `scopes/`-alle. Agentti-CLI-istunto kirjaa tuloksen myöhemmin raportin perusteella.
 
 ## Kielletty aina
 

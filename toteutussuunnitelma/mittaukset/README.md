@@ -8,4 +8,4 @@
 
 - `tulos` ∈ vihreä | punainen | eskaloitu | keskeytetty; `ajo` 1–3 (sääntö 5).
 - `usd` lisätään, kun `claude subagents` -skoopin SUBAGENTS-HINTA on valmis.
-- Pilotit T-16-G (Sonnet), T-17 (Opus) ja P-1 (Haiku) saavat `huom: "pilotti"` (scopes-V2, K-9 19.10.2026).
+- Pilotit T-16-G (perustaso), T-17 (vahva taso) ja P-1 (kevyt taso) saavat `huom: "pilotti"` (scopes-V2, K-9 19.10.2026).
