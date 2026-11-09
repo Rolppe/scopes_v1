@@ -6,7 +6,7 @@ see the same file.
 
 ## Bird's-eye view
 
-The author runs many Claude Code sessions in parallel, each in a tmux pane on a home server, each tied to a "scope": a
+The author runs many coding-agent sessions in parallel, each in a tmux pane on a home server, each tied to a "scope": a
 named work area with a register file (`REKISTERI.md`) that holds its next work packet, decisions, open items and
 defects. Two things are hard to see from a phone: which scope is waiting for an answer, and how full each session's
 context window is. The system answers both and lets the phone act on the sessions.
@@ -16,8 +16,8 @@ Three processes matter.
 1. **The app** (`ios/`), SwiftUI, on the iPhone. It polls and streams, posts actions, keeps a local copy of the
    registers, and raises local notifications.
 2. **The service** (`palvelu/`, `localregister/`), one Node 22 process on the server. It is the only thing the phone
-   talks to. It reads registers and Claude Code transcripts, and it acts on sessions by typing into tmux panes.
-3. **The sessions** themselves: Claude Code (and `agy`, the Antigravity CLI) in tmux, started by helper scripts of the
+   talks to. It reads registers and agent session transcripts, and it acts on sessions by typing into tmux panes.
+3. **The sessions** themselves: agent CLIs in tmux, started by helper scripts of the
    author's wider tool chain that are not in this repository.
 
 Between the app and the service sits either the home LAN or a WireGuard tunnel that the app runs in its own process.
@@ -39,10 +39,10 @@ a local TCP forward.
 together, by concern:
 
 - Reading: `lahteet.mjs` (scope list, register parsing, session context size from transcripts, read-only).
-- Acting: `toiminnot.mjs` (unpack, compact, new, archive; tmux send-keys), `viestit.mjs` (chat via `claude -p`, per-scope
+- Acting: `toiminnot.mjs` (unpack, compact, new, archive; tmux send-keys), `viestit.mjs` (chat through the agent CLI's non-interactive mode, per-scope
   messages, model switching), `toiminnot-asetukset.mjs` (switches), `purkajat.mjs` (unpack options), `liitteet.mjs`
   (attachments).
-- Other agents and devices: `agy-istunto.mjs`, `agy-kayttoraja.mjs`, `agy-luvat.mjs` (Antigravity CLI), `android.mjs`
+- Other agents and devices: `agy-istunto.mjs`, `agy-kayttoraja.mjs`, `agy-luvat.mjs` (a second agent CLI), `android.mjs`
   (adb), `linux-server.mjs` (wake and power-off of the server PC), `mac-claude.mjs` (sessions on the Mac).
 - Terminal: `terminal.mjs` (WebSocket, session manager, REST under `/api/terminal/sessions`).
 - Limits and cost: `kayttoraja.mjs`, `nebius-valitys.mjs` (translation proxy, separate process on loopback),
@@ -89,7 +89,7 @@ server address, elsewhere `http://127.0.0.1:<port>` which the tunnel forwards th
 repository from running alone.
 
 **Service to sessions.** Only tmux (`send-keys`, `capture-pane`, `list-panes`) and files: transcripts under
-`~/.claude/projects` for Claude Code, SQLite for `agy`, opened read-only.
+the first agent CLI's transcript directory, SQLite for the second one, opened read-only.
 
 **App, widget, keyboard.** They share data only through the App Group snapshot (`Jaettu/Tilannekuva.swift`).
 

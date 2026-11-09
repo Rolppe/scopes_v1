@@ -2,7 +2,10 @@
 
 [![CI](https://github.com/Rolppe/scopes_v1/actions/workflows/ci.yml/badge.svg)](https://github.com/Rolppe/scopes_v1/actions/workflows/ci.yml)
 
-An iPhone app and a home-server service for monitoring and steering dozens of parallel Claude Code sessions that run in tmux.
+An iPhone app (SwiftUI) and a Node 22 home-server service with no npm dependencies for monitoring and steering dozens of
+parallel coding-agent sessions in tmux: usage limits, context size, questions waiting for an answer, and a closed list
+of actions from the phone. The app embeds a WireGuard tunnel; the project also has line-level register sync with
+version vectors, a hand-written WebSocket terminal and CI on GitHub Actions.
 
 The app shows each "scope" (a named work area with its own register file), how large the context of its running
 session is, the usage limits, and which sessions are waiting for an answer. From the phone you can unpack, compact and
@@ -14,8 +17,8 @@ This is the first-generation system. Its successor is [scopes_v2](https://github
 ## What it does
 
 - Lists every scope with its next work packet, open items, open defects and the measured context size (in tokens) of
-  the running Claude Code session. Dark and light themes, landscape layout, a lock-screen widget.
-- Shows the 5-hour and weekly Claude usage limits, and a context breakdown per register file.
+  the running coding-agent session. Dark and light themes, landscape layout, a lock-screen widget.
+- Shows the 5-hour and weekly usage limits, and a context breakdown per register file.
 - Controls sessions through a fixed set of actions: unpack a scope into a new tmux session, compact it, queue
   automatic hand-over, create or archive a scope, switch model and effort.
 - Chat and per-scope messaging: sends text and attachments to a session's tmux pane, streams answers token by token
@@ -48,9 +51,9 @@ flowchart LR
     Act["Whitelisted actions<br/>(execFile, no shell)"]
     WS["WebSocket terminal<br/>(RFC 6455, hand-written)"]
     LR["Register sync<br/>(localregister)"]
-    Proxy["Anthropic to OpenAI proxy<br/>(cost cap)"]
+    Proxy["Translation proxy to an<br/>OpenAI-compatible provider<br/>(cost cap)"]
   end
-  Tmux["tmux panes with Claude Code / agy"]
+  Tmux["tmux panes with agent CLIs"]
   Reg["REKISTERI.md files,<br/>session transcripts"]
   App -->|"LAN"| API
   App -->|"away from home"| Tun --> API
@@ -58,7 +61,7 @@ flowchart LR
   API --> Act --> Tmux
   API --> LR --> Reg
   API --> WS --> Tmux
-  Tmux -.->|"ANTHROPIC_BASE_URL"| Proxy
+  Tmux -.->|"base URL override"| Proxy
   API -->|"reads"| Reg
 ```
 
@@ -87,15 +90,15 @@ flowchart LR
   `execFile` without a shell, one action runs at a time (429 otherwise), every attempt including rejected ones is
   logged, and the Bearer key is compared in constant time (`timingSafeEqual`). The server refuses to start with a key
   shorter than 32 characters. [palvelu/toiminnot.mjs](palvelu/toiminnot.mjs), `avainKelpaa` in `palvelin.mjs`.
-- **Anthropic to OpenAI translation proxy with a fail-closed cost cap.** Lets Claude Code run against a provider that
+- **Translation proxy to an OpenAI-compatible provider with a fail-closed cost cap.** Lets an agent CLI run against a provider that
   speaks only `/v1/chat/completions`, including streaming and tool calls. Before every call it computes spend from a
   token log at the provider's own prices plus a worst-case estimate for the new call; a missing or unreadable cap
   means no call at all (written after an uncapped measurement run cost about 7.10 USD).
-  [palvelu/nebius-valitys.mjs](palvelu/nebius-valitys.mjs).
-- **Schemaless protobuf decoding.** The Antigravity CLI (`agy`) keeps conversations as protobuf blobs in SQLite without
+  [`palvelu/nebius-valitys.mjs`](palvelu/nebius-valitys.mjs).
+- **Schemaless protobuf decoding.** A second agent CLI keeps conversations as protobuf blobs in SQLite without
   a published schema. A small varint/length-delimited reader plus field numbers found empirically on one CLI version
   turn them into chat messages; unknown structure yields fewer messages, never an error.
-  [palvelu/agy-istunto.mjs](palvelu/agy-istunto.mjs) (22 tests).
+  [`palvelu/agy-istunto.mjs`](palvelu/agy-istunto.mjs) (22 tests).
 - **Freeze diagnostics, background refresh and a measured UI fix.** The server logs every request and any event-loop
   stall over 500 ms; the app posts main-thread hangs and MetricKit reports back ([palvelu/diagnostiikka.mjs](palvelu/diagnostiikka.mjs)).
   Notifications use `BGAppRefreshTask` because APNs is unavailable ([ios/Sources/Ilmoitukset.swift](ios/Sources/Ilmoitukset.swift)).
@@ -111,14 +114,14 @@ flowchart LR
 | Shared Swift | `ScopesCore`, `ScopesUI` Swift packages (iOS and macOS clients) | tools 5.9, iOS 17 / macOS 14 |
 | Tunnel | Go, wireguard-go, gVisor netstack, gomobile | Go 1.26 |
 | Server | Node.js, built-ins only (`node:http`, `node:sqlite`, `node:test`) | Node 22 |
-| Sessions | tmux, Claude Code, agy | n/a |
+| Sessions | tmux, agent CLIs | n/a |
 | Remote terminal client | SwiftTerm Swift package | 1.0.0 or later |
 | Tests | XCUITest, XCTest, `node:test`, `go test` | n/a |
 
 ## Architecture
 
 The phone talks HTTP and NDJSON to one Node process on the home server. That process reads the register files and
-Claude Code transcripts to build the scope view, and acts on sessions only by typing into tmux panes through a closed
+agent session transcripts to build the scope view, and acts on sessions only by typing into tmux panes through a closed
 list of actions. Away from home the same HTTP traffic goes through the in-app WireGuard tunnel. Registers are synced
 through a separate line-level store that is exported back to git. Details, invariants and design decisions are in
 [ARCHITECTURE.md](ARCHITECTURE.md).
@@ -127,13 +130,13 @@ through a separate line-level store that is exported back to git. Details, invar
 
 ```
 ios/            Skoopit app (SwiftUI), widget, keyboard extension, UI tests, tunneli/ (Go tunnel)
-palvelu/        Node server: palvelin.mjs (HTTP API), actions, chat, terminal, proxy, agy, android
+palvelu/        Node server: palvelin.mjs (HTTP API), actions, chat, terminal, proxy, second agent CLI, android
 localregister/  Register sync: lr.mjs (store), palvelu.mjs (HTTP routes), MUOTO.md (format)
 shared/         ScopesCore and ScopesUI Swift packages (shared by iOS and macOS)
 macos/          ScopesMac client (XcodeGen project, SwiftUI)
 remoteterminal/ Remote terminal: Swift package (SwiftTerm), protocol contract, gate script
 ioskeyboard/    Identical copy of ios/Keyboard plus its working notes
-siirto/ agy/    Session hand-over helpers (git, economy), Antigravity CLI integration
+siirto/ agy/    Session hand-over helpers (git, economy), second agent CLI integration
 design/         Look and feel notes and the screenshots used above
 performance/    Measurements
 toteutussuunnitelma/ architecture/ ...   Internal plans, briefs and registers (Finnish)
@@ -145,7 +148,7 @@ About 40 further top-level directories hold the working notes of individual scop
 ## Getting started
 
 Prerequisites: a Mac with Xcode 26 and XcodeGen; Go 1.26 (gomobile comes from the `tool` directive in
-`ios/tunneli/go.mod`); Node 22 or newer, tmux and Claude Code on the server.
+`ios/tunneli/go.mod`); Node 22 or newer, tmux and a coding-agent CLI on the server.
 
 Build the iOS app (simulator, no signing team needed):
 
@@ -192,16 +195,17 @@ looked at depend on monorepo paths or tools. UI tests use the real service, not 
 
 ## How it was built
 
-Mikko Paaso set the requirements, made the architecture decisions and directed the work. Claude Code agents wrote the
-code from written briefs and registers, and tests, simulator runs and device runs were the acceptance gates. Mikko
-reviewed results and decided what to keep.
+Mikko Paaso set the requirements, designed the architecture, defined the acceptance criteria and verified the results.
+Nothing was accepted on a report, only on a measurement or a passing check: tests, gate scripts, simulator runs and
+runs on real devices. Errors were fixed in a tight check-and-measure loop. In the safety layer, forbidden actions are
+made impossible rather than warned about: the phone can only trigger a closed list of actions, never a shell command.
 
 - The work was split into feature scopes (chat, list, infra, tunnel, notifications, keyboard ...), each with its own
   session, register (`REKISTERI.md`), history and archive. Decisions are recorded with the date and "Käyttäjä" (user).
-- 195 commits between 2026-10-13 and 2026-10-29; 168 carry a `Co-Authored-By` trailer for the model that wrote them
-  (Opus 5.5 153, Sonnet 5.5 13, Fable 5.1 2).
+- Each task was specified as a written brief with the files it may touch, an acceptance script and stop conditions.
+- 195 commits between 2026-10-13 and 2026-10-29.
 - 81 `REKISTERI.md`, 59 `HISTORIA.md` and 59 `ARKISTO.md` files; 82 task briefs in `toteutussuunnitelma/briefit`
-  (for the successor, v2) and a log of 47 executor runs (42 green, 4 red, 1 aborted) in
+  (for the successor, v2) and a log of 47 task runs (42 green, 4 red, 1 aborted) in
   `toteutussuunnitelma/mittaukset/tehtavat.jsonl`.
 - The multi-agent orchestration model (planners, coordinator, watcher, work scopes, escalation rules) is written down in
   [KEHITYSMALLI.md](KEHITYSMALLI.md) (Finnish).

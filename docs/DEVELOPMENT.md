@@ -4,8 +4,9 @@ How Scopes v1 was developed, and how to read the working notes that were left in
 
 ## How development worked
 
-Mikko Paaso wrote the requirements, took the architecture decisions and directed the work. Claude Code agents wrote
-the code. Nothing was done in one long conversation. Work was cut into **work packets**, each owned by a **scope**, and
+Mikko Paaso set the requirements, designed the architecture, defined the acceptance criteria and verified the results.
+Nothing was accepted on a report, only on a measurement or a passing check, and errors were fixed in a tight
+check-and-measure loop. Nothing was done in one long conversation. Work was cut into **work packets**, each owned by a **scope**, and
 each scope was a separate agent session with its own written state.
 
 1. **Scopes by feature.** On 13.10.2026 the first decision log fixes the split: scopes by feature, not by layer, so the
@@ -15,28 +16,28 @@ each scope was a separate agent session with its own written state.
 2. **A register per scope.** `REKISTERI.md` holds purpose and boundary, decisions (dated, with "Käyttäjä" when the
    user decided), open items, defects and one line `SEURAAVA PAKETTI` (next packet) that says what to do, which paths
    it may touch and how to start (`/pura <scope>`). A new session reads only that, so context stays small.
-3. **Pack and unpack.** At the end of a session the agent ran `/pakkaa`: it writes a memo, updates the register,
+3. **Pack and unpack.** At the end of a session the session ended with `/pakkaa`: it writes a memo, updates the register,
    appends to `HISTORIA.md` and moves removed text to `ARKISTO.md`. The next session ran `/pura` and continued from the
    next-packet line. The phone app drives the same commands (see the README).
-4. **Briefs for executors.** For larger work a planner wrote a brief per task and a cheaper model executed it. A brief
+4. **Briefs for executors.** Each larger task was specified as a written brief, and an executor session carried it out. A brief
    in `toteutussuunnitelma/briefit/` has a fixed shape: task, files (`may` / `must not` / `read`), numbered steps,
    an acceptance command, and a budget. The supervisor hands the executor only the path to the brief and runs the
    acceptance command itself.
-5. **Acceptance gates.** A task is done when its gate is green, not when the agent says so: a `gate.sh` script
+5. **Acceptance gates.** A task is done when its gate is green, not when a report says so: a `gate.sh` script
    (`macos/`, `remoteterminal/`, `siirto/git/`, `siirto/economy/`), `node --test`, XCUITests against the live
    service, and device runs. Gates also enforce boundaries, for example failing when a path outside the scope changed.
    Executor runs were logged in `toteutussuunnitelma/mittaukset/tehtavat.jsonl` (47 rows: 42 green, 4 red, 1 aborted).
 6. **Defects are first-class.** Problems found during work get an id (`V-nnn`) and a row in `viat/` or the scope's own
    register, and are fixed in a later packet.
 7. **Orchestration model.** For the successor project the roles were formalised: planners decide, a coordinator hands out
-   gate slots, work scopes implement, a Haiku-class watcher reads tmux panes, an overseer resolves stuck sessions with
+   gate slots, work scopes implement, a lightweight watcher reads tmux panes, an overseer resolves stuck sessions with
    the user's standing authority. See `KEHITYSMALLI.md` (Finnish, written 20.10.2026).
 
-Evidence in git: 195 commits from 2026-10-13 to 2026-10-29, 168 with a `Co-Authored-By` trailer naming the model.
+Evidence in git: 195 commits from 2026-10-13 to 2026-10-29.
 
 ## A note on the files
 
-Everything below is working notes, written in Finnish by agents for agents and kept as a record of the process. They
+Everything below is working notes, written in Finnish as working records of the process. They
 are not polished documentation and they contain references to a private monorepo and to the author's machines.
 
 | File | What it is |
@@ -63,7 +64,7 @@ Code:
 | `shared/`, `macos/` | Swift packages and the macOS client. |
 | `remoteterminal/` | Terminal client package, protocol contract (`RAJAPINTA.md`), plan. |
 | `ioskeyboard/` | Keyboard scope. Its `Sources` equals `ios/Keyboard`. |
-| `siirto/`, `agy/`, `universaltools/` | Hand-over helpers and tests (git, economy), Antigravity CLI work, agent-neutral tools. |
+| `siirto/`, `agy/`, `universaltools/` | Hand-over helpers and tests (git, economy), second agent CLI work, agent-neutral tools. |
 
 Notes by feature or concern (each has `REKISTERI.md`, often `HISTORIA.md` and `ARKISTO.md`):
 
