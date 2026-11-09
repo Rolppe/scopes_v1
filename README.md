@@ -214,6 +214,7 @@ How to read the Finnish working notes: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md
 
 ## Status and limitations
 
+- This extract is a snapshot of 29.10.2026 with about 24 000 lines of Swift (iOS, macOS, keyboard and terminal packages). Development continues in the private repository, where Scopes had about 30 000 lines of Swift on 9.11.2026.
 - Extracted from a private monorepo. `palvelu/` imports three helper modules and calls scripts under
   `claude/siirto/tools` and `Infra/` that are not here, so the server cannot start from this repository alone and 26
   of 47 Node test files have no passing test (25 fail to load).
